@@ -1,0 +1,5 @@
+*.suo
+
+ScummEditor/bin/Debug/ScummEditor.vshost.exe
+ScummEditor/bin/Debug/ScummEditor.vshost.exe.config
+ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest

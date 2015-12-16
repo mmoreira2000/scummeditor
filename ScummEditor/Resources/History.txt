@@ -1,0 +1,45 @@
+1.0.3.0
+-------
+* Added possibility to edit palette colors. 
+
+* Added possibility to choose the palette entries for costumes.
+
+1.0.2.0
+-------
+* Simplified and flexibilized the process of reading data blocks. This should make the ScummEditor compatible with more game versions, including modified ones.
+
+* Added compatibility with the Monkey Island 1 DOS Talkie version. This version order data blocks on non-standard ways.
+
+1.0.1.3
+-------
+* Exported images now generates .idx file for background and objects. When importing back, if exists a .idx file the import process will use it to priotize the search in the palette table. This makes obsolete the fix made on version 1.0.1.2 and should solve a problem on encoding the object #15 on ROOM #53.
+
+1.0.1.2
+-------
+* Dirty fix to solve a problem reencoding a object 7 on room 25. That bug made the palette of the reencoded object to swap togheter with bernard, when in shadows.
+
+1.0.1.1
+-------
+* Added a option on the image encoder to select what codec to use. This is because not all DOTT rooms supports decode all game codecs. I don't why this happens, but at least one room on DOTT has this problem. Dunno about others games.
+
+1.0.1.0
+-------
+* Fixed a bug on customes image encoder that generate wrong images when it has any repetition count greater than 255
+
+* Palettes color are now showed togheter with its index.
+
+* Added palette selection when exporting and importing images, and more than one palette is avaliable. (Not avaliable on batch operations)
+
+* Costume viewer now shows costume palette color and real palette index instead of only real palette index.
+
+* Added support for export and import 8 bits indexed palette images
+
+* Added this history in about
+
+* Added option to cancel image batch export
+
+* Some cosmetic changes
+
+1.0.0.0
+-------
+* Inicial Release, ScummBR internal use only.

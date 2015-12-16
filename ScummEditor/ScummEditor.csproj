@@ -1,0 +1,425 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{095F914B-419C-4129-BA5B-7C4374537865}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>ScummEditor</RootNamespace>
+    <AssemblyName>ScummEditor</AssemblyName>
+    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <FileAlignment>512</FileAlignment>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>publish\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>0</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Be.Windows.Forms.HexBox">
+      <HintPath>..\Libraries\Be.Windows.Forms.HexBox.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="BinaryHelper.cs" />
+    <Compile Include="BitStreamManager.cs" />
+    <Compile Include="Encoders\BompImageDecoder.cs" />
+    <Compile Include="Encoders\BompImageEncoder.cs" />
+    <Compile Include="Encoders\CostumeImageDecoder.cs" />
+    <Compile Include="Encoders\CostumeImageEncoder.cs" />
+    <Compile Include="Encoders\ImageDecoder.cs" />
+    <Compile Include="Encoders\ImageDepthConversor.cs" />
+    <Compile Include="Encoders\ImageEncoder.cs" />
+    <Compile Include="Encoders\LineInformation.cs" />
+    <Compile Include="Encoders\SegmentInformation.cs" />
+    <Compile Include="Encoders\ZPlaneDecoder.cs" />
+    <Compile Include="Encoders\ZPlaneEncoder.cs" />
+    <Compile Include="Exceptions\ConversionException.cs" />
+    <Compile Include="Exceptions\ImageEncodeException.cs" />
+    <Compile Include="Exceptions\InvalidFileFormatException.cs" />
+    <Compile Include="About.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="About.Designer.cs">
+      <DependentUpon>About.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\BlockBaseControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\BlockBaseControl.Designer.cs">
+      <DependentUpon>BlockBaseControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ColorCycleControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ColorCycleControl.Designer.cs">
+      <DependentUpon>ColorCycleControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\CostumeControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\CostumeControl.Designer.cs">
+      <DependentUpon>CostumeControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\CostumePaletteSelectionWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Gui\CostumePaletteSelectionWindow.Designer.cs">
+      <DependentUpon>CostumePaletteSelectionWindow.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ExportResources.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Gui\ExportResources.Designer.cs">
+      <DependentUpon>ExportResources.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ImageBompControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ImageBompControl.Designer.cs">
+      <DependentUpon>ImageBompControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ImageStripTableControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ImageStripTableControl.Designer.cs">
+      <DependentUpon>ImageStripTableControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ImageType.cs" />
+    <Compile Include="Gui\ImportResources.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Gui\ImportResources.Designer.cs">
+      <DependentUpon>ImportResources.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\IndexFile\DirectoryOfItemsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\IndexFile\DirectoryOfItemsControl.Designer.cs">
+      <DependentUpon>DirectoryOfItemsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\IndexFile\DirectoryOfRoomsControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\IndexFile\DirectoryOfRoomsControl.Designer.cs">
+      <DependentUpon>DirectoryOfRoomsControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\NotImplementedDataBlockControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\NotImplementedDataBlockControl.Designer.cs">
+      <DependentUpon>NotImplementedDataBlockControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ObjectImageHeaderControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ObjectImageHeaderControl.Designer.cs">
+      <DependentUpon>ObjectImageHeaderControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\PaletteColor.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\PaletteColor.Designer.cs">
+      <DependentUpon>PaletteColor.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\PaletteDataControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\PaletteDataControl.Designer.cs">
+      <DependentUpon>PaletteDataControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\RoomBlockImageControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\RoomBlockImageControl.Designer.cs">
+      <DependentUpon>RoomBlockImageControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\DiskBlockControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\DiskBlockControl.Designer.cs">
+      <DependentUpon>DiskBlockControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\RoomHeaderControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\RoomHeaderControl.Designer.cs">
+      <DependentUpon>RoomHeaderControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\RoomImageHeaderControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\RoomImageHeaderControl.Designer.cs">
+      <DependentUpon>RoomImageHeaderControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\RoomOffsetTableControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\RoomOffsetTableControl.Designer.cs">
+      <DependentUpon>RoomOffsetTableControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\TreeNavigatorManager.cs" />
+    <Compile Include="Gui\ValuePaddingBlockControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ValuePaddingBlockControl.Designer.cs">
+      <DependentUpon>ValuePaddingBlockControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ZPlaneControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ZPlaneControl.Designer.cs">
+      <DependentUpon>ZPlaneControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Functions.cs" />
+    <Compile Include="Structures\DataFile\ColorCycle.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\Costume.cs" />
+    <Compile Include="Structures\DataFile\DiskBlock.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\IImageSize.cs" />
+    <Compile Include="Structures\DataFile\ImageBomp.cs" />
+    <Compile Include="Structures\DataFile\ImageData.cs" />
+    <Compile Include="Structures\DataFile\ImageStripTable.cs" />
+    <Compile Include="Structures\DataFile\NotImplementedDataBlock.cs" />
+    <Compile Include="Structures\DataFile\ObjectImage.cs" />
+    <Compile Include="Structures\DataFile\ObjectImageHeader.cs" />
+    <Compile Include="Structures\DataFile\PaletteData.cs" />
+    <Compile Include="Structures\DataFile\PaletteOffset.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\PalettesData.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\PalettesWrapper.cs" />
+    <Compile Include="Structures\DataFile\RoomBlock.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\RoomHeader.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\RoomImage.cs" />
+    <Compile Include="Structures\DataFile\RoomImageHeader.cs" />
+    <Compile Include="Structures\DataFile\RoomOffsetTable.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\ScummV6DataFile.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\ValuePaddingBlock.cs">
+      <SubType>Code</SubType>
+    </Compile>
+    <Compile Include="Structures\DataFile\ZPlane.cs" />
+    <Compile Include="Structures\IBinaryPersistence.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfArrays.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfCharsets.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfCostumes.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfItems.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfObjects.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfRooms.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfScripts.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryOfSounds.cs" />
+    <Compile Include="Structures\IndexFile\MaximumValues.cs" />
+    <Compile Include="Structures\IndexFile\DirectoryItem.cs" />
+    <Compile Include="Structures\IndexFile\RoomNamesV6.cs" />
+    <Compile Include="Structures\ScummV6GameData.cs" />
+    <Compile Include="Structures\IndexFile\ScummV6IndexFile.cs" />
+    <Compile Include="Structures\BlockBase.cs" />
+    <Compile Include="XoredFileStream.cs" />
+    <Compile Include="FilePacker.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="FilePacker.Designer.cs">
+      <DependentUpon>FilePacker.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <EmbeddedResource Include="FilePacker.resx">
+      <DependentUpon>FilePacker.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="About.resx">
+      <DependentUpon>About.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\BlockBaseControl.resx">
+      <DependentUpon>BlockBaseControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ColorCycleControl.resx">
+      <DependentUpon>ColorCycleControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\CostumeControl.resx">
+      <DependentUpon>CostumeControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\CostumePaletteSelectionWindow.resx">
+      <DependentUpon>CostumePaletteSelectionWindow.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ExportResources.resx">
+      <DependentUpon>ExportResources.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ImageBompControl.resx">
+      <DependentUpon>ImageBompControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ImageStripTableControl.resx">
+      <DependentUpon>ImageStripTableControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ImportResources.resx">
+      <DependentUpon>ImportResources.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\IndexFile\DirectoryOfItemsControl.resx">
+      <DependentUpon>DirectoryOfItemsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\IndexFile\DirectoryOfRoomsControl.resx">
+      <DependentUpon>DirectoryOfRoomsControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\NotImplementedDataBlockControl.resx">
+      <DependentUpon>NotImplementedDataBlockControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ObjectImageHeaderControl.resx">
+      <DependentUpon>ObjectImageHeaderControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\PaletteColor.resx">
+      <DependentUpon>PaletteColor.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\PaletteDataControl.resx">
+      <DependentUpon>PaletteDataControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\RoomBlockImageControl.resx">
+      <DependentUpon>RoomBlockImageControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\DiskBlockControl.resx">
+      <DependentUpon>DiskBlockControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\RoomHeaderControl.resx">
+      <DependentUpon>RoomHeaderControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\RoomImageHeaderControl.resx">
+      <DependentUpon>RoomImageHeaderControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\RoomOffsetTableControl.resx">
+      <DependentUpon>RoomOffsetTableControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ValuePaddingBlockControl.resx">
+      <DependentUpon>ValuePaddingBlockControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Gui\ZPlaneControl.resx">
+      <DependentUpon>ZPlaneControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <None Include="app.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Documentation\bitwise_description.txt" />
+    <Content Include="Documentation\bitwise_operators.html" />
+    <Content Include="Documentation\SCUMM_6_resource_files.htm" />
+    <None Include="Resources\sbr_ico_32x32.png" />
+    <None Include="Resources\sbr_ico_16x16.png" />
+    <None Include="Resources\Transform.png" />
+    <None Include="Resources\SCUMMeditor 05b.png" />
+    <None Include="Resources\sbr_logo_scummpack.png" />
+    <EmbeddedResource Include="Resources\History.txt" />
+    <None Include="Resources\Disk_blue.png" />
+    <None Include="Resources\Error.png" />
+    <None Include="Resources\Export2.png" />
+    <None Include="Resources\Folder_closed.png" />
+    <None Include="Resources\logo_scummbr_medium.png" />
+    <None Include="Resources\Open.ico" />
+    <None Include="Resources\Save.ico" />
+    <Content Include="Resources\sbr_ico_01.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.0,Profile=Client">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4 Client Profile %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 3.1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <ProjectExtensions>
+    <VisualStudio>
+      <UserProperties BuildVersion_UpdateAssemblyVersion="True" BuildVersion_UpdateFileVersion="True" />
+    </VisualStudio>
+  </ProjectExtensions>
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

@@ -1,0 +1,903 @@
+﻿<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en" dir="ltr">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta http-equiv="Content-Style-Type" content="text/css" />
+		<meta name="generator" content="MediaWiki 1.15.5" />
+		<meta name="keywords" content="SCUMM/Technical Reference/SCUMM 6 resource files,SCUMM/Technical Reference/Costume resources,SCUMM/Technical Reference/Image resources" />
+		<link rel="shortcut icon" href="/favicon.ico" />
+		<link rel="search" type="application/opensearchdescription+xml" href="/opensearch_desc.php" title="ScummVM :: Wiki (en)" />
+		<link title="Creative Commons" type="application/rdf+xml" href="/index.php?title=SCUMM/Technical_Reference/SCUMM_6_resource_files&amp;action=creativecommons" rel="meta" />
+		<link rel="copyright" href="http://www.gnu.org/copyleft/fdl.html" />
+		<link rel="alternate" type="application/rss+xml" title="ScummVM :: Wiki RSS Feed" href="/index.php?title=Special:RecentChanges&amp;feed=rss" />
+		<link rel="alternate" type="application/atom+xml" title="ScummVM :: Wiki Atom Feed" href="/index.php?title=Special:RecentChanges&amp;feed=atom" />
+<title>SCUMM/Technical Reference/SCUMM 6 resource files - ScummVM :: Wiki</title>
+<link rel="stylesheet" href="/skins/scummmodern/menu.css?207" type="text/css" media="screen" />
+		<link rel="stylesheet" href="/skins/scummmodern/layout.css?207" type="text/css" media="screen" />
+		<link rel="stylesheet" href="/skins/scummmodern/chart.css?207" type="text/css" media="screen" />
+		<!--[if IE 6]><link rel="stylesheet" href="/skins/scummmodern/ie6.css?207" type="text/css" media="screen" /><![endif]-->
+		<!--[if IE 7]><link rel="stylesheet" href="/skins/scummmodern/ie7.css?207" type="text/css" media="screen" /><![endif]-->
+		<link rel="stylesheet" href="/skins/scummmodern/print.css?207" type="text/css" media="print" />
+		<link rel="stylesheet" href="/index.php?title=MediaWiki:Common.css&amp;usemsgcache=yes&amp;ctype=text%2Fcss&amp;smaxage=18000&amp;action=raw&amp;maxage=18000" type="text/css" />
+		<link rel="stylesheet" href="/index.php?title=MediaWiki:Print.css&amp;usemsgcache=yes&amp;ctype=text%2Fcss&amp;smaxage=18000&amp;action=raw&amp;maxage=18000" type="text/css" media="print" />
+		<link rel="stylesheet" href="/index.php?title=MediaWiki:Scummmodern.css&amp;usemsgcache=yes&amp;ctype=text%2Fcss&amp;smaxage=18000&amp;action=raw&amp;maxage=18000" type="text/css" />
+		<link rel="stylesheet" href="/index.php?title=-&amp;action=raw&amp;maxage=18000&amp;gen=css" type="text/css" />
+<!--[if lt IE 7]><script type="text/javascript" src="/skins/common/IEFixes.js?207"></script>
+<meta http-equiv="imagetoolbar" content="no" /><![endif]-->
+
+<script type= "text/javascript">/*<![CDATA[*/
+		var skin = "scummmodern";
+		var stylepath = "/skins";
+		var wgArticlePath = "/index.php/$1";
+		var wgScriptPath = "";
+		var wgScript = "/index.php";
+		var wgVariantArticlePath = false;
+		var wgActionPaths = {};
+		var wgServer = "http://wiki.scummvm.org";
+		var wgCanonicalNamespace = "";
+		var wgCanonicalSpecialPageName = false;
+		var wgNamespaceNumber = 0;
+		var wgPageName = "SCUMM/Technical_Reference/SCUMM_6_resource_files";
+		var wgTitle = "SCUMM/Technical Reference/SCUMM 6 resource files";
+		var wgAction = "view";
+		var wgArticleId = "3031";
+		var wgIsArticle = true;
+		var wgUserName = null;
+		var wgUserGroups = null;
+		var wgUserLanguage = "en";
+		var wgContentLanguage = "en";
+		var wgBreakFrames = false;
+		var wgCurRevisionId = 16176;
+		var wgVersion = "1.15.5";
+		var wgEnableAPI = true;
+		var wgEnableWriteAPI = true;
+		var wgSeparatorTransformTable = ["", ""];
+		var wgDigitTransformTable = ["", ""];
+		var wgRestrictionEdit = [];
+		var wgRestrictionMove = [];
+		/*]]>*/</script>
+
+<script type="text/javascript" src="/skins/scummmodern/wikibits.js?207"><!-- wikibits js --></script>
+
+<!-- Head Scripts -->
+		<script type="text/javascript" src="/skins/common/ajax.js?207"></script>
+		<script type='text/javascript' src='/extensions/MathJax/MathJax/MathJax.js'>    MathJax.Hub.Config({
+        extensions: ["tex2jax.js","TeX/AMSmath.js","TeX/AMSsymbols.js"],
+        jax: ["input/TeX", "output/HTML-CSS"],
+        tex2jax: {
+            inlineMath: [ ["\\(","\\)"] ],
+            displayMath: [ ["\\[","\\]"] ],
+            processEscapes: false,
+            element: "content",
+            ignoreClass: "(tex2jax_ignore|mw-search-results|searchresults)", /* note: this is part of a regex, check the docs! */
+            skipTags: ["script","noscript","style","textarea","code"] /* removed pre as wikimedia renders math in there */
+        },
+        /* "HTML-CSS": { availableFonts: ["TeX"] }, */
+        TeX: {
+          Macros: {
+            /* Wikipedia compatibility: these macros are used on Wikipedia */
+            empty: '\\emptyset',
+            P: '\\unicode{xb6}',
+            Alpha: '\\unicode{x391}', /* FIXME: These capital Greeks don't show up in bold in \boldsymbol ... */
+            Beta: '\\unicode{x392}',
+            Epsilon: '\\unicode{x395}',
+            Zeta: '\\unicode{x396}',
+            Eta: '\\unicode{x397}',
+            Iota: '\\unicode{x399}',
+            Kappa: '\\unicode{x39a}',
+            Mu: '\\unicode{x39c}',
+            Nu: '\\unicode{x39d}',
+            Pi: '\\unicode{x3a0}',
+            Rho: '\\unicode{x3a1}',
+            Sigma: '\\unicode{x3a3}',
+            Tau: '\\unicode{x3a4}',
+            Chi: '\\unicode{x3a7}',
+            C: '\\mathbb{C}',        /* the complex numbers */
+            N: '\\mathbb{N}',        /* the natural numbers */
+            Q: '\\mathbb{Q}',        /* the rational numbers */
+            R: '\\mathbb{R}',        /* the real numbers */
+            Z: '\\mathbb{Z}',        /* the integer numbers */
+
+            /* some extre macros for ease of use; these are non-standard! */
+            F: '\\mathbb{F}',        /* a finite field */
+            HH: '\\mathcal{H}',      /* a Hilbert space */
+            bszero: '\\boldsymbol{0}', /* vector of zeros */
+            bsone: '\\boldsymbol{1}',  /* vector of ones */
+            bst: '\\boldsymbol{t}',    /* a vector 't' */
+            bsv: '\\boldsymbol{v}',    /* a vector 'v' */
+            bsw: '\\boldsymbol{w}',    /* a vector 'w' */
+            bsx: '\\boldsymbol{x}',    /* a vector 'x' */
+            bsy: '\\boldsymbol{y}',    /* a vector 'y' */
+            bsz: '\\boldsymbol{z}',    /* a vector 'z' */
+            bsDelta: '\\boldsymbol{\\Delta}', /* a vector '\Delta' */
+            E: '\\mathrm{e}',          /* the exponential */
+            rd: '\\,\\mathrm{d}',      /*  roman d for use in integrals: $\int f(x) \rd x$ */
+            rdelta: '\\,\\delta',      /* delta operator for use in sums */
+            rD: '\\mathrm{D}',         /* differential operator D */
+
+            /* example from MathJax on how to define macros with parameters: */
+            /* bold: ['{\\bf #1}', 1] */
+
+            RR: '\\mathbb{R}',
+            ZZ: '\\mathbb{Z}',
+            NN: '\\mathbb{N}',
+            QQ: '\\mathbb{Q}',
+            CC: '\\mathbb{C}',
+            FF: '\\mathbb{F}'
+          }
+        }
+    });
+</script>
+<script type="text/javascript" src="/skins/common/ajax.js?207"></script>
+<script type="text/javascript" src="/skins/scummmodern/ajaxwatch.js?207"></script>
+		<script type="text/javascript" src="/index.php?title=-&amp;action=raw&amp;gen=js&amp;useskin=scummmodern"><!-- site js --></script>
+</head>
+<body class="mediawiki ltr ns-0 ns-subject page-SCUMM_Technical_Reference_SCUMM_6_resource_files skin-scummmodern">
+	
+    <table id="toc" class="toc" summary="Contents">
+        <tr>
+            <td>
+                <ul>
+                    <li class="toclevel-1">
+                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#Scumm_6_data_format">
+                        <span class="tocnumber">1</span> <span class="toctext">Scumm 6 data format</span></a>
+                        <ul>
+                            <li class="toclevel-2">
+                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#1._Introduction">
+                                <span class="tocnumber">1.1</span> <span class="toctext">1. Introduction</span></a>
+                                <ul>
+                                    <li class="toclevel-3">
+                                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#1.1_Other_resources">
+                                        <span class="tocnumber">1.1.1</span> <span class="toctext">1.1 Other resources</span></a></li>
+                                    <li class="toclevel-3">
+                                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#1.2_Basics">
+                                        <span class="tocnumber">1.1.2</span> <span class="toctext">1.2 Basics</span></a></li>
+                                </ul>
+                            </li>
+                            <li class="toclevel-2">
+                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#2._Index_file">
+                                <span class="tocnumber">1.2</span> <span class="toctext">2. Index file</span></a></li>
+                            <li class="toclevel-2">
+                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3._Main_data_file">
+                                <span class="tocnumber">1.3</span> <span class="toctext">3. Main data file</span></a>
+                                <ul>
+                                    <li class="toclevel-3">
+                                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.1_Structure">
+                                        <span class="tocnumber">1.3.1</span> <span class="toctext">3.1 Structure</span></a></li>
+                                    <li class="toclevel-3">
+                                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2_Blocks_content">
+                                        <span class="tocnumber">1.3.2</span> <span class="toctext">3.2 Blocks content</span></a>
+                                        <ul>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.1_LOFF">
+                                                <span class="tocnumber">1.3.2.1</span> <span class="toctext">3.2.1 LOFF</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.2_RMHD">
+                                                <span class="tocnumber">1.3.2.2</span> <span class="toctext">3.2.2 RMHD</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.3_CYCL">
+                                                <span class="tocnumber">1.3.2.3</span> <span class="toctext">3.2.3 CYCL</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.4_TRNS">
+                                                <span class="tocnumber">1.3.2.4</span> <span class="toctext">3.2.4 TRNS</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.5_OFFS">
+                                                <span class="tocnumber">1.3.2.5</span> <span class="toctext">3.2.5 OFFS</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.6_APAL">
+                                                <span class="tocnumber">1.3.2.6</span> <span class="toctext">3.2.6 APAL</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.7_RMIH">
+                                                <span class="tocnumber">1.3.2.7</span> <span class="toctext">3.2.7 RMIH</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.8_SMAP">
+                                                <span class="tocnumber">1.3.2.8</span> <span class="toctext">3.2.8 SMAP</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.9_ZPnn">
+                                                <span class="tocnumber">1.3.2.9</span> <span class="toctext">3.2.9 ZPnn</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.10_IMHD">
+                                                <span class="tocnumber">1.3.2.10</span> <span class="toctext">3.2.10 IMHD</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.11_CDHD">
+                                                <span class="tocnumber">1.3.2.11</span> <span class="toctext">3.2.11 CDHD</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.12_VERB">
+                                                <span class="tocnumber">1.3.2.12</span> <span class="toctext">3.2.12 VERB</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.13_OBNA">
+                                                <span class="tocnumber">1.3.2.13</span> <span class="toctext">3.2.13 OBNA</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.14_NLSC">
+                                                <span class="tocnumber">1.3.2.14</span> <span class="toctext">3.2.14 NLSC</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.15_LSCR">
+                                                <span class="tocnumber">1.3.2.15</span> <span class="toctext">3.2.15 LSCR</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.16_BOXD">
+                                                <span class="tocnumber">1.3.2.16</span> <span class="toctext">3.2.16 BOXD</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.17_BOXM">
+                                                <span class="tocnumber">1.3.2.17</span> <span class="toctext">3.2.17 BOXM</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.18_SCAL">
+                                                <span class="tocnumber">1.3.2.18</span> <span class="toctext">3.2.18 SCAL</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.19_COST">
+                                                <span class="tocnumber">1.3.2.19</span> <span class="toctext">3.2.19 COST</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.20_CHAR">
+                                                <span class="tocnumber">1.3.2.20</span> <span class="toctext">3.2.20 CHAR</span></a></li>
+                                            <li class="toclevel-4">
+                                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#3.2.21_SOUN">
+                                                <span class="tocnumber">1.3.2.21</span> <span class="toctext">3.2.21 SOUN</span></a></li>
+                                        </ul>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li class="toclevel-2">
+                                <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#4._Voice_file">
+                                <span class="tocnumber">1.4</span> <span class="toctext">4. Voice file</span></a>
+                                <ul>
+                                    <li class="toclevel-3">
+                                        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/SCUMM_6_resource_files#4.1_Structure">
+                                        <span class="tocnumber">1.4.1</span> <span class="toctext">4.1 Structure</span></a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </td>
+        </tr>
+    </table>
+    <a id="Scumm_6_data_format" name="Scumm_6_data_format"></a>
+    <h2>
+        <span class="mw-headline">Scumm 6 data format </span>
+    </h2>
+    <a id="1._Introduction" name="1._Introduction"></a>
+    <h3>
+        <span class="mw-headline">1. Introduction </span>
+    </h3>
+    <p>
+        The first SCUMM version was written for Maniac Mansion. At that time, floppy 
+        disk was the most common medium for games, so naturally the file formats reflect 
+        this. Basically each floppy contained one or more rooms with all the data needed 
+        to play in those rooms. Later games came on CD and all data was grouped into 2 
+        files. The main data file is merely a big bunch of room files put together. The 
+        second file is an index to make random access easy.
+    </p>
+    <a id="1.1_Other_resources" name="1.1_Other_resources"></a>
+    <h4>
+        <span class="mw-headline">1.1 Other resources </span>
+    </h4>
+    <p>
+        Other people are working on similar stuff. Some information came from these:
+    </p>
+    <ul>
+        <li>&quot;The inCompleat SCUMM Reference Guide&quot;:<a class="external free" 
+                href="http://www.cowlark.com/scumm/" rel="nofollow" 
+                title="http://www.cowlark.com/scumm/">http://www.cowlark.com/scumm/</a>
+        </li>
+        <li>&quot;LucasHacks!&quot;:<a class="external free" href="http://scumm.mixnmojo.com/" 
+                rel="nofollow" title="http://scumm.mixnmojo.com/">http://scumm.mixnmojo.com/</a>
+        </li>
+    </ul>
+    <a id="1.2_Basics" name="1.2_Basics"></a>
+    <h4>
+        <span class="mw-headline">1.2 Basics </span>
+    </h4>
+    <p>
+        First of all, the data can be &quot;encrypted&quot;. To decrypt just XOR each byte with a 
+        key. According to the ScummVM code, there are 3 keys in use: 0x00, 0xFF and 
+        0x69. DOTT uses 0x69.
+    </p>
+    <p>
+        All SCUMM files are made of blocks like this:
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  type: 32
+  size: 32be
+  data: ...
+</pre>
+    </span>
+    <p>
+        Note that the size includes this header! For example, if &#39;data&#39; contains 32 
+        bytes, then size will be 40, because the block&#39;s header is 8 bytes long.
+    </p>
+    <a id="2._Index_file" name="2._Index_file"></a>
+    <h3>
+        <span class="mw-headline">2. Index file </span>
+    </h3>
+    <p>
+        <b>RNAM</b>&nbsp;: room name list
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  vlc (end code 0x00, so room no starts at 1)
+    room no&nbsp;: 8
+    name   &nbsp;: 8*9 (binary inverted)
+</pre>
+    </span>
+    <p>
+        List the name of the rooms, note that you must apply a binary not on the names 
+        (name[i] = ~name[i]). The list must be terminated with a zero byte.
+    </p>
+    <p>
+        <b>MAXS</b>&nbsp;: maximal address for ...
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  max var       &nbsp;: 16le
+  unk           &nbsp;: 16le (perhaps actors as it&#39;s 16 in dott, but that
+                         doesn&#39;t really fit with later versions)
+  max bit var   &nbsp;: 16le
+  max local objs&nbsp;: 16le
+  max arrays    &nbsp;: 16le
+  unk2          &nbsp;: 16le (really dunno as it&#39;s 0 in dott)
+  max verb      &nbsp;: 16le
+  max fl objs   &nbsp;: 16le
+  max inv       &nbsp;: 16le
+  max room      &nbsp;: 16le
+  max scr       &nbsp;: 16le
+  max snds      &nbsp;: 16le
+  max chst      &nbsp;: 16le
+  max cost      &nbsp;: 16le
+  max glob obj  &nbsp;: 16le
+</pre>
+    </span>
+    <p>
+        This is used by the VM to ensure resource address validity. So generally it 
+        doesn&#39;t represent the actual number of resources, in particular for variables, 
+        as most low addresses are reserved and might not be used at all in the scripts.
+        <i>max local objs</i> is the maximum number of objects used inside a single 
+        room. It&#39;s set to 200 in DOTT, and I suppose this limit was simply set 
+        arbitrarily. <i>max global obj</i> is the highest valid object address, so 
+        usually the number of objects minus 17 (as object addresses 1-16 are used for 
+        actors). <i>max bit var</i> must be rounded up to the next multiple of 8, as 
+        apparently the original engine just divides by 8 to allocate the memory.
+    </p>
+    <p>
+        <b>DROO</b>&nbsp;: room idx
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries&nbsp;: 16le
+  file no    &nbsp;: 8*num
+  room off   &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        This describes where to find each room: in which file and at which offset. So 
+        one can split the game into several files named gamename.xxx. The offset is to 
+        the beginning of the ROOM block (i.e. right after the LFLF header).
+    </p>
+    <p>
+        <b>DSCR</b>&nbsp;: script idx
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries&nbsp;: 16le
+  room no    &nbsp;: 8*num
+  room off   &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        <b>DSOU</b>&nbsp;: sound idx
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries&nbsp;: 16le
+  room no    &nbsp;: 8*num
+  room off   &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        <b>DCOS</b>&nbsp;: costume idx
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries&nbsp;: 16le
+  room no    &nbsp;: 8*num
+  room off   &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        <b>DCHR</b>&nbsp;: charset idx
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries&nbsp;: 16le
+  room no    &nbsp;: 8*num
+  room off   &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        All the above D??? blocks describe where the resources are found. The offset is 
+        relative to the beginning of the ROOM (i.e. the one given for the room in the 
+        DROO block).
+    </p>
+    <p>
+        <b>DOBJ</b>&nbsp;: object owners list
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  num entries     &nbsp;: 16le
+  obj owner/state &nbsp;: 8*num
+    owner         &nbsp;: 4
+    state         &nbsp;: 4
+  class data      &nbsp;: 32le*num
+</pre>
+    </span>
+    <p>
+        This block sets the owner, class and initial state of each object. Each object 
+        must have an owner and it is usually the room (0xF), but it can be any actor 
+        number.
+    </p>
+    <p>
+        <b>AARY</b>&nbsp;: array list
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  vlc (end code 0x0000)
+    var no     &nbsp;: 16le
+    x size -1  &nbsp;: 16le
+    y size -1  &nbsp;: 16le
+    type       &nbsp;: 16le (0: words, 1: bytes)
+</pre>
+    </span>
+    <p>
+        Finally we have a list of pre-allocated arrays, these will be allocated by the 
+        engine before running the boot script.
+    </p>
+    <a id="3._Main_data_file" name="3._Main_data_file"></a>
+    <h3>
+        <span class="mw-headline">3. Main data file </span>
+    </h3>
+    <a id="3.1_Structure" name="3.1_Structure"></a>
+    <h4>
+        <span class="mw-headline">3.1 Structure </span>
+    </h4>
+    <ul>
+        <li>*LECF* main container
+            <ul>
+                <li>*LOFF* room offset table </li>
+                <li>*LFLF* disk block
+                    <ul>
+                        <li>*ROOM* room block
+                            <ul>
+                                <li>*RMHD* room header </li>
+                                <li>*CYCL* color cycle (vlc stop on 0x00) </li>
+                                <li>*TRNS* transparent color </li>
+                                <li>*PALS* palette data
+                                    <ul>
+                                        <li>*WRAP* dummy container
+                                            <ul>
+                                                <li>*OFFS* palette index </li>
+                                                <li>*APAL* 256 entries rgb palette (include the others blocks size) </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li>*RMIM* room image
+                                    <ul>
+                                        <li>*RMIH* number of z buffers </li>
+                                        <li>*IM00* image data
+                                            <ul>
+                                                <li>*SMAP* stripe table + plane 0 </li>
+                                                <li>*ZPnn* stripe table + z planes (nn &gt;= 1) </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li>*OBIM* obj image
+                                    <ul>
+                                        <li>*IMHD* image header </li>
+                                        <li>*IMnn* image data (image for state nn, start with state 1 as state 0 just 
+                                            display nothing)
+                                            <ul>
+                                                <li>*SMAP* plane 0 (see above) </li>
+                                                <li>*ZPnn* other z planes (nn &gt;= 1, again see above) </li>
+                                            </ul>
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li>*OBCD* object scripts
+                                    <ul>
+                                        <li>*CDHD* code header </li>
+                                        <li>*VERB* verb entries (the object scripts indexed by verbs. Several verbs may have 
+                                            the same code) </li>
+                                        <li>*OBNA* object name (default object name, it may be overrided by the scripts)
+                                        </li>
+                                    </ul>
+                                </li>
+                                <li>*EXCD* exit script (script run when leaving the room) </li>
+                                <li>*ENCD* entry script (script run when entering the room) </li>
+                                <li>*NLSC* number of local scripts </li>
+                                <li>*LSCR* local script </li>
+                                <li>*BOXD* box data (box 0 seems to be crap with all the points set to 
+                                    -32000,-32000) </li>
+                                <li>*BOXM* box matrix </li>
+                                <li>*SCAL* </li>
+                            </ul>
+                        </li>
+                        <li>*SCRP* script </li>
+                        <li>*SOUN* sound, contain one of:
+                            <ul>
+                                <li>*MIDI* midi data </li>
+                                <li>*SOU* container for the different versions
+                                    <ul>
+                                        <li>*ROL* roland data </li>
+                                        <li>*ADL* adlib data </li>
+                                        <li>*GMD* general midi data </li>
+                                    </ul>
+                                </li>
+                            </ul>
+                        </li>
+                        <li>*COST* costume </li>
+                        <li>*CHAR* charset </li>
+                    </ul>
+                </li>
+            </ul>
+        </li>
+    </ul>
+    <a id="3.2_Blocks_content" name="3.2_Blocks_content"></a>
+    <h4>
+        <span class="mw-headline">3.2 Blocks content </span>
+    </h4>
+    <p>
+        All the blocks not described here don&#39;t contain anything more than the blocks 
+        shown in the above structure. Or they are unknown (to me) atm&nbsp;;)
+    </p>
+    <a id="3.2.1_LOFF" name="3.2.1_LOFF"></a>
+    <h5>
+        <span class="mw-headline">3.2.1 LOFF </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  num rooms: 8
+    room id: 8
+    offset&nbsp;: 32le (absolute offset of the ROOM block)
+</pre>
+    </span><a id="3.2.2_RMHD" name="3.2.2_RMHD"></a>
+    <h5>
+        <span class="mw-headline">3.2.2 RMHD </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  width   &nbsp;: 16le
+  height  &nbsp;: 16le
+  num objs&nbsp;: 16le
+</pre>
+    </span><a id="3.2.3_CYCL" name="3.2.3_CYCL"></a>
+    <h5>
+        <span class="mw-headline">3.2.3 CYCL </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  cycles &nbsp;: variable length
+    idx  &nbsp;: 8 (valid range is [1-16])
+    unk  &nbsp;: 16 Th
+    freq &nbsp;: 16be (delay = 16384/freq)
+    flags&nbsp;: 16be
+    start&nbsp;: 8 (start/end entries in the palette)
+    end  &nbsp;: 8
+  close  &nbsp;: 8 must be set to 0 to end the block
+</pre>
+    </span>
+    <p>
+        Defines the various parts of the palette that can be cycled. The only known flag 
+        is the second bit, which means the cycling should go backwards.
+    </p>
+    <a id="3.2.4_TRNS" name="3.2.4_TRNS"></a>
+    <h5>
+        <span class="mw-headline">3.2.4 TRNS </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  val    &nbsp;: 8
+  padding&nbsp;: 8
+</pre>
+    </span><a id="3.2.5_OFFS" name="3.2.5_OFFS"></a>
+    <h5>
+        <span class="mw-headline">3.2.5 OFFS </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  offset table&nbsp;: block size imply the number of palette&nbsp;?
+    offset    &nbsp;: 32le (offset starting from this OFFS block)
+</pre>
+    </span><a id="3.2.6_APAL" name="3.2.6_APAL"></a>
+    <h5>
+        <span class="mw-headline">3.2.6 APAL </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  colors&nbsp;: 256 times
+    r   &nbsp;: 8
+    g   &nbsp;: 8
+    b   &nbsp;: 8
+  APAL  &nbsp;: others APAL blocks may follow
+</pre>
+    </span>
+    <p>
+        Note that the APAL blocks are constructed recursively. If we have for example 3 
+        palettes, the first APAL block contains its palette followed by 2 other APAL 
+        blocks, etc.
+    </p>
+    <a id="3.2.7_RMIH" name="3.2.7_RMIH"></a>
+    <h5>
+        <span class="mw-headline">3.2.7 RMIH </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  num z buf: 16le (number of ZPnn in the IM00 block)</pre>
+    </span><a id="3.2.8_SMAP" name="3.2.8_SMAP"></a>
+    <h5>
+        <span class="mw-headline">3.2.8 SMAP </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  strip off&nbsp;: 32le (offset from this SMAP. 1 per column of 8 pix)
+  stripes
+    codec  &nbsp;: 8
+    data   &nbsp;: variable length
+</pre>
+    </span><a id="3.2.9_ZPnn" name="3.2.9_ZPnn"></a>
+    <h5>
+        <span class="mw-headline">3.2.9 ZPnn </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  strip off&nbsp;: 16le (offset from this ZPnn. 1 per column of 8 pix)
+  stripes
+    data   &nbsp;: variable length
+</pre>
+    </span>
+    <p>
+        See
+        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/Image_resources" 
+            title="SCUMM/Technical Reference/Image resources">SCUMM Image Resources</a> 
+        for more information on the SMAP and ZPnn blocks.
+    </p>
+    <a id="3.2.10_IMHD" name="3.2.10_IMHD"></a>
+    <h5>
+        <span class="mw-headline">3.2.10 IMHD </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  obj id      &nbsp;: 16le
+  num imnn    &nbsp;: 16le
+  num zpnn    &nbsp;: 16le
+  unknown     &nbsp;: 16
+  x           &nbsp;: 16le
+  y           &nbsp;: 16le
+  width       &nbsp;: 16le
+  height      &nbsp;: 16le
+  num hotspots&nbsp;: 16le (usually one for each IMnn, but there is one even
+                       if no IMnn is present)
+  hotspots
+    x         &nbsp;: 16le signed
+    y         &nbsp;: 16le signed
+</pre>
+    </span><a id="3.2.11_CDHD" name="3.2.11_CDHD"></a>
+    <h5>
+        <span class="mw-headline">3.2.11 CDHD </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  obj id   &nbsp;: 16le
+  x        &nbsp;: 16le (upper left corner)
+  y        &nbsp;: 16le
+  w        &nbsp;: 16le (size of the active area - it may not match the image
+                    size, I think)
+  h        &nbsp;: 16le
+  flags    &nbsp;: 8
+  parent   &nbsp;: 8
+  unk      &nbsp;: 2*16
+  actor dir&nbsp;: 8 (direction an actor should look at when standing in front
+                 of the object)
+</pre>
+    </span><a id="3.2.12_VERB" name="3.2.12_VERB"></a>
+    <h5>
+        <span class="mw-headline">3.2.12 VERB </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  offset table&nbsp;: vlc
+    entries   &nbsp;: 8 (0x00 is end, 0xFF is default)
+    offset    &nbsp;: 16le
+  code
+</pre>
+    </span>
+    <p>
+        Each offset is relative to the start of the block. For example, offset 0 is the 
+        &#39;V&#39; in &#39;VERB&#39;.
+    </p>
+    <a id="3.2.13_OBNA" name="3.2.13_OBNA"></a>
+    <h5>
+        <span class="mw-headline">3.2.13 OBNA </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  null terminated string</pre>
+    </span><a id="3.2.14_NLSC" name="3.2.14_NLSC"></a>
+    <h5>
+        <span class="mw-headline">3.2.14 NLSC </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  val    &nbsp;: 8
+  padding&nbsp;: 8
+</pre>
+    </span><a id="3.2.15_LSCR" name="3.2.15_LSCR"></a>
+    <h5>
+        <span class="mw-headline">3.2.15 LSCR </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  idx &nbsp;: 8 (local script IDs start at 200)
+  data
+</pre>
+    </span><a id="3.2.16_BOXD" name="3.2.16_BOXD"></a>
+    <h5>
+        <span class="mw-headline">3.2.16 BOXD </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  num box&nbsp;: 16 ScummVM only uses the lower 8 bits
+    ulx  &nbsp;: 16le
+    uly  &nbsp;: 16le
+    urx  &nbsp;: 16le
+    ury  &nbsp;: 16le
+    lrx  &nbsp;: 16le
+    lry  &nbsp;: 16le
+    llx  &nbsp;: 16le
+    lly  &nbsp;: 16le
+    mask &nbsp;: 8
+    flags&nbsp;: 8
+    scale&nbsp;: 16le
+</pre>
+    </span>
+    <p>
+        The mask indicates which Z plane should mask this box. The flags are used for 
+        certain parameters:
+    </p>
+    <ul>
+        <li>0x08&nbsp;: X flip </li>
+        <li>0x10&nbsp;: Y flip </li>
+        <li>0x20&nbsp;: Ignore scale / Player only </li>
+        <li>0x40&nbsp;: Locked </li>
+        <li>0x80&nbsp;: Invisible </li>
+    </ul>
+    <p>
+        &quot;scale&quot; indicates the scaling to be used for actors in the box. If the highest 
+        bit is set, it defines a scale slot instead. See the SCAL block for more details 
+        on scaling.
+    </p>
+    <a id="3.2.17_BOXM" name="3.2.17_BOXM"></a>
+    <h5>
+        <span class="mw-headline">3.2.17 BOXM </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  line     &nbsp;: the matrix has one line for each box, terminated by 0xFF.
+    box    &nbsp;: list of the directly connected boxes
+      start&nbsp;: 8
+      end  &nbsp;: 8
+      box  &nbsp;: 8
+    0xFF   &nbsp;: 8
+</pre>
+    </span><a id="3.2.18_SCAL" name="3.2.18_SCAL"></a>
+    <h5>
+        <span class="mw-headline">3.2.18 SCAL </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  scale data (repeat 4 times)
+    scale1&nbsp;: 16le
+    y1    &nbsp;: 16le
+    scale2&nbsp;: 16le
+    y2    &nbsp;: 16le
+</pre>
+    </span>
+    <p>
+        The SCAL block defines the room&#39;s scale slots. These allow the actors to be 
+        scaled as a function of their position in the room, instead of just having a 
+        fixed scale for a whole box. Each slot represents a linear function ranging from 
+        scale1 to scale2 for an input (the y coordinate) ranging from y1 to y2. Scale 
+        factors range from 1 to 255, with 255 being unscaled and 1 the minimal size (1 
+        pixel or so&nbsp;:). I dunno yet if the real scale factor is s/255, but that seems 
+        the most logical.
+    </p>
+    <span class="tex2jax_ignore">
+    <pre>  s = ((scale2 - scale1) * (y - y1)) / (y2 - y1) + scale1;
+  if(s &gt; 0xFF) s = 0xFF;
+  if(s &lt; 1) s = 1;
+</pre>
+    </span><a id="3.2.19_COST" name="3.2.19_COST"></a>
+    <h5>
+        <span class="mw-headline">3.2.19 COST </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  size              &nbsp;: 32le can be 0 (see num anim) or the size
+                       (sometimes with an offset of one&nbsp;??)
+  header            &nbsp;: 2*8 always contain &quot;CO&quot;
+  num anim          &nbsp;: 8  if(size) num_anim++
+  format            &nbsp;: 8  bit 7 is a mirror flag, bit 0 is the palette
+                       size (0: 16 colors, 1: 32 colors)
+  palette           &nbsp;: 8*num colors coded in format
+  anim cmds offset  &nbsp;: 16le access the anim cmds array
+  limbs offset      &nbsp;: 16*16le access limb picture table
+  anim offsets      &nbsp;: 16le*num anim  access anim definitions
+  anim
+    limb mask       &nbsp;: 16le
+    anim definitions&nbsp;: variable length, one definition for each bit set
+                       to 1 in the limb mask.
+        0xFFFF      &nbsp;: 16le stopped limb code
+     OR
+        start       &nbsp;: 16le
+        noloop      &nbsp;: 1
+        len         &nbsp;: 7
+  anim cmds
+    cmd             &nbsp;: 8
+  limbs
+    pict  offset    &nbsp;: 16le
+  picts
+    width           &nbsp;: 16le
+    height          &nbsp;: 16le
+    rel_x           &nbsp;: s16le
+    rel_y           &nbsp;: s16le
+    move_x          &nbsp;: s16le
+    move_y          &nbsp;: s16le
+    redir_limb      &nbsp;: 8 only present if((format &amp; 0x7E) == 0x60)
+    redir_pict      &nbsp;: 8 only present if((format &amp; 0x7E) == 0x60)
+    rle data
+</pre>
+    </span>
+    <p>
+        See
+        <a href="http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference/Costume_resources" 
+            title="SCUMM/Technical Reference/Costume resources">SCUMM Costume Resources</a> 
+        for more informations on costumes.
+    </p>
+    <a id="3.2.20_CHAR" name="3.2.20_CHAR"></a>
+    <h5>
+        <span class="mw-headline">3.2.20 CHAR </span>
+    </h5>
+    <span class="tex2jax_ignore">
+    <pre>  size          &nbsp;: 32le  size-15
+  unknown       &nbsp;: 2*8 always 0x6303 in dott
+  palette       &nbsp;: 15*8
+  bpp           &nbsp;: 8 (font ptr)
+  font height   &nbsp;: 8
+  num char      &nbsp;: 16le
+  offset table  &nbsp;: num*32le the offsets are relative to font ptr
+  chars
+    width       &nbsp;: 8
+    height      &nbsp;: 8
+    x offset    &nbsp;: s8
+    y offset    &nbsp;: s8
+    data        &nbsp;: raw bit packed data
+</pre>
+    </span>
+    <p>
+        In ScummVM only bpp 1, 2, 4 and 8 are supported.
+    </p>
+    <a id="3.2.21_SOUN" name="3.2.21_SOUN"></a>
+    <h5>
+        <span class="mw-headline">3.2.21 SOUN </span>
+    </h5>
+    <p>
+        This is apparently used to store music, and was also used for sound effects in 
+        older games. They can contain various data, but it seems only SOU is used in 
+        DOTT. Sam&#39;n Max also has some MIDI blocks. A few others exist but they are 
+        probably not used in v6.
+    </p>
+    <p>
+        The SOU block again contains new blocks to store the various versions. In DOTT 
+        they generally contain 3 blocks: ROL, ADL and GMD (presumably Roland, AdLib, and 
+        General MIDI). Each seems to contain more or less standard MIDI data.
+    </p>
+    <a id="4._Voice_file" name="4._Voice_file"></a>
+    <h3>
+        <span class="mw-headline">4. Voice file </span>
+    </h3>
+    <p>
+        All the voices and effects are in a separate file. In the original engine, the 
+        file is called MONSTER.SOU and uses VOC (creative voice) samples. ScummVM can 
+        use compressed samples and supports files named $GAME.SOU. Currently ScummVM 
+        supports MP3, Vorbis and FLAC.
+    </p>
+    <a id="4.1_Structure" name="4.1_Structure"></a>
+    <h4>
+        <span class="mw-headline">4.1 Structure </span>
+    </h4>
+    <span class="tex2jax_ignore">
+    <pre>  main block header  &nbsp;: scumm block header (SOU )
+  samples
+    sync block header&nbsp;: scumm block header (VCTL)
+      sync data      &nbsp;: 16be*num
+    voc data         &nbsp;: sample data
+</pre>
+    </span>
+    <p>
+        The first block header at the start of the file has a zero size. The number of 
+        sync points is derived from the VCTL block size. The size of the VOC data can 
+        only be found by parsing it.
+    </p>
+</body>
+</html>
