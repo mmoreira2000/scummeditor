@@ -21,6 +21,6 @@ As far as I know this is the only existing tool that allows you change the costu
 ## Thanks
 I would like to say thank you to Jestar Jokin (http://www.jestarjokin.net/blog/category/scumm/) for his great help and for being so nice with me, providing his source codes and pointing me to links where I could learn a lot about the scumm data and image formats. Without his help, this program never existed.
 
-I also would like to say thanks to SCUMMVM (http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference), SCUMM REVISITED (http://goblin.cx/scumm/scummrev/articles/image.html -- offline) and SCUMMC (https://github.com/jamesu/scummc/wiki) sites for providing a lot of useful technical information on their sites. I made this tool based on what I learned there.
+I also would like to say thanks to SCUMMVM (http://wiki.scummvm.org/index.php/SCUMM/Technical_Reference), SCUMM REVISITED (http://web.archive.org/web/20110224120228/http://goblin.cx/scumm/scummrev/articles/image.html -- webarchive mirror, original site is offline) and SCUMMC (https://github.com/jamesu/scummc/wiki) sites for providing a lot of useful technical information on their sites. I made this tool based on what I learned there.
 
 This program utilizes BE.HexEditor to display binary data. More information and download of the control on http://sourceforge.net/projects/hexbox/
