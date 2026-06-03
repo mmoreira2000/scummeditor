@@ -49,6 +49,22 @@ namespace ScummEditor
                 return result;
             }
 
+            indexPath = Path.Combine(path, "SAMNMAX.SM0");
+            dataPath = Path.Combine(path, "SAMNMAX.SM1");
+            if (File.Exists(indexPath) && File.Exists(dataPath))
+            {
+                result = new GameInfo
+                {
+                    LoadedGame = ScummGame.SamAndMax,
+                    IndexFile = indexPath,
+                    DataFile = dataPath,
+                    Xored = true,
+                    XorKey = 0x69,
+                    ScummVersion = 6
+                };
+
+                return result;
+            }
 
             indexPath = Path.Combine(path, "ATLANTIS.000");
             dataPath = Path.Combine(path, "ATLANTIS.001");
