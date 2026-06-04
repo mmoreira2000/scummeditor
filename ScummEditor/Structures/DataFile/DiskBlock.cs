@@ -40,6 +40,39 @@ namespace ScummEditor.Structures.DataFile
                         Childrens.Add(costumeBlock);
                         break;
 
+                    case "SOUN":
+                        // Only decode SOUN on v6; v5 (e.g. MI2 talkie) keeps the generic
+                        // block so its byte-preserving quirks stay untouched.
+                        if (_gameInfo.ScummVersion == 6)
+                        {
+                            var soundBlock = new SoundBlock(this);
+                            soundBlock.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(soundBlock);
+                        }
+                        else
+                        {
+                            var soundDefault = new NotImplementedDataBlock(this, typeRead);
+                            soundDefault.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(soundDefault);
+                        }
+                        break;
+
+                    case "SCRP":
+                        // v6 only: typed script block (disassemblable). v5 stays generic.
+                        if (_gameInfo.ScummVersion == 6)
+                        {
+                            var scriptBlock = new ScriptBlock(this, "SCRP");
+                            scriptBlock.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(scriptBlock);
+                        }
+                        else
+                        {
+                            var scriptDefault = new NotImplementedDataBlock(this, typeRead);
+                            scriptDefault.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(scriptDefault);
+                        }
+                        break;
+
                     default:
                         var Default = new NotImplementedDataBlock(this, typeRead);
                         Default.LoadFromBinaryReader(binaryReader);

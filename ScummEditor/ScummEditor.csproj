@@ -72,6 +72,8 @@
     <Compile Include="Encoders\ImageDepthConversor.cs" />
     <Compile Include="Encoders\ImageEncoder.cs" />
     <Compile Include="Encoders\LineInformation.cs" />
+    <Compile Include="Encoders\Scumm6Disassembler.cs" />
+    <Compile Include="Encoders\SoundConverter.cs" />
     <Compile Include="Encoders\SegmentInformation.cs" />
     <Compile Include="Encoders\ZPlaneDecoder.cs" />
     <Compile Include="Encoders\ZPlaneEncoder.cs" />
@@ -89,6 +91,24 @@
     </Compile>
     <Compile Include="Gui\BlockBaseControl.Designer.cs">
       <DependentUpon>BlockBaseControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\StructuredBlockControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\StructuredBlockControl.Designer.cs">
+      <DependentUpon>StructuredBlockControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\SoundBlockControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\SoundBlockControl.Designer.cs">
+      <DependentUpon>SoundBlockControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Gui\ScriptControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Gui\ScriptControl.Designer.cs">
+      <DependentUpon>ScriptControl.cs</DependentUpon>
     </Compile>
     <Compile Include="Gui\ColorCycleControl.cs">
       <SubType>UserControl</SubType>
@@ -213,10 +233,16 @@
       <DependentUpon>ZPlaneControl.cs</DependentUpon>
     </Compile>
     <Compile Include="Functions.cs" />
+    <Compile Include="Structures\DataFile\BoxData.cs" />
+    <Compile Include="Structures\DataFile\BoxMatrix.cs" />
     <Compile Include="Structures\DataFile\ColorCycle.cs">
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="Structures\DataFile\Costume.cs" />
+    <Compile Include="Structures\DataFile\ObjectCode.cs" />
+    <Compile Include="Structures\DataFile\Scale.cs" />
+    <Compile Include="Structures\DataFile\ScriptBlock.cs" />
+    <Compile Include="Structures\DataFile\SoundBlock.cs" />
     <Compile Include="Structures\DataFile\DiskBlock.cs">
       <SubType>Code</SubType>
     </Compile>

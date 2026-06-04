@@ -217,16 +217,16 @@ namespace ScummEditor.Structures.DataFile
 
             while (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "OBCD")
             {
-                var OBCD = new NotImplementedDataBlock(this, "OBCD");
+                var OBCD = new ObjectCode(this);
                 OBCD.LoadFromBinaryReader(binaryReader);
                 Childrens.Add(OBCD);
             }
 
-            var EXCD = new NotImplementedDataBlock(this, "EXCD");
+            var EXCD = new ScriptBlock(this, "EXCD");
             EXCD.LoadFromBinaryReader(binaryReader);
             Childrens.Add(EXCD);
 
-            var ENCD = new NotImplementedDataBlock(this, "ENCD");
+            var ENCD = new ScriptBlock(this, "ENCD");
             ENCD.LoadFromBinaryReader(binaryReader);
             Childrens.Add(ENCD);
 
@@ -236,20 +236,20 @@ namespace ScummEditor.Structures.DataFile
 
             for (int i = 0; i < NLSC.Value; i++)
             {
-                var LSCR = new NotImplementedDataBlock(this, "LSCR");
+                var LSCR = new ScriptBlock(this, "LSCR");
                 LSCR.LoadFromBinaryReader(binaryReader);
                 Childrens.Add(LSCR);
             }
 
-            var BOXD = new NotImplementedDataBlock(this, "BOXD");
+            var BOXD = new BoxData(this);
             BOXD.LoadFromBinaryReader(binaryReader);
             Childrens.Add(BOXD);
 
-            var BOXM = new NotImplementedDataBlock(this, "BOXM");
+            var BOXM = new BoxMatrix(this);
             BOXM.LoadFromBinaryReader(binaryReader);
             Childrens.Add(BOXM);
 
-            var SCAL = new NotImplementedDataBlock(this, "SCAL");
+            var SCAL = new Scale(this);
             SCAL.LoadFromBinaryReader(binaryReader);
             Childrens.Add(SCAL);
         }
