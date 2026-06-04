@@ -54,6 +54,11 @@ namespace ScummEditor.Gui
             FilesExported.Visible = true;
             FilesExportedLabel.Visible = true;
 
+            // Backgrounds, objects and costumes are always exported as true 8bpp indexed images
+            // whose pixel bytes ARE the original palette indexes. This is the only supported format
+            // because it round-trips losslessly: the index is preserved even when several palette
+            // entries share the same color, so the image still renders correctly under any
+            // alternate palette. (Editing must keep the image indexed; do not convert it to RGB.)
             var decoder = new ImageDecoder();
             decoder.UseTransparentColor = ExportWithTransparency.Checked;
 
@@ -65,6 +70,7 @@ namespace ScummEditor.Gui
 
             var zplaneDecoder = new ZPlaneDecoder();
 
+            // Z-planes are binary masks (no palette), exported as 1bpp black/white images.
             var convert = new ImageDepthConversor();
 
 
@@ -79,14 +85,8 @@ namespace ScummEditor.Gui
                     Bitmap background = decoder.Decode(currentRoom);
                     if (background != null)
                     {
-                        if (Export8Bits.Checked)
-                        {
-                            background = convert.CopyToBpp(background, 8, currentRoom.GetDefaultPalette().Colors);
-                        }
                         string backgroundName = Path.Combine(location, string.Format("Room#{0}.png", i));
                         background.Save(backgroundName, System.Drawing.Imaging.ImageFormat.Png);
-                        File.WriteAllText(backgroundName + ".idx", string.Join(";", decoder.UsedIndexes));
-
                     }
                     FilesExported.Text = (++fileCount).ToString();
                 }
@@ -102,10 +102,7 @@ namespace ScummEditor.Gui
                         Bitmap zplane = zplaneDecoder.Decode(currentRoom, j);
                         if (zplane != null)
                         {
-                            if (Export8Bits.Checked)
-                            {
-                                zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
-                            }
+                            zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
                             zplane.Save(Path.Combine(location, string.Format("Room#{0} ZP#{1}.png", i, j)), System.Drawing.Imaging.ImageFormat.Png);
                             FilesExported.Text = (++fileCount).ToString();
                         }
@@ -126,26 +123,18 @@ namespace ScummEditor.Gui
                             if (_cancelExport) break;
 
                             Bitmap image;
-                            int[] usedIndexes;
 
                             if (IMxx[k].GetSMAP() == null)
                             {
                                 image = bompDecoder.Decode(currentRoom, j, k);
-                                usedIndexes = bompDecoder.UsedIndexes.ToArray();
                             }
                             else
                             {
                                 image = decoder.Decode(currentRoom, j, k);
-                                usedIndexes = decoder.UsedIndexes.ToArray();
                             }
 
-                            if (Export8Bits.Checked)
-                            {
-                                image = convert.CopyToBpp(image, 8, currentRoom.GetDefaultPalette().Colors);
-                            }
                             string objectFilename = Path.Combine(location, string.Format("Room#{0} Obj#{1} Img#{2}.png", i, j, k));
                             image.Save(objectFilename, System.Drawing.Imaging.ImageFormat.Png);
-                            File.WriteAllText(objectFilename + ".idx", string.Join(";", usedIndexes));
 
                             FilesExported.Text = (++fileCount).ToString();
                         }
@@ -169,10 +158,7 @@ namespace ScummEditor.Gui
 
                                 Bitmap zplane = zplaneDecoder.Decode(currentRoom, j, k, l);
 
-                                if (Export8Bits.Checked)
-                                {
-                                    zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
-                                }
+                                zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
                                 zplane.Save(Path.Combine(location, string.Format("Room#{0} Obj#{1} Img#{2} ZP#{3}.png", i, j, k, l)), System.Drawing.Imaging.ImageFormat.Png);
 
                                 FilesExported.Text = (++fileCount).ToString();
@@ -197,22 +183,6 @@ namespace ScummEditor.Gui
                                 || costume.Pictures[k].ImageData.Length == 1 && costume.Pictures[k].ImageData[0] == 0) continue;
 
                             Bitmap image = costumeDecoder.Decode(currentRoom, costume, k);
-
-                            if (Export8Bits.Checked)
-                            {
-                                var c = new List<Color>();
-                                for (int z = 0; z < 256; z++)
-                                {
-                                    c.Add(Color.Black);
-                                }
-
-                                PaletteData defaultPallete = currentRoom.GetDefaultPalette();
-                                for (int z = 0; z < costume.Palette.Count; z++)
-                                {
-                                    c[z] = defaultPallete.Colors[costume.Palette[z]];
-                                }
-                                image = convert.CopyToBpp(image, 8, c.ToArray());
-                            }
 
                             image.Save(Path.Combine(location, string.Format("Room#{0} Costume#{1} FrameIndex#{2}.png", i, j, k)), System.Drawing.Imaging.ImageFormat.Png);
                             FilesExported.Text = (++fileCount).ToString();

@@ -86,8 +86,7 @@ namespace ScummEditor.Gui
 
         private void DecodeImage()
         {
-            int[] usedIndexes;
-            Bitmap background = GenericDecodeImage(out usedIndexes);
+            Bitmap background = GenericDecodeImage();
             if (background != null)
             {
                 pictureBackground.Width = background.Width;
@@ -106,48 +105,20 @@ namespace ScummEditor.Gui
             var result = dlg.ShowDialog();
             if (result == DialogResult.Cancel) return;
 
-            int[] usedPalleteIndexes;
-            Bitmap background = GenericDecodeImage(out usedPalleteIndexes);
-
-            //EncoderParameters parameters = new EncoderParameters();
-            //var x = new System.Drawing.Imaging.Encoder(new Guid("66087055-ad66-4c7c-9a18-38a2310b8337"));
-            //parameters.Param[0] = new EncoderParameter(x, 8);
-            if (Export8Bits.Checked)
-            {
-                var convert = new ImageDepthConversor();
-                if (_imageType == ImageType.Costume)
-                {
-                    var c = new List<Color>();
-                    for (int i = 0; i < 256; i++)
-                    {
-                        c.Add(Color.Black);
-                    }
-
-                    PaletteData defaultPallete = _roomBlock.GetDefaultPalette();
-                    for (int i = 0; i < _costume.Palette.Count; i++)
-                    {
-                        c[i] = defaultPallete.Colors[_costume.Palette[i]];
-                    }
-                    background = convert.CopyToBpp(background, 8, c.ToArray());
-                }
-                else
-                {
-                    background = convert.CopyToBpp(background, 8, _roomBlock.GetDefaultPalette().Colors);
-                }
-            }
+            // GenericDecodeImage already returns a true indexed (8bpp) bitmap for palette-based
+            // images, so the saved PNG preserves the original palette indexes losslessly.
+            Bitmap background = GenericDecodeImage();
 
             background.Save(dlg.FileName, ImageFormat.Png);
-            File.WriteAllText(dlg.FileName + ".idx", string.Join(";", usedPalleteIndexes));
         }
 
         private void TesteReencode_Click(object sender, EventArgs e)
         {
-            int[] usedIndexes;
-            Bitmap background = GenericDecodeImage(out usedIndexes);
+            Bitmap background = GenericDecodeImage();
 
-            GenericEncodeImage(background, usedIndexes);
+            GenericEncodeImage(background);
 
-            Bitmap backgroundReencoded = GenericDecodeImage(out usedIndexes);
+            Bitmap backgroundReencoded = GenericDecodeImage();
             pictureBackground.Width = background.Width;
             pictureBackground.Height = background.Height;
             pictureBackground.Image = backgroundReencoded;
@@ -162,32 +133,20 @@ namespace ScummEditor.Gui
             var result = dlg.ShowDialog();
             if (result == DialogResult.Cancel) return;
 
-
             var background = (Bitmap)Bitmap.FromFile(dlg.FileName);
-            var preferredIndexes = new int[] { };
-
-            string indexFile = dlg.FileName + ".idx";
-            if (File.Exists(indexFile))
-            {
-                preferredIndexes = File.ReadAllText(indexFile).Split(';').Select(s => Convert.ToInt32(s)).ToArray();
-            }
-            GenericEncodeImage(background, preferredIndexes);
+            GenericEncodeImage(background);
 
             DecodeImage();
         }
 
-        private Bitmap GenericDecodeImage(out int[] usedPalleteIndexes)
+        private Bitmap GenericDecodeImage()
         {
-            usedPalleteIndexes = null;
-
             if (_imageType == ImageType.Background)
             {
                 var decoder = new ImageDecoder();
                 decoder.PaletteIndex = PaletteIndex;
                 decoder.UseTransparentColor = DecodeTransparent;
-                Bitmap decodedImage = decoder.Decode(_roomBlock);
-                usedPalleteIndexes = decoder.UsedIndexes.ToArray();
-                return decodedImage;
+                return decoder.Decode(_roomBlock);
             }
             if (_imageType == ImageType.ZPlane)
             {
@@ -201,18 +160,14 @@ namespace ScummEditor.Gui
                     var decoder = new BompImageDecoder();
                     decoder.PaletteIndex = PaletteIndex;
                     decoder.UseTransparentColor = DecodeTransparent;
-                    Bitmap decodedImage = decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
-                    usedPalleteIndexes = decoder.UsedIndexes.ToArray();
-                    return decodedImage;
+                    return decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
                 }
                 else
                 {
                     var decoder = new ImageDecoder();
                     decoder.PaletteIndex = PaletteIndex;
                     decoder.UseTransparentColor = DecodeTransparent;
-                    Bitmap decodedImage = decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
-                    usedPalleteIndexes = decoder.UsedIndexes.ToArray();
-                    return decodedImage;
+                    return decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
                 }
             }
             if (_imageType == ImageType.ObjectsZPlane)
@@ -230,7 +185,7 @@ namespace ScummEditor.Gui
             return null;
         }
 
-        private void GenericEncodeImage(Bitmap bitmapToEncode, int[] preferredIndexes)
+        private void GenericEncodeImage(Bitmap bitmapToEncode)
         {
             try
             {
@@ -239,9 +194,7 @@ namespace ScummEditor.Gui
                     case ImageType.Background:
                         {
                             var encoder = new ImageEncoder();
-                            encoder.PaletteIndex = PaletteIndex;
                             encoder.EncodeSettings = (ImageEncoder.EncodeTypeSettings)CompressionMethod.SelectedIndex;
-                            encoder.PreferredIndexes = new List<int>(preferredIndexes);
                             encoder.Encode(_roomBlock, bitmapToEncode);
                         }
                         break;
@@ -255,16 +208,12 @@ namespace ScummEditor.Gui
                         if (_roomBlock.GetOBIMs()[_objectIndex].GetIMxx()[_imageIndex].GetSMAP() == null)
                         {
                             var encoder = new BompImageEncoder();
-                            encoder.PaletteIndex = PaletteIndex;
-                            encoder.PreferredIndexes = new List<int>(preferredIndexes);
                             encoder.Encode(_roomBlock, _objectIndex, _imageIndex, bitmapToEncode);
                         }
                         else
                         {
                             var encoder = new ImageEncoder();
-                            encoder.PaletteIndex = PaletteIndex;
                             encoder.EncodeSettings = (ImageEncoder.EncodeTypeSettings)CompressionMethod.SelectedIndex;
-                            encoder.PreferredIndexes = new List<int>(preferredIndexes);
                             encoder.Encode(_roomBlock, _objectIndex, _imageIndex, bitmapToEncode);
                         }
                         break;
@@ -277,7 +226,6 @@ namespace ScummEditor.Gui
                     case ImageType.Costume:
                         {
                             var encoder = new CostumeImageEncoder();
-                            encoder.PaletteIndex = PaletteIndex;
                             encoder.Encode(_roomBlock, _costume, _imageIndex, bitmapToEncode);
                         }
                         break;

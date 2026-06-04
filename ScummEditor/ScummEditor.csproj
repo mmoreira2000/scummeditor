@@ -71,6 +71,7 @@
     <Compile Include="Encoders\ImageDecoder.cs" />
     <Compile Include="Encoders\ImageDepthConversor.cs" />
     <Compile Include="Encoders\ImageEncoder.cs" />
+    <Compile Include="Encoders\IndexedImageHelper.cs" />
     <Compile Include="Encoders\LineInformation.cs" />
     <Compile Include="Encoders\SegmentInformation.cs" />
     <Compile Include="Encoders\ZPlaneDecoder.cs" />
