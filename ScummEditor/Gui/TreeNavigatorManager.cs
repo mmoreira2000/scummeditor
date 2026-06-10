@@ -48,6 +48,8 @@ namespace ScummEditor.Gui
             var scriptControl = new ScriptControl();
             _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);
 
+            _controlViewers.Add(typeof(Charset).Name, new CharsetControl());
+
             var directoryOfItemsControlGeneric = new DirectoryOfItemsControl();
             _controlViewers.Add(typeof(DirectoryOfItems).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfRooms).Name, new DirectoryOfRoomsControl());

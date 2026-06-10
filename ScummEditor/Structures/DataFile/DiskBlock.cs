@@ -73,6 +73,22 @@ namespace ScummEditor.Structures.DataFile
                         }
                         break;
 
+                    case "CHAR":
+                        // v6 only: typed charset/font block (glyph viewer). v5 stays generic.
+                        if (_gameInfo.ScummVersion == 6)
+                        {
+                            var charsetBlock = new Charset(this);
+                            charsetBlock.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(charsetBlock);
+                        }
+                        else
+                        {
+                            var charsetDefault = new NotImplementedDataBlock(this, typeRead);
+                            charsetDefault.LoadFromBinaryReader(binaryReader);
+                            Childrens.Add(charsetDefault);
+                        }
+                        break;
+
                     default:
                         var Default = new NotImplementedDataBlock(this, typeRead);
                         Default.LoadFromBinaryReader(binaryReader);
