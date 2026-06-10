@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Security.AccessControl;
 using Microsoft.Win32.SafeHandles;
 
 namespace ScummEditor
@@ -43,18 +42,6 @@ namespace ScummEditor
 
         public XoredFileStream(int xorKey, string path, FileMode mode, FileAccess access, FileShare share, int bufferSize, bool useAsync)
             : base(path, mode, access, share, bufferSize, useAsync)
-        {
-            _xorKey = xorKey;
-        }
-
-        public XoredFileStream(int xorKey, string path, FileMode mode, FileSystemRights rights, FileShare share, int bufferSize, FileOptions options, FileSecurity fileSecurity)
-            : base(path, mode, rights, share, bufferSize, options, fileSecurity)
-        {
-            _xorKey = xorKey;
-        }
-
-        public XoredFileStream(int xorKey, string path, FileMode mode, FileSystemRights rights, FileShare share, int bufferSize, FileOptions options)
-            : base(path, mode, rights, share, bufferSize, options)
         {
             _xorKey = xorKey;
         }

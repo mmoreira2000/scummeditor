@@ -1,6 +1,16 @@
+1.1.0.0
+-------
+* Lossless indexed image export/import. Backgrounds and objects are now exported as 8-bit indexed PNGs that store the original palette index of every pixel, and importing reads those indexes back directly instead of guessing them from the pixel color. This preserves the exact index even when the palette has repeated colors, so the image keeps rendering correctly under any of the alternate (APAL) palettes. The old color-matching import and the .idx side files are no longer needed.
+
+* Costumes are exported with their own (costume-local) palette and their relative indexes, also round-tripping losslessly.
+
+* Added detection of Sam & Max installs that use SAMNMAX.SM0 / SAMNMAX.SM1.
+
+* Migrated the editor to .NET 10 and Visual Studio 2022 (SDK-style projects). It now builds and runs on the modern .NET runtime.
+
 1.0.3.0
 -------
-* Added possibility to edit palette colors. 
+* Added possibility to edit palette colors.
 
 * Added possibility to choose the palette entries for costumes.
 

@@ -87,21 +87,12 @@ namespace ScummEditor.Gui
                 RoomBlock currentRoomBlock = diskBlocks[currentFile.RoomIndex].GetROOM();
                 Bitmap bitmapToEncode = (Bitmap)Bitmap.FromFile(currentFile.Filename);
 
-                var preferredIndexes = new int[0];
-                string indexFile = currentFile.Filename + ".idx";
-                if (File.Exists(indexFile))
-                {
-                    preferredIndexes = File.ReadAllText(indexFile).Split(';').Select(s => Convert.ToInt32(s)).ToArray();
-                }
-
-
                 try
                 {
                     switch (currentFile.ImageType)
                     {
                         case ImageType.Background:
                             {
-                                encoder.PreferredIndexes = new List<int>(preferredIndexes);
                                 encoder.Encode(currentRoomBlock, bitmapToEncode);
                             }
                             break;
@@ -113,12 +104,10 @@ namespace ScummEditor.Gui
                         case ImageType.Object:
                             if (currentRoomBlock.GetOBIMs()[currentFile.ObjectIndex].GetIMxx()[currentFile.ImageIndex].GetSMAP() == null)
                             {
-                                bompEncoder.PreferredIndexes = new List<int>(preferredIndexes);
                                 bompEncoder.Encode(currentRoomBlock, currentFile.ObjectIndex, currentFile.ImageIndex, bitmapToEncode);
                             }
                             else
                             {
-                                encoder.PreferredIndexes = new List<int>(preferredIndexes);
                                 encoder.Encode(currentRoomBlock, currentFile.ObjectIndex, currentFile.ImageIndex, bitmapToEncode);
                             }
                             break;

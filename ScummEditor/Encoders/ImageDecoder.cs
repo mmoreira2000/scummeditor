@@ -14,10 +14,12 @@ namespace ScummEditor.Encoders
         private List<StripData> _strips;
 
         private Bitmap _resultBitmap;
+        private byte[,] _indexMatrix;
 
         public List<int> UsedIndexes { get; private set; }
 
         public bool UseTransparentColor { get; set; }
+
         public int PaletteIndex { get; set; }
         public ImageDecoder()
         {
@@ -91,6 +93,7 @@ namespace ScummEditor.Encoders
             }
 
             _resultBitmap = new Bitmap(_width, _height);
+            _indexMatrix = new byte[_width, _height];
 
             for (int i = 0; i < _strips.Count; i++)
             {
@@ -110,6 +113,14 @@ namespace ScummEditor.Encoders
                     DecodeUncompressed(strip);
                 }
             }
+
+            _resultBitmap = IndexedImageHelper.FromIndexMatrix(_indexMatrix, _pallete.Colors,
+                UseTransparentColor ? _transparency : -1);
+        }
+
+        private void PlotIndex(int x, int y)
+        {
+            _indexMatrix[x, y] = (byte)_paletteIndex;
         }
 
         private int _numBitPerPaletteEntry;
@@ -138,6 +149,7 @@ namespace ScummEditor.Encoders
             SetCurrentColor();
 
             _resultBitmap.SetPixel(_currentOffset + _currentColumn, _currentLine, _currentColor);
+            PlotIndex(_currentOffset + _currentColumn, _currentLine);
 
             while (!finishDecode)
             {
@@ -307,6 +319,7 @@ namespace ScummEditor.Encoders
             _paletteIndex = _bitStreamManager.ReadByte();
             SetCurrentColor();
             _resultBitmap.SetPixel(_currentOffset, 0, _currentColor);
+            PlotIndex(_currentOffset, 0);
 
             while (!finishDecode)
             {
@@ -338,6 +351,7 @@ namespace ScummEditor.Encoders
                 }
             }
             _resultBitmap.SetPixel(_currentOffset + _currentColumn, _currentLine, _currentColor);
+            PlotIndex(_currentOffset + _currentColumn, _currentLine);
         }
 
     }

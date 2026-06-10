@@ -13,8 +13,11 @@ namespace ScummEditor.Encoders
         private ImageBomp _imageData;
 
         private Bitmap _resultBitmap;
+        private byte[,] _indexMatrix;
+        private int _lastIndex;
 
         public bool UseTransparentColor { get; set; }
+
         public int PaletteIndex { get; set; }
 
         public List<int> UsedIndexes { get; private set; }
@@ -59,6 +62,7 @@ namespace ScummEditor.Encoders
             var bitStreamManager = new BitStreamManager(_imageData.Data);
 
             _resultBitmap = new Bitmap(_width, _height);
+            _indexMatrix = new byte[_width, _height];
 
             //if (_pictureData.ImageData.Length == 0
             //    || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) return; //Algumas imagens são vazias!!
@@ -106,10 +110,15 @@ namespace ScummEditor.Encoders
             }
 
             UsedIndexes.Sort();
+
+            _resultBitmap = IndexedImageHelper.FromIndexMatrix(_indexMatrix, _pallete.Colors,
+                UseTransparentColor ? 255 : -1);
         }
 
         private Color GetColor(int paletteIndex)
         {
+            _lastIndex = paletteIndex;
+
             if (!UsedIndexes.Contains(paletteIndex)) UsedIndexes.Add(paletteIndex);
 
             var color = _pallete.Colors[paletteIndex];
@@ -127,6 +136,7 @@ namespace ScummEditor.Encoders
             if (_currentColumn == _resultBitmap.Width || _currentLine == _resultBitmap.Height) Debugger.Break();
 
             _resultBitmap.SetPixel(_currentColumn, _currentLine, color);
+            _indexMatrix[_currentColumn, _currentLine] = (byte)_lastIndex;
             _currentColumn++;
             if (_currentColumn == _width)
             {

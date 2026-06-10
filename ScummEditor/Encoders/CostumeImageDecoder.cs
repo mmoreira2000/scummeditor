@@ -11,6 +11,7 @@ namespace ScummEditor.Encoders
         private Costume _costume;
 
         private Bitmap _resultBitmap;
+        private byte[,] _indexMatrix;
         public bool UseTransparentColor { get; set; }
 
         private PaletteData _palette;
@@ -72,9 +73,14 @@ namespace ScummEditor.Encoders
             }
 
             _resultBitmap = new Bitmap(_pictureData.Width, _pictureData.Height);
+            _indexMatrix = new byte[_pictureData.Width, _pictureData.Height];
 
             if (_pictureData.ImageData.Length == 0
-                || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) return; //Algumas imagens são vazias!!
+                || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) //Algumas imagens são vazias!!
+            {
+                BuildIndexedResult();
+                return;
+            }
 
             /*
                 while(1)
@@ -117,6 +123,7 @@ namespace ScummEditor.Encoders
                 for (int i = 0; i < repetitionCount; i++)
                 {
                     _resultBitmap.SetPixel(currentColumn, currentLine, _currentColor);
+                    _indexMatrix[currentColumn, currentLine] = paletteIndex;
                     currentLine++;
                     if (currentLine == _pictureData.Height)
                     {
@@ -126,6 +133,22 @@ namespace ScummEditor.Encoders
                 }
                 if ((currentColumn == _pictureData.Width && currentLine == 0) || bitStreamManager.EndOfStream) finishDecode = true;
             }
+
+            BuildIndexedResult();
+        }
+
+        // Builds the indexed result bitmap using a palette made of the costume-local colors,
+        // so the pixel bytes are the costume-relative indexes that the codec actually stores.
+        private void BuildIndexedResult()
+        {
+            var localPalette = new Color[_costume.Palette.Count];
+            for (int i = 0; i < _costume.Palette.Count; i++)
+            {
+                localPalette[i] = _palette.Colors[_costume.Palette[i]];
+            }
+
+            _resultBitmap = IndexedImageHelper.FromIndexMatrix(_indexMatrix, localPalette,
+                UseTransparentColor ? 0 : -1);
         }
 
         private Color _currentColor;

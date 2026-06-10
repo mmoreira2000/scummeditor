@@ -23,25 +23,22 @@ namespace ScummEditor.Encoders
         private ushort _width;
         private ushort _height;
         private byte _transparency;
-        private PaletteData _pallete;
         private Bitmap _imageToEncode;
         private ImageStripTable _strips;
+
+        // Raw palette indexes read from the (indexed) source bitmap. The codec stores these
+        // directly, so the index is preserved losslessly regardless of duplicate palette colors.
+        private byte[,] _indexMatrix;
 
         //Used during encode.
         private int _currentOffset;
         private Point _currentLocation;
         private RenderingDirections _renderdingDirection;
 
-        public int PaletteIndex { get; set; }
-
-        public List<int> PreferredIndexes { get; set; }
-
         public EncodeTypeSettings EncodeSettings { get; set; }
 
         public ImageEncoder()
         {
-            PreferredIndexes=new List<int>();
-            PaletteIndex = 0;
             EncodeSettings = EncodeTypeSettings.AutoDetect;
         }
 
@@ -57,15 +54,6 @@ namespace ScummEditor.Encoders
             _height = IMHD.Height;
             _transparency = blockToEncode.GetTRNS().Value;
             _strips = obj.GetIMxx()[imageIndex].GetSMAP();
-            if (PaletteIndex == 0)
-            {
-                _pallete = blockToEncode.GetDefaultPalette();
-
-            }
-            else
-            {
-                _pallete = blockToEncode.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
-            }
             Encode();
         }
 
@@ -78,15 +66,6 @@ namespace ScummEditor.Encoders
             _height = RMHD.Height;
             _transparency = blockToEncode.GetTRNS().Value;
             _strips = blockToEncode.GetRMIM().GetIM00().GetSMAP();
-            if (PaletteIndex == 0)
-            {
-                _pallete = blockToEncode.GetDefaultPalette();
-
-            }
-            else
-            {
-                _pallete = blockToEncode.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
-            }
 
             Encode();
         }
@@ -97,6 +76,12 @@ namespace ScummEditor.Encoders
             {
                 throw new ImageEncodeException("The image must have the same size as ROOM/OBJ");
             }
+
+            if (!IndexedImageHelper.IsIndexed(_imageToEncode))
+            {
+                throw new ImageEncodeException("The image must be an indexed (palette-based) image so the original palette indexes are preserved. Re-export it from ScummEditor and edit it without converting it to RGB/truecolor.");
+            }
+            _indexMatrix = IndexedImageHelper.GetIndexMatrix(_imageToEncode);
 
             _strips.Strips.Clear();
             int stripCount = _width / 8;
@@ -171,12 +156,12 @@ namespace ScummEditor.Encoders
             _currentLocation.X = 0;
             _currentLocation.Y = 0;
 
-            int firstPaletteIndex = FindTableIndex(_imageToEncode.GetPixel(_currentOffset + 0, 0));
+            int firstPaletteIndex = GetIndexAt(_currentOffset + 0, 0);
             bitStream.AddByte((byte)firstPaletteIndex);
 
             while (!(_currentLocation.X == 7 && _currentLocation.Y == (_height - 1)))
             {
-                var paletteIndex = FindTableIndex(GetNextPixel());
+                var paletteIndex = GetNextIndex();
                 bitStream.AddByte((byte)paletteIndex);
             }
 
@@ -201,16 +186,14 @@ namespace ScummEditor.Encoders
 
             int negationValue = 1;
 
-            //Color currentColor = GetNextPixel(); //pq isso fica menos errado!?
-            Color currentColor = _imageToEncode.GetPixel(_currentOffset + 0, 0);
-            int currentPaletteIndex = FindTableIndex(currentColor);
+            int currentPaletteIndex = GetIndexAt(_currentOffset + 0, 0);
 
             bitStream.AddByte((byte)currentPaletteIndex);
 
 
             while (!(_currentLocation.X == 7 && _currentLocation.Y == (_height - 1)))
             {
-                var newPaletteIndex = FindTableIndex(GetNextPixel());
+                var newPaletteIndex = GetNextIndex();
 
                 if (newPaletteIndex == currentPaletteIndex)
                 {
@@ -273,9 +256,7 @@ namespace ScummEditor.Encoders
             _currentLocation.X = 0;
             _currentLocation.Y = 0;
 
-            //Color currentColor = GetNextPixel(); //pq isso fica menos errado!?
-            Color currentColor = _imageToEncode.GetPixel(_currentOffset + 0, 0);
-            int currentPaletteIndex = FindTableIndex(currentColor);
+            int currentPaletteIndex = GetIndexAt(_currentOffset + 0, 0);
 
             bitStream.AddByte((byte)currentPaletteIndex);
 
@@ -283,7 +264,7 @@ namespace ScummEditor.Encoders
 
             while (!(_currentLocation.X == 7 && _currentLocation.Y == (_height - 1)))
             {
-                var newPaletteIndex = FindTableIndex(GetNextPixel());
+                var newPaletteIndex = GetNextIndex();
 
                 if (newPaletteIndex == currentPaletteIndex)
                 {
@@ -416,7 +397,14 @@ namespace ScummEditor.Encoders
             }
         }
 
-        private Color GetNextPixel()
+        // Returns the raw palette index stored at the given pixel of the indexed source bitmap.
+        private int GetIndexAt(int x, int y)
+        {
+            return _indexMatrix[x, y];
+        }
+
+        // Advances the current location and returns the index there.
+        private int GetNextIndex()
         {
             if (_renderdingDirection == RenderingDirections.Horizontal)
             {
@@ -436,43 +424,7 @@ namespace ScummEditor.Encoders
                     _currentLocation.X++;
                 }
             }
-            return _imageToEncode.GetPixel(_currentOffset + _currentLocation.X, _currentLocation.Y);
-        }
-
-        private int FindTableIndex(Color color)
-        {
-            if (PreferredIndexes != null)
-            {
-                foreach (var preferredIndex in PreferredIndexes)
-                {
-                    if (ColorVerify(preferredIndex, color)) return preferredIndex;
-                }
-            }
-
-            //for (int i = _pallete.Colors.Length - 1; i >= 0; i--)
-            //{
-            //    if (ColorVerify(i, color)) return i;
-            //}
-
-            for (int i = 0; i < _pallete.Colors.Length; i++)
-            {
-                if (ColorVerify(i, color)) return i;
-            }
-
-            throw new ImageEncodeException(string.Format("This color does not exist in the palette (R:{0}, G:{1}, B:{2}", color.R, color.G, color.B));
-        }
-
-        private bool ColorVerify(int paletteIndex, Color color)
-        {
-            var colorCheck = _pallete.Colors[paletteIndex];
-            if (colorCheck.R == color.R &&
-                colorCheck.G == color.G &&
-                colorCheck.B == color.B)
-            {
-                return true;
-            }
-
-            return false;
+            return GetIndexAt(_currentOffset + _currentLocation.X, _currentLocation.Y);
         }
 
         public void VerifyStrip(out bool hasTransparency, out int paletteBitSize, bool checkTransparentColorEntry)
@@ -483,30 +435,14 @@ namespace ScummEditor.Encoders
             _currentLocation.X = 0;
             _currentLocation.Y = 0;
 
-            Color transparentColor = Color.Empty;
-            if (checkTransparentColorEntry)
-            {
-                transparentColor = _pallete.Colors[_transparency];
-            }
-
-
-            Color pixel = _imageToEncode.GetPixel(_currentOffset + 0, 0);
-            if (pixel.A < 255 || pixel == transparentColor)
-            {
-                hasTransparency = true;
-            }
-
-            int pIndex = FindTableIndex(pixel);
+            int pIndex = GetIndexAt(_currentOffset + 0, 0);
+            if (checkTransparentColorEntry && pIndex == _transparency) hasTransparency = true;
             if (pIndex > highestPaletteIndex) highestPaletteIndex = pIndex;
 
             while (!(_currentLocation.X == 7 && _currentLocation.Y == (_height - 1)))
             {
-                pixel = GetNextPixel();
-                if (pixel.A < 255 || pixel == transparentColor)
-                {
-                    hasTransparency = true;
-                }
-                pIndex = FindTableIndex(pixel);
+                pIndex = GetNextIndex();
+                if (checkTransparentColorEntry && pIndex == _transparency) hasTransparency = true;
                 if (pIndex > highestPaletteIndex) highestPaletteIndex = pIndex;
             }
 

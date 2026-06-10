@@ -3,3 +3,15 @@
 ScummEditor/bin/Debug/ScummEditor.vshost.exe
 ScummEditor/bin/Debug/ScummEditor.vshost.exe.config
 ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest
+
+# Build output
+[Bb]in/
+[Oo]bj/
+
+# Visual Studio
+.vs/
+*.user
+
+# NuGet restored packages
+packages/*
+!packages/repositories.config
