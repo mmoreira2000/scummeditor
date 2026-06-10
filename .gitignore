@@ -10,6 +10,7 @@ ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest
 
 # Visual Studio
 .vs/
+*.user
 
 # NuGet restored packages
 packages/*
