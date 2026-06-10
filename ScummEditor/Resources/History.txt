@@ -1,3 +1,15 @@
+1.1.1.0
+-------
+* Decoded the room navigation and object-code blocks, each with its own viewer: BOXD (walk boxes), BOXM (box matrix), SCAL (scale slots) and OBCD (object code, showing the object name and verb count).
+
+* Decoded the sound blocks (SOUN): the iMUSE device versions (AdLib, Roland, General MIDI) are listed and can be exported, and Standard MIDI / digital (VOC) sounds can be played.
+
+* Added a SCUMM 6 script disassembler. Global, local, entry and exit scripts (SCRP, LSCR, EXCD, ENCD) are shown as a readable, C#-like listing.
+
+* Decoded the charset/font blocks (CHAR): the glyphs are rendered in a font atlas viewer.
+
+* With this every SCUMM 6 block type is now parsed - there are no more raw, "not implemented" blocks. Validated against Day of the Tentacle and Sam & Max with a byte-identical round-trip.
+
 1.1.0.0
 -------
 * Lossless indexed image export/import. Backgrounds and objects are now exported as 8-bit indexed PNGs that store the original palette index of every pixel, and importing reads those indexes back directly instead of guessing them from the pixel color. This preserves the exact index even when the palette has repeated colors, so the image keeps rendering correctly under any of the alternate (APAL) palettes. The old color-matching import and the .idx side files are no longer needed.
