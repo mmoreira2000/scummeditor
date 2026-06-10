@@ -111,11 +111,83 @@ namespace ScummEditor.Encoders
             return string.Join(", ", parts);
         }
 
+        // Several opcodes take a variable-length "stack list": the element count is pushed last,
+        // then that many values were pushed before it. Renders as "[a, b, c]". When the count is
+        // not a literal (a variable/expression) it is shown as "[*<count>]".
+        private string PopStackList()
+        {
+            string countExpr = Pop();
+            int count;
+            if (int.TryParse(countExpr, out count) && count >= 0 && count <= 128)
+            {
+                var parts = new string[count];
+                for (int i = count - 1; i >= 0; i--) parts[i] = Pop();
+                return "[" + string.Join(", ", parts) + "]";
+            }
+            return "[*" + countExpr + "]";
+        }
+
         private void Binary(string op)
         {
             string b = Pop();
             string a = Pop();
             Push("(" + a + " " + op + " " + b + ")");
+        }
+
+        // --- readability: drop redundant parentheses / invert negated comparisons ---
+
+        // Pairs of comparison operators and their logical negation (longer ops listed first).
+        private static readonly string[][] CompOps =
+        {
+            new[] { " <= ", " > " }, new[] { " >= ", " < " },
+            new[] { " == ", " != " }, new[] { " != ", " == " },
+            new[] { " < ", " >= " }, new[] { " > ", " <= " }
+        };
+
+        // Removes one outer parenthesis pair when it wraps the whole expression.
+        private static string StripParens(string e)
+        {
+            if (e == null || e.Length < 2 || e[0] != '(' || e[e.Length - 1] != ')') return e;
+            int depth = 0;
+            for (int i = 0; i < e.Length; i++)
+            {
+                if (e[i] == '(') depth++;
+                else if (e[i] == ')')
+                {
+                    depth--;
+                    if (depth == 0) return i == e.Length - 1 ? e.Substring(1, e.Length - 2) : e;
+                }
+            }
+            return e;
+        }
+
+        // Logical negation of an "ifNot" condition: !!x -> x, !(a == b) -> a != b, etc.
+        private static string NegateCondition(string cond)
+        {
+            string s = StripParens(cond);
+            if (s.StartsWith("!")) return StripParens(s.Substring(1));
+
+            foreach (string[] pair in CompOps)
+            {
+                int idx = TopLevelIndexOf(s, pair[0]);
+                if (idx >= 0) return s.Substring(0, idx) + pair[1] + s.Substring(idx + pair[0].Length);
+            }
+            // A single atom (variable or call, no top-level operator) needs no wrapping parens.
+            return TopLevelIndexOf(s, " ") < 0 ? "!" + s : "!(" + s + ")";
+        }
+
+        // Index of the first occurrence of op outside any () or [] nesting, or -1.
+        private static int TopLevelIndexOf(string s, string op)
+        {
+            int depth = 0;
+            for (int i = 0; i + op.Length <= s.Length; i++)
+            {
+                char c = s[i];
+                if (c == '(' || c == '[') depth++;
+                else if (c == ')' || c == ']') depth--;
+                else if (depth == 0 && string.CompareOrdinal(s, i, op, 0, op.Length) == 0) return i;
+            }
+            return -1;
         }
 
         // -------------------------------------------------------------------------
@@ -245,15 +317,15 @@ namespace ScummEditor.Encoders
                 case 0x17: Binary("/"); break;
                 case 0x18: Binary("&&"); break;
                 case 0x19: Binary("||"); break;
-                case 0x1A: Emit(offset, Pop() + ";"); break;                                     // pop (discard / call result)
+                case 0x1A: Emit(offset, StripParens(Pop()) + ";"); break;                        // pop (discard / call result)
 
                 // ---- variable / array writes ----
-                case 0x42: { string v = ReadVarName(false); Emit(offset, v + " = " + Pop() + ";"); break; } // writeByteVar
-                case 0x43: { string v = ReadVarName(true); Emit(offset, v + " = " + Pop() + ";"); break; }  // writeWordVar
-                case 0x46: { string a = ReadVarName(false); string val = Pop(); string idx = Pop(); Emit(offset, a + "[" + idx + "] = " + val + ";"); break; } // byteArrayWrite
-                case 0x47: { string a = ReadVarName(true); string val = Pop(); string idx = Pop(); Emit(offset, a + "[" + idx + "] = " + val + ";"); break; }  // wordArrayWrite
-                case 0x4A: { string a = ReadVarName(false); string val = Pop(); string idx = Pop(); string b = Pop(); Emit(offset, a + "[" + b + "][" + idx + "] = " + val + ";"); break; } // byteArrayIndexedWrite
-                case 0x4B: { string a = ReadVarName(true); string val = Pop(); string idx = Pop(); string b = Pop(); Emit(offset, a + "[" + b + "][" + idx + "] = " + val + ";"); break; }  // wordArrayIndexedWrite
+                case 0x42: { string v = ReadVarName(false); Emit(offset, v + " = " + StripParens(Pop()) + ";"); break; } // writeByteVar
+                case 0x43: { string v = ReadVarName(true); Emit(offset, v + " = " + StripParens(Pop()) + ";"); break; }  // writeWordVar
+                case 0x46: { string a = ReadVarName(false); string val = StripParens(Pop()); string idx = Pop(); Emit(offset, a + "[" + idx + "] = " + val + ";"); break; } // byteArrayWrite
+                case 0x47: { string a = ReadVarName(true); string val = StripParens(Pop()); string idx = Pop(); Emit(offset, a + "[" + idx + "] = " + val + ";"); break; }  // wordArrayWrite
+                case 0x4A: { string a = ReadVarName(false); string val = StripParens(Pop()); string idx = Pop(); string b = Pop(); Emit(offset, a + "[" + b + "][" + idx + "] = " + val + ";"); break; } // byteArrayIndexedWrite
+                case 0x4B: { string a = ReadVarName(true); string val = StripParens(Pop()); string idx = Pop(); string b = Pop(); Emit(offset, a + "[" + b + "][" + idx + "] = " + val + ";"); break; }  // wordArrayIndexedWrite
                 case 0x4E: Emit(offset, ReadVarName(false) + "++;"); break;                      // byteVarInc
                 case 0x4F: Emit(offset, ReadVarName(true) + "++;"); break;                       // wordVarInc
                 case 0x52: { string a = ReadVarName(false); Emit(offset, a + "[" + Pop() + "]++;"); break; } // byteArrayInc
@@ -264,17 +336,17 @@ namespace ScummEditor.Encoders
                 case 0x5B: { string a = ReadVarName(true); Emit(offset, a + "[" + Pop() + "]--;"); break; }  // wordArrayDec
 
                 // ---- control flow ----
-                case 0x5C: { string cond = Pop(); Emit(offset, "if (" + cond + ") goto " + Jump(offset) + ";"); break; }        // if (jumpTrue)
-                case 0x5D: { string cond = Pop(); string c = cond.StartsWith("!") ? cond.Substring(1) : "!(" + cond + ")"; Emit(offset, "if (" + c + ") goto " + Jump(offset) + ";"); break; }     // ifNot (jumpFalse)
+                case 0x5C: { string cond = Pop(); Emit(offset, "if (" + StripParens(cond) + ") goto " + Jump(offset) + ";"); break; }   // if (jumpTrue)
+                case 0x5D: { string cond = Pop(); Emit(offset, "if (" + NegateCondition(cond) + ") goto " + Jump(offset) + ";"); break; } // ifNot (jumpFalse)
                 case 0x73: Emit(offset, "goto " + Jump(offset) + ";"); break;                    // jump
                 case 0x65: Emit(offset, "stopObjectCode();"); break;
                 case 0x66: Emit(offset, "stopObjectCode();"); break;
                 case 0x6C: Emit(offset, "breakHere();"); break;
 
                 // ---- scripts / objects ----
-                case 0x5E: StmtCall(offset, "startScript", 3); break;
-                case 0x5F: StmtCall(offset, "startScriptQuick", 2); break;
-                case 0x60: StmtCall(offset, "startObject", 4); break;
+                case 0x5E: { string a = PopStackList(); string s = Pop(); string f = Pop(); Emit(offset, "startScript(" + s + ", " + f + ", " + a + ");"); break; }
+                case 0x5F: { string a = PopStackList(); string s = Pop(); Emit(offset, "startScriptQuick(" + s + ", " + a + ");"); break; }
+                case 0x60: { string a = PopStackList(); string e = Pop(); string s = Pop(); Emit(offset, "startObject(" + s + ", " + e + ", " + a + ");"); break; }
                 case 0x61: StmtCall(offset, "drawObject", 2); break;
                 case 0x62: StmtCall(offset, "drawObjectAt", 3); break;
                 case 0x63: StmtCall(offset, "drawBlastObject", 5); break;
@@ -334,12 +406,12 @@ namespace ScummEditor.Encoders
                 case 0xA2: Push("getActorElevation(" + Pop() + ")"); break;
                 case 0xA3: { string b = Pop(); string a = Pop(); Push("getVerbEntrypoint(" + a + ", " + b + ")"); break; }
                 case 0xA6: StmtCall(offset, "drawBox", 5); break;
-                case 0xA7: Emit(offset, Pop() + ";"); break;                                     // pop
+                case 0xA7: Emit(offset, StripParens(Pop()) + ";"); break;                        // pop
                 case 0xA8: Push("getActorWidth(" + Pop() + ")"); break;
                 case 0xAA: Push("getActorScaleX(" + Pop() + ")"); break;
                 case 0xAB: Push("getActorAnimCounter(" + Pop() + ")"); break;
-                case 0xAC: StmtCall(offset, "soundKludge", 1); break;
-                case 0xAD: { string list = Pop(); string val = Pop(); Push("isAnyOf(" + val + ", " + list + ")"); break; }
+                case 0xAC: Emit(offset, "soundKludge(" + PopStackList() + ");"); break;
+                case 0xAD: { string list = PopStackList(); string val = Pop(); Push("isAnyOf(" + val + ", " + list + ")"); break; }
                 case 0xAF: { string b = Pop(); string a = Pop(); Push("isActorInBox(" + a + ", " + b + ")"); break; }
                 case 0xB0: StmtCall(offset, "delay", 1); break;
                 case 0xB1: StmtCall(offset, "delaySeconds", 1); break;
@@ -348,17 +420,17 @@ namespace ScummEditor.Encoders
                 case 0xBA: { string s = ReadString(); StmtCallWithExtra(offset, "talkActor", 1, s); break; }
                 case 0xBB: Emit(offset, "talkEgo(" + ReadString() + ");"); break;
                 case 0xBD: Emit(offset, "dummy();"); break;
-                case 0xBE: StmtCall(offset, "startObjectQuick", 2); break;
-                case 0xBF: StmtCall(offset, "startScriptQuick2", 2); break;
+                case 0xBE: { string a = PopStackList(); string s = Pop(); Emit(offset, "startObjectQuick(" + s + ", " + a + ");"); break; }
+                case 0xBF: { string a = PopStackList(); string s = Pop(); Emit(offset, "startScriptQuick2(" + s + ", " + a + ");"); break; }
                 case 0xC4: Push("abs(" + Pop() + ")"); break;
                 case 0xC5: { string b = Pop(); string a = Pop(); Push("getDistObjObj(" + a + ", " + b + ")"); break; }
                 case 0xC6: { string c = Pop(); string b = Pop(); string a = Pop(); Push("getDistObjPt(" + a + ", " + b + ", " + c + ")"); break; }
                 case 0xC7: { string d = Pop(); string c = Pop(); string b = Pop(); string a = Pop(); Push("getDistPtPt(" + a + ", " + b + ", " + c + ", " + d + ")"); break; }
-                case 0xC8: { string args = DrainStack(); Push("kernelGetFunctions(" + args + ")"); break; }
-                case 0xC9: Emit(offset, "kernelSetFunctions(" + DrainStack() + ");"); break;
+                case 0xC8: Push("kernelGetFunctions(" + PopStackList() + ")"); break;
+                case 0xC9: Emit(offset, "kernelSetFunctions(" + PopStackList() + ");"); break;
                 case 0xCA: StmtCall(offset, "delayFrames", 1); break;
-                case 0xCB: { string list = Pop(); string idx = Pop(); Push("pickOneOf(" + idx + ", " + list + ")"); break; }
-                case 0xCC: { string def = Pop(); string list = Pop(); string idx = Pop(); Push("pickOneOfDefault(" + idx + ", " + list + ", " + def + ")"); break; }
+                case 0xCB: { string list = PopStackList(); string idx = Pop(); Push("pickOneOf(" + idx + ", " + list + ")"); break; }
+                case 0xCC: { string def = Pop(); string list = PopStackList(); string idx = Pop(); Push("pickOneOfDefault(" + idx + ", " + list + ", " + def + ")"); break; }
                 case 0xCD: StmtCall(offset, "stampObject", 4); break;
                 case 0xD0: Push("getDateTime()"); break;
                 case 0xD1: Emit(offset, "stopTalking();"); break;
@@ -371,15 +443,15 @@ namespace ScummEditor.Encoders
                 case 0xDD: Push("findAllObjects(" + Pop() + ")"); break;
 
                 // ---- sub-opcode groups ----
-                case 0x6B: SubOp(offset, "cursorCommand"); break;
-                case 0x9B: SubOp(offset, "resourceRoutines"); break;
-                case 0x9C: SubOp(offset, "roomOps"); break;
-                case 0x9D: SubOpMaybeString(offset, "actorOps", 0x58); break;   // SO_ACTOR_NAME -> inline string
-                case 0x9E: SubOpMaybeString(offset, "verbOps", 0x7D); break;     // SO_VERB_NAME -> inline string
+                case 0x6B: SubOp(offset, "cursorCommand", CursorCommand); break;
+                case 0x9B: SubOp(offset, "resourceRoutines", ResourceRoutines); break;
+                case 0x9C: SubOp(offset, "roomOps", RoomOps); break;
+                case 0x9D: SubOpMaybeString(offset, "actorOps", 0x58, ActorOps); break;   // SO_ACTOR_NAME -> inline string
+                case 0x9E: SubOpMaybeString(offset, "verbOps", 0x7D, VerbOps); break;      // SO_VERB_NAME -> inline string
                 case 0xA4: ArrayOps(offset); break;
-                case 0xA5: SubOp(offset, "saveRestoreVerbs"); break;
+                case 0xA5: SubOp(offset, "saveRestoreVerbs", SaveRestoreVerbs); break;
                 case 0xA9: WaitOp(offset); break;
-                case 0xAE: SubOp(offset, "systemOps"); break;
+                case 0xAE: SubOp(offset, "systemOps", SystemOps); break;
                 case 0xB4: PrintOp(offset, "printLine"); break;
                 case 0xB5: PrintOp(offset, "printText"); break;
                 case 0xB6: PrintOp(offset, "printDebug"); break;
@@ -404,42 +476,133 @@ namespace ScummEditor.Encoders
             Emit(offset, name + "(" + args + extra + ");");
         }
 
-        // Generic sub-opcode group: read the sub-op byte, emit "group.sub_XX(...);" consuming the
-        // stack as a free-form argument list (we don't model every sub-op's exact arity).
-        private void SubOp(int offset, string group)
+        // -------------------------------------------------------------------------
+        // Sub-opcode name tables (ScummVM SO_* constants). Used only to label the
+        // disassembly; the byte decoding never depends on them. Unknown sub-codes fall
+        // back to "op_0xNN".
+        // -------------------------------------------------------------------------
+
+        private static string SubName(Dictionary<int, string> table, byte sub)
         {
-            byte sub = ReadByte();
-            Emit(offset, group + ".op_0x" + sub.ToString("X2") + "(" + DrainStack() + ");");
+            string name;
+            if (table != null && table.TryGetValue(sub, out name)) return name;
+            return "op_0x" + sub.ToString("X2");
         }
 
-        // wait has a few sub-ops; SO_WAIT_FOR_ACTOR (0xA8) carries an inline jump offset
-        // (the script loops back to it while the actor is still moving).
+        private static readonly Dictionary<int, string> CursorCommand = new Dictionary<int, string>
+        {
+            {0x90,"cursorOn"}, {0x91,"cursorOff"}, {0x92,"userPutOn"}, {0x93,"userPutOff"},
+            {0x94,"softCursorOn"}, {0x95,"softCursorOff"}, {0x96,"softUserPutOn"}, {0x97,"softUserPutOff"},
+            {0x99,"setCursorImg"}, {0x9A,"setCursorHotspot"}, {0x9C,"initCharset"}, {0x9D,"charsetColors"},
+            {0xD6,"cursorTransparent"}
+        };
+
+        private static readonly Dictionary<int, string> ResourceRoutines = new Dictionary<int, string>
+        {
+            {0x64,"loadScript"}, {0x65,"loadSound"}, {0x66,"loadCostume"}, {0x67,"loadRoom"},
+            {0x68,"nukeScript"}, {0x69,"nukeSound"}, {0x6A,"nukeCostume"}, {0x6B,"nukeRoom"},
+            {0x6C,"lockScript"}, {0x6D,"lockSound"}, {0x6E,"lockCostume"}, {0x6F,"lockRoom"},
+            {0x70,"unlockScript"}, {0x71,"unlockSound"}, {0x72,"unlockCostume"}, {0x73,"unlockRoom"},
+            {0x74,"clearHeap"}, {0x75,"loadCharset"}, {0x76,"nukeCharset"}, {0x77,"loadFlObject"}
+        };
+
+        private static readonly Dictionary<int, string> RoomOps = new Dictionary<int, string>
+        {
+            {0xAC,"roomScroll"}, {0xAE,"setScreen"}, {0xAF,"setPalColor"}, {0xB0,"shakeOn"},
+            {0xB1,"shakeOff"}, {0xB3,"darkenPalette"}, {0xB4,"saveLoadRoom"}, {0xB5,"screenEffect"},
+            {0xB6,"darkenPaletteRgb"}, {0xB7,"setupShadowPalette"}, {0xBA,"palManipulate"},
+            {0xBB,"colorCycleDelay"}, {0xD5,"setPalette"}, {0xDC,"copyPalColor"}, {0xEC,"setRoomPalette"}
+        };
+
+        private static readonly Dictionary<int, string> ActorOps = new Dictionary<int, string>
+        {
+            {0xC5,"setCurActor"}, {0x4C,"setCostume"}, {0x4D,"setWalkSpeed"}, {0x4E,"setSound"},
+            {0x4F,"setWalkFrame"}, {0x50,"setTalkFrame"}, {0x51,"setStandFrame"}, {0x52,"setAnimation"},
+            {0x53,"init"}, {0x54,"setElevation"}, {0x55,"setDefaultAnim"}, {0x56,"setPalette"},
+            {0x57,"setTalkColor"}, {0x58,"setName"}, {0x59,"setInitFrame"}, {0x5B,"setWidth"},
+            {0x5C,"setScale"}, {0x5D,"setNeverZClip"}, {0x5E,"setAlwaysZClip"}, {0x5F,"setIgnoreBoxes"},
+            {0x60,"setFollowBoxes"}, {0x61,"setAnimSpeed"}, {0x62,"setShadowMode"}, {0x63,"setTalkPos"},
+            {0x9C,"setCharset"}, {0xC6,"setAnimVar"}, {0xD7,"setIgnoreTurnsOn"}, {0xD8,"setIgnoreTurnsOff"},
+            {0xD9,"initLittle"}
+        };
+
+        private static readonly Dictionary<int, string> VerbOps = new Dictionary<int, string>
+        {
+            {0xC4,"setCurVerb"}, {0x7C,"loadImage"}, {0x7D,"loadString"}, {0x7E,"setColor"},
+            {0x7F,"setHiColor"}, {0x80,"setXY"}, {0x81,"setOn"}, {0x82,"setOff"}, {0x83,"delete"},
+            {0x84,"new"}, {0x85,"setDimColor"}, {0x86,"setDim"}, {0x87,"setKey"}, {0x88,"setCenter"},
+            {0x89,"setToString"}, {0x8B,"setToObject"}, {0x8C,"setBackColor"}, {0xFF,"redraw"}
+        };
+
+        private static readonly Dictionary<int, string> WaitOps = new Dictionary<int, string>
+        {
+            {0xA8,"waitForActor"}, {0xA9,"waitForMessage"}, {0xAA,"waitForCamera"}, {0xAB,"waitForSentence"}
+        };
+
+        private static readonly Dictionary<int, string> SaveRestoreVerbs = new Dictionary<int, string>
+        {
+            {0x8D,"saveVerbs"}, {0x8E,"restoreVerbs"}, {0x8F,"deleteVerbs"}
+        };
+
+        private static readonly Dictionary<int, string> SystemOps = new Dictionary<int, string>
+        {
+            {0x9E,"restartGame"}, {0x9F,"pauseGame"}, {0xA0,"quitGame"}
+        };
+
+        private static readonly Dictionary<int, string> ArrayOpsNames = new Dictionary<int, string>
+        {
+            {0xCD,"assignString"}, {0xD0,"assignIntList"}, {0xD4,"assign2DimList"}
+        };
+
+        private static readonly Dictionary<int, string> DimNames = new Dictionary<int, string>
+        {
+            {0xC7,"int"}, {0xC8,"bit"}, {0xC9,"nibble"}, {0xCA,"byte"}, {0xCB,"string"}, {0xCC,"undim"}
+        };
+
+        private static readonly Dictionary<int, string> PrintOps = new Dictionary<int, string>
+        {
+            {0x41,"at"}, {0x42,"color"}, {0x43,"clipped"}, {0x45,"center"}, {0x47,"left"},
+            {0x48,"overhead"}, {0x4A,"mumble"}, {0x4B,"text"}, {0xFE,"begin"}, {0xFF,"end"}
+        };
+
+        // Generic sub-opcode group: read the sub-op byte and emit "group.name(args);", consuming
+        // the stack as a free-form argument list (exact per-sub-op arity is not modelled).
+        private void SubOp(int offset, string group, Dictionary<int, string> table)
+        {
+            byte sub = ReadByte();
+            Emit(offset, group + "." + SubName(table, sub) + "(" + DrainStack() + ");");
+        }
+
+        // wait: SO_WAIT_FOR_ACTOR (0xA8) carries an inline jump offset (the script loops back to
+        // it while the actor is still moving).
         private void WaitOp(int offset)
         {
             byte sub = ReadByte();
-            if (sub == 0xA8) // SO_WAIT_FOR_ACTOR
+            string name = SubName(WaitOps, sub);
+            if (sub == 0xA8)
             {
                 string actor = DrainStack();
                 string label = Jump(offset);
-                Emit(offset, "wait.waitForActor(" + actor + ") retry " + label + ";");
+                Emit(offset, "wait." + name + "(" + actor + ") retry " + label + ";");
             }
             else
             {
-                Emit(offset, "wait.op_0x" + sub.ToString("X2") + "(" + DrainStack() + ");");
+                Emit(offset, "wait." + name + "(" + DrainStack() + ");");
             }
         }
 
         // Sub-opcode group where one sub-op (the "name" op) carries an inline string.
-        private void SubOpMaybeString(int offset, string group, byte stringSub)
+        private void SubOpMaybeString(int offset, string group, byte stringSub, Dictionary<int, string> table)
         {
             byte sub = ReadByte();
+            string name = SubName(table, sub);
             if (sub == stringSub)
             {
-                Emit(offset, group + ".setName(" + ReadString() + ");");
+                Emit(offset, group + "." + name + "(" + ReadString() + ");");
             }
             else
             {
-                Emit(offset, group + ".op_0x" + sub.ToString("X2") + "(" + DrainStack() + ");");
+                Emit(offset, group + "." + name + "(" + DrainStack() + ");");
             }
         }
 
@@ -452,7 +615,7 @@ namespace ScummEditor.Encoders
             }
             else
             {
-                Emit(offset, group + ".op_0x" + sub.ToString("X2") + "(" + DrainStack() + ");");
+                Emit(offset, group + "." + SubName(PrintOps, sub) + "(" + DrainStack() + ");");
             }
         }
 
@@ -461,13 +624,13 @@ namespace ScummEditor.Encoders
             byte sub = ReadByte();
             int array = ReadWord();
             string arrayName = Var(array);
-            if (sub == 0xCD) // assignString
+            if (sub == 0xCD) // assignString -> inline string
             {
                 Emit(offset, arrayName + " = " + ReadString() + ";");
             }
             else
             {
-                Emit(offset, "arrayOps.op_0x" + sub.ToString("X2") + "(" + arrayName + ", " + DrainStack() + ");");
+                Emit(offset, "arrayOps." + SubName(ArrayOpsNames, sub) + "(" + arrayName + ", " + DrainStack() + ");");
             }
         }
 
@@ -475,7 +638,7 @@ namespace ScummEditor.Encoders
         {
             byte sub = ReadByte();
             int array = ReadWord();
-            Emit(offset, group + ".op_0x" + sub.ToString("X2") + "(" + Var(array) + DrainStackPrefixed() + ");");
+            Emit(offset, group + "." + SubName(DimNames, sub) + "(" + Var(array) + DrainStackPrefixed() + ");");
         }
 
         // Consumes whatever is currently on the virtual stack as a comma-separated list.
