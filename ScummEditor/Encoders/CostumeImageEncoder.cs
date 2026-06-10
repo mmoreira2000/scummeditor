@@ -12,27 +12,16 @@ namespace ScummEditor.Encoders
         CostumeImageData _pictureData;
         private Costume _costume;
         private Bitmap _imageToEncode;
-        private PaletteData _palette;
 
-        public int PaletteIndex { get; set; }
-        public CostumeImageEncoder()
-        {
-            PaletteIndex = 0;
-        }
+        // Raw costume-relative palette indexes read from the (indexed) source bitmap. The codec
+        // stores these directly, so the index is preserved losslessly regardless of duplicate colors.
+        private byte[,] _indexMatrix;
 
         public void Encode(RoomBlock roomBlock, Costume costume, int frameIndex, Bitmap imageToEncode)
         {
             _costume = costume;
             _pictureData = costume.Pictures[frameIndex];
             _imageToEncode = imageToEncode;
-            if (PaletteIndex == 0)
-            {
-                _palette = roomBlock.GetDefaultPalette();
-            }
-            else
-            {
-                _palette = roomBlock.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
-            }
 
             Encode();
         }
@@ -42,6 +31,12 @@ namespace ScummEditor.Encoders
             {
                 throw new ImageEncodeException("The image must have the same size as original costume frame");
             }
+
+            if (!IndexedImageHelper.IsIndexed(_imageToEncode))
+            {
+                throw new ImageEncodeException("The image must be an indexed (palette-based) image so the original palette indexes are preserved. Re-export it from ScummEditor and edit it without converting it to RGB/truecolor.");
+            }
+            _indexMatrix = IndexedImageHelper.GetIndexMatrix(_imageToEncode);
 
             var bitStreamManager = new BitStreamManager();
             int colorSize = 0;
@@ -64,8 +59,7 @@ namespace ScummEditor.Encoders
             int currentLine = 0;
             int currentColumn = 0;
 
-            Color currentColor = _imageToEncode.GetPixel(0, 0);
-            byte currentColorPalette = GetRelativePaletteIndex(currentColor);
+            byte currentColorPalette = GetRelativeIndexAt(0, 0);
             int repetitionCount = 0;
 
             /* The compression used for the costume data is a simple byte based RLE compression. 
@@ -76,8 +70,8 @@ namespace ScummEditor.Encoders
              */
             while (!(currentLine == 0 && currentColumn == _pictureData.Width))
             {
-                Color newColor = _imageToEncode.GetPixel(currentColumn, currentLine);
-                if (newColor == currentColor)
+                byte newColorPalette = GetRelativeIndexAt(currentColumn, currentLine);
+                if (newColorPalette == currentColorPalette)
                 {
                     repetitionCount++;
                 }
@@ -105,8 +99,7 @@ namespace ScummEditor.Encoders
                         bitStreamManager.AddByte((byte)repetitionCount, repetitionCountSize);
                         bitStreamManager.AddByte(currentColorPalette, colorSize);
                     }
-                    currentColor = newColor;
-                    currentColorPalette = GetRelativePaletteIndex(currentColor);
+                    currentColorPalette = newColorPalette;
 
                     repetitionCount = 1;
                 }
@@ -149,41 +142,10 @@ namespace ScummEditor.Encoders
             _pictureData.ImageData = bitStreamManager.ToByteArray();
         }
 
-        private byte GetRelativePaletteIndex(Color color)
+        // Returns the raw costume-relative palette index stored at the given pixel of the indexed source.
+        private byte GetRelativeIndexAt(int x, int y)
         {
-            //The same color can appear more than one time in the palette index.
-            //Because we don't know what absolute index the relative index refers (usually the last absolute index),
-            //we will need to verify all indexes.
-            var absolutePaletteIndexes = new List<int>();
-
-            for (int i = 0; i < _palette.Colors.Length; i++)
-            {
-                var colorCheck = _palette.Colors[i];
-                if (colorCheck.R == color.R &&
-                    colorCheck.G == color.G &&
-                    colorCheck.B == color.B)
-                {
-                    absolutePaletteIndexes.Add(i);
-                }
-            }
-
-            if (absolutePaletteIndexes.Count == 0)
-            {
-                throw new ImageEncodeException(string.Format("This color (R:{0}, G:{1}, B:{2}) does not exist in the palette.", color.R, color.G, color.B));
-            }
-
-            foreach (int absolutePaletteIndex in absolutePaletteIndexes)
-            {
-                for (int i = 0; i < _costume.Palette.Count; i++)
-                {
-                    if (_costume.Palette[i] == absolutePaletteIndex)
-                    {
-                        return (byte)i;
-                    }
-                }
-            }
-
-            throw new ImageEncodeException(string.Format("This color (R:{0}, G:{1}, B:{2}) does exist in the palette, but it's not in the costume palette.", color.R, color.G, color.B));
+            return _indexMatrix[x, y];
         }
     }
 }

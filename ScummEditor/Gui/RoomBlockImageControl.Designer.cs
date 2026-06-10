@@ -33,7 +33,6 @@
             this.ImportFromDisk = new System.Windows.Forms.Button();
             this.SaveToDisk = new System.Windows.Forms.Button();
             this.pictureScroll = new System.Windows.Forms.Panel();
-            this.Export8Bits = new System.Windows.Forms.CheckBox();
             this.CompressionMethod = new System.Windows.Forms.ComboBox();
             this.CompressionMethodLabel = new System.Windows.Forms.Label();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBackground)).BeginInit();
@@ -89,21 +88,9 @@
             this.pictureScroll.Name = "pictureScroll";
             this.pictureScroll.Size = new System.Drawing.Size(259, 220);
             this.pictureScroll.TabIndex = 16;
-            // 
-            // Export8Bits
-            // 
-            this.Export8Bits.AutoSize = true;
-            this.Export8Bits.Checked = true;
-            this.Export8Bits.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.Export8Bits.Location = new System.Drawing.Point(3, 6);
-            this.Export8Bits.Name = "Export8Bits";
-            this.Export8Bits.Size = new System.Drawing.Size(51, 17);
-            this.Export8Bits.TabIndex = 12;
-            this.Export8Bits.Text = "8 bits";
-            this.Export8Bits.UseVisualStyleBackColor = true;
-            // 
+            //
             // CompressionMethod
-            // 
+            //
             this.CompressionMethod.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.CompressionMethod.FormattingEnabled = true;
             this.CompressionMethod.Location = new System.Drawing.Point(113, 31);
@@ -128,7 +115,6 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.CompressionMethodLabel);
             this.Controls.Add(this.CompressionMethod);
-            this.Controls.Add(this.Export8Bits);
             this.Controls.Add(this.pictureScroll);
             this.Controls.Add(this.TesteReencode);
             this.Controls.Add(this.ImportFromDisk);
@@ -149,7 +135,6 @@
         private System.Windows.Forms.Button ImportFromDisk;
         private System.Windows.Forms.Button SaveToDisk;
         private System.Windows.Forms.Panel pictureScroll;
-        private System.Windows.Forms.CheckBox Export8Bits;
         private System.Windows.Forms.ComboBox CompressionMethod;
         private System.Windows.Forms.Label CompressionMethodLabel;
     }

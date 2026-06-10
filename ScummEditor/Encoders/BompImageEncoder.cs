@@ -10,20 +10,15 @@ namespace ScummEditor.Encoders
     {
         private ushort _width;
         private ushort _height;
-        private PaletteData _pallete;
         private Bitmap _imageToEncode;
         private ImageBomp _imageBomp;
 
-        public List<int> PreferredIndexes { get; set; }
+        // Raw palette indexes read from the (indexed) source bitmap. The codec stores these
+        // directly, so the index is preserved losslessly regardless of duplicate palette colors.
+        private byte[,] _indexMatrix;
 
         //Used during encode.
         private int _currentLine;
-
-        public int PaletteIndex { get; set; }
-        public BompImageEncoder()
-        {
-            PaletteIndex = 0;
-        }
 
         public void Encode(RoomBlock blockToEncode, int objectIndex, int imageIndex, Bitmap imageToEncode)
         {
@@ -34,15 +29,6 @@ namespace ScummEditor.Encoders
             _width = IMHD.Width;
             _height = IMHD.Height;
             _imageBomp = obj.GetIMxx()[imageIndex].GetBOMP();
-
-            if (PaletteIndex == 0)
-            {
-                _pallete = blockToEncode.GetDefaultPalette();
-            }
-            else
-            {
-                _pallete = blockToEncode.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
-            }
 
             Encode();
         }
@@ -56,16 +42,6 @@ namespace ScummEditor.Encoders
             _height = RMHD.Height;
             _imageBomp = blockToEncode.GetRMIM().GetIM00().GetBOMP();
 
-            if (PaletteIndex == 0)
-            {
-                _pallete = blockToEncode.GetDefaultPalette();
-
-            }
-            else
-            {
-                _pallete = blockToEncode.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
-            }
-
             Encode();
         }
 
@@ -76,6 +52,12 @@ namespace ScummEditor.Encoders
         {
             var result = new List<byte>();
 
+            if (!IndexedImageHelper.IsIndexed(_imageToEncode))
+            {
+                throw new ImageEncodeException("The image must be an indexed (palette-based) image so the original palette indexes are preserved. Re-export it from ScummEditor and edit it without converting it to RGB/truecolor.");
+            }
+            _indexMatrix = IndexedImageHelper.GetIndexMatrix(_imageToEncode);
+
             _currentLine = 0;
 
             //Primeira passagem - Cadastra tudo alternado
@@ -85,8 +67,8 @@ namespace ScummEditor.Encoders
                 var lineInformation = new List<SegmentInformation>();
 
                 var currentSegmentInformation = new SegmentInformation();
-                byte lastColorIndex = (byte)FindTableIndex(_imageToEncode.GetPixel(0, _currentLine));
-                if (lastColorIndex == (byte)FindTableIndex(_imageToEncode.GetPixel(1, _currentLine)))
+                byte lastColorIndex = (byte)GetIndexAt(0, _currentLine);
+                if (lastColorIndex == (byte)GetIndexAt(1, _currentLine))
                 {
                     currentSegmentInformation.RepeatSameColor = true;
                 }
@@ -94,7 +76,7 @@ namespace ScummEditor.Encoders
 
                 for (int x = 1; x < _width; x++)
                 {
-                    byte currentColorIndex = (byte)FindTableIndex(_imageToEncode.GetPixel(x, _currentLine));
+                    byte currentColorIndex = (byte)GetIndexAt(x, _currentLine);
 
                     if (currentColorIndex != lastColorIndex)
                     {
@@ -201,40 +183,11 @@ namespace ScummEditor.Encoders
             _imageBomp.Data = result.ToArray();
         }
 
-        private int FindTableIndex(Color color)
+        // Returns the raw palette index stored at the given pixel of the indexed source bitmap.
+        private int GetIndexAt(int x, int y)
         {
-            if (PreferredIndexes != null)
-            {
-                foreach (var preferredIndex in PreferredIndexes)
-                {
-                    if (ColorVerify(preferredIndex, color)) return preferredIndex;
-                }
-            }
-
-            //Pelo que entendi, a cor de transparencia é sempre a 255, ultima da paletta.
-            //Então vou começar pela última cor, porque a mesma cor pode aparecer em outras
-            //posições na paletta, e assim perderia a transparencia.
-            //Não sei se vale para tudo e todos os casos, mas é o que sei por hora.
-            for (int i = _pallete.Colors.Length - 1; i >= 0; i--)
-            {
-                if (ColorVerify(i, color)) return i;
-            }
-
-            throw new ImageEncodeException(string.Format("This color does not exist in the palette (R:{0}, G:{1}, B:{2}", color.R, color.G, color.B));
+            return _indexMatrix[x, y];
         }
 
-        private bool ColorVerify(int paletteIndex, Color color)
-        {
-            var colorCheck = _pallete.Colors[paletteIndex];
-            if (colorCheck.R == color.R &&
-                colorCheck.G == color.G &&
-                colorCheck.B == color.B)
-            {
-                return true;
-            }
-
-            return false;
-        }
-   
     }
 }

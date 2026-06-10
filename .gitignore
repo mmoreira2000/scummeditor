@@ -10,11 +10,9 @@ ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest
 
 # Visual Studio
 .vs/
-
-# Claude
-.claude/
+*.user
 
 # NuGet restored packages
 packages/*
 !packages/repositories.config
-
+/ScummEditor/Properties/PublishProfiles

@@ -42,7 +42,6 @@
             this.ExportObjectsZPlanes = new System.Windows.Forms.CheckBox();
             this.FilesExportedLabel = new System.Windows.Forms.Label();
             this.FilesExported = new System.Windows.Forms.Label();
-            this.Export8Bits = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // OK
@@ -193,25 +192,12 @@
             this.FilesExported.TabIndex = 13;
             this.FilesExported.Text = "0";
             this.FilesExported.Visible = false;
-            // 
-            // Export8Bits
-            // 
-            this.Export8Bits.AutoSize = true;
-            this.Export8Bits.Checked = true;
-            this.Export8Bits.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.Export8Bits.Location = new System.Drawing.Point(12, 79);
-            this.Export8Bits.Name = "Export8Bits";
-            this.Export8Bits.Size = new System.Drawing.Size(204, 17);
-            this.Export8Bits.TabIndex = 14;
-            this.Export8Bits.Text = "Export as 8 bits indexed palette image";
-            this.Export8Bits.UseVisualStyleBackColor = true;
-            // 
+            //
             // ExportResources
-            // 
+            //
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(427, 226);
-            this.Controls.Add(this.Export8Bits);
             this.Controls.Add(this.FilesExported);
             this.Controls.Add(this.FilesExportedLabel);
             this.Controls.Add(this.ExportObjectsZPlanes);
@@ -251,6 +237,5 @@
         private System.Windows.Forms.CheckBox ExportObjectsZPlanes;
         private System.Windows.Forms.Label FilesExportedLabel;
         private System.Windows.Forms.Label FilesExported;
-        private System.Windows.Forms.CheckBox Export8Bits;
     }
 }
