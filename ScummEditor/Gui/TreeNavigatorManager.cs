@@ -37,6 +37,19 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(Costume).Name, new CostumeControl());
             _controlViewers.Add(typeof(ImageBomp).Name, new ImageBompControl());
 
+            var structuredBlockControl = new StructuredBlockControl();
+            _controlViewers.Add(typeof(BoxData).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(BoxMatrix).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(Scale).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(ObjectCode).Name, structuredBlockControl);
+
+            _controlViewers.Add(typeof(SoundBlock).Name, new SoundBlockControl());
+
+            var scriptControl = new ScriptControl();
+            _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);
+
+            _controlViewers.Add(typeof(Charset).Name, new CharsetControl());
+
             var directoryOfItemsControlGeneric = new DirectoryOfItemsControl();
             _controlViewers.Add(typeof(DirectoryOfItems).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfRooms).Name, new DirectoryOfRoomsControl());
