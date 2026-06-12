@@ -66,7 +66,16 @@ namespace ScummEditor.Gui
             {
                 var slice = new byte[obcd.VerbCodeLength];
                 Array.Copy(obcd.RawContent, obcd.VerbCodeOffset, slice, 0, obcd.VerbCodeLength);
-                Scumm6Disassembler.Result result = Scumm6Disassembler.Disassemble(slice, 0, labels);
+
+                Scumm6Disassembler.Result result;
+                if (obcd.GameInfo != null && obcd.GameInfo.ScummVersion == 5)
+                {
+                    result = Scumm5Disassembler.Disassemble(slice, 0, labels);
+                }
+                else
+                {
+                    result = Scumm6Disassembler.Disassemble(slice, 0, labels);
+                }
 
                 if (!result.DecodedToEnd)
                     sb.AppendLine("// WARNING: disassembly stopped before the end of the script (unknown opcode).");

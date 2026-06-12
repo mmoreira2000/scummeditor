@@ -166,6 +166,7 @@ namespace ScummEditor.Encoders
         }
 
         // --- readability: drop redundant parentheses / invert negated comparisons ---
+        // (internal: the v5 disassembler reuses these helpers)
 
         // Pairs of comparison operators and their logical negation (longer ops listed first).
         private static readonly string[][] CompOps =
@@ -176,7 +177,7 @@ namespace ScummEditor.Encoders
         };
 
         // Removes one outer parenthesis pair when it wraps the whole expression.
-        private static string StripParens(string e)
+        internal static string StripParens(string e)
         {
             if (e == null || e.Length < 2 || e[0] != '(' || e[e.Length - 1] != ')') return e;
             int depth = 0;
@@ -193,7 +194,7 @@ namespace ScummEditor.Encoders
         }
 
         // Logical negation of an "ifNot" condition: !!x -> x, !(a == b) -> a != b, etc.
-        private static string NegateCondition(string cond)
+        internal static string NegateCondition(string cond)
         {
             string s = StripParens(cond);
             if (s.StartsWith("!")) return StripParens(s.Substring(1));

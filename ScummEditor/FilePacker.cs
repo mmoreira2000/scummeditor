@@ -110,6 +110,11 @@ namespace ScummEditor
             {
                 edition = "Talkie";
             }
+            else if (gameInfo.HasCdAudio)
+            {
+                // CD edition without recorded speech (e.g. Monkey Island 1 CD: music on CD audio).
+                edition = "CD";
+            }
             else
             {
                 edition = "Floppy";
@@ -259,12 +264,12 @@ namespace ScummEditor
             {
                 int count = GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec,
                     Path.GetFileName(scummFile.LoadedGameInfo.DataFile));
-                MessageBox.Show(this, count + " textos exportados para:\n" + dlg.FileName,
+                MessageBox.Show(this, count + " texts exported to:\n" + dlg.FileName,
                     "Export game texts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao exportar: " + ex.Message, "Export game texts",
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export game texts",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -319,7 +324,7 @@ namespace ScummEditor
                 }
                 catch (FormatException ex)
                 {
-                    MessageBox.Show(this, "Charmap inválido: " + ex.Message, "Export game texts",
+                    MessageBox.Show(this, "Invalid charmap: " + ex.Message, "Export game texts",
                         MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 }
             }
@@ -342,14 +347,14 @@ namespace ScummEditor
 
                 string message = report.Summary();
                 if (report.HasChanges)
-                    message += Environment.NewLine + "Use 'Save Changes' para gravar as alterações nos arquivos do jogo.";
+                    message += Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.";
 
                 MessageBox.Show(this, message, "Import game texts", MessageBoxButtons.OK,
                     report.Errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao importar: " + ex.Message, "Import game texts",
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Import game texts",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -364,7 +369,7 @@ namespace ScummEditor
 
             var dlg = new FolderBrowserDialog
             {
-                Description = "Pasta para salvar as fontes do jogo (charset_N.png + charset_N.guide.png)"
+                Description = "Folder to save the game fonts (charset_N.png + charset_N.guide.png)"
             };
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
@@ -375,7 +380,7 @@ namespace ScummEditor
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao exportar: " + ex.Message, "Export game fonts",
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export game fonts",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -390,7 +395,7 @@ namespace ScummEditor
 
             var dlg = new FolderBrowserDialog
             {
-                Description = "Pasta com os arquivos charset_N.png a importar"
+                Description = "Folder with the charset_N.png files to import"
             };
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
@@ -398,12 +403,12 @@ namespace ScummEditor
             {
                 string report = CharsetPngCodec.ImportAll(scummFile.DataFile, dlg.SelectedPath);
                 MessageBox.Show(this,
-                    report + Environment.NewLine + "Use 'Save Changes' para gravar as alterações nos arquivos do jogo.",
+                    report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao importar: " + ex.Message, "Import game fonts",
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Import game fonts",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

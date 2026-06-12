@@ -7,7 +7,7 @@ namespace ScummEditor.Structures.IndexFile
     public class DirectoryOfArrays : BlockBase
     {
         /*
-        vlc (end code 0x0000)   (vlc = Variable Length Code // indica um loop, sendo o codigo de finalização o 0x0000)
+        vlc (end code 0x0000)   (vlc = Variable Length Code: a loop whose end marker is 0x0000)
             var no      : 16le
             x size -1   : 16le
             y size -1   : 16le

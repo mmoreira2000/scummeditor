@@ -102,22 +102,22 @@ namespace ScummEditor.Encoders
             foreach (string token in spec.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries))
             {
                 int eq = token.IndexOf('=');
-                if (eq != 1) throw new FormatException("entrada de charmap inválida: '" + token + "' (esperado 'caractere=0xNN')");
+                if (eq != 1) throw new FormatException("invalid charmap entry: '" + token + "' (expected 'character=0xNN')");
                 char ch = token[0];
                 string hex = token.Substring(eq + 1);
                 if (hex.StartsWith("0x", StringComparison.OrdinalIgnoreCase)) hex = hex.Substring(2);
                 byte b;
                 if (!byte.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out b))
-                    throw new FormatException("byte inválido no charmap: '" + token + "'");
+                    throw new FormatException("invalid byte in the charmap: '" + token + "'");
 
                 if (ch <= 0x7E)
-                    throw new FormatException("charmap não pode remapear caracteres ASCII: '" + token + "'");
+                    throw new FormatException("the charmap cannot remap ASCII characters: '" + token + "'");
                 if (b == 0x00 || b == 0xFE || b == 0xFF)
-                    throw new FormatException("byte reservado no charmap (0x00/0xFE/0xFF): '" + token + "'");
+                    throw new FormatException("reserved byte in the charmap (0x00/0xFE/0xFF): '" + token + "'");
                 if (codec._charToByte.ContainsKey(ch))
-                    throw new FormatException("caractere duplicado no charmap: '" + ch + "'");
+                    throw new FormatException("duplicated character in the charmap: '" + ch + "'");
                 if (codec._byteToChar.ContainsKey(b))
-                    throw new FormatException("byte duplicado no charmap: '0x" + b.ToString("X2") + "'");
+                    throw new FormatException("duplicated byte in the charmap: '0x" + b.ToString("X2") + "'");
 
                 codec.Map(ch, b);
             }
@@ -230,7 +230,7 @@ namespace ScummEditor.Encoders
                     if (_charToByte.TryGetValue(ch, out b)) { bytes.Add(b); i++; }
                     else
                     {
-                        error = "caractere sem mapeamento no charmap: '" + ch + "' (U+" + ((int)ch).ToString("X4") + ")";
+                        error = "character with no charmap mapping: '" + ch + "' (U+" + ((int)ch).ToString("X4") + ")";
                         return null;
                     }
                 }
@@ -248,7 +248,7 @@ namespace ScummEditor.Encoders
                 byte raw;
                 if (!byte.TryParse(token.Substring(2), NumberStyles.HexNumber, CultureInfo.InvariantCulture, out raw))
                 {
-                    error = "token inválido: {" + token + "}";
+                    error = "invalid token: {" + token + "}";
                     return false;
                 }
                 bytes.Add(raw);
@@ -278,14 +278,14 @@ namespace ScummEditor.Encoders
             }
             if (code < 0)
             {
-                error = "token desconhecido: {" + token + "}";
+                error = "unknown token: {" + token + "}";
                 return false;
             }
 
             bool hasArg = Array.IndexOf(NoArgCodes, code) < 0;
             if (hasArg != (argText != null))
             {
-                error = "token {" + token + "} " + (hasArg ? "exige" : "não aceita") + " argumento";
+                error = "token {" + token + "} " + (hasArg ? "requires an" : "does not take an") + " argument";
                 return false;
             }
 
@@ -296,7 +296,7 @@ namespace ScummEditor.Encoders
                 int val;
                 if (!int.TryParse(argText, out val) || val < 0 || val > 0xFFFF)
                 {
-                    error = "argumento inválido em {" + token + "}";
+                    error = "invalid argument in {" + token + "}";
                     return false;
                 }
                 bytes.Add((byte)(val & 0xFF));

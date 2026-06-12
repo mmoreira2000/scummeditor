@@ -99,6 +99,16 @@ namespace ScummEditor
                     result.IsTalkie = true;
                 }
 
+                // Some releases ship the CD audio tracks ripped as CDDA.SOU instead of a speech
+                // file (e.g. the Monkey Island 1 CD edition). That marks the CD edition, but it
+                // is NOT speech - the game must not be reported as a talkie because of it.
+                result.HasCdAudio = false;
+                var cdAudioInfo = new FileInfo(Path.Combine(folder, "CDDA.SOU"));
+                if (cdAudioInfo.Exists && cdAudioInfo.Length >= TalkieMinimumSpeechBytes)
+                {
+                    result.HasCdAudio = true;
+                }
+
                 // Monkey Island 1 CD: the speech edition has its own entry in the game list.
                 if (candidate.Game == ScummGame.MonkeyIsland1VGA && result.IsTalkie)
                 {

@@ -30,28 +30,28 @@ namespace ScummEditor.Encoders
         public string Summary()
         {
             var sb = new StringBuilder();
-            sb.AppendLine("Linhas de texto lidas: " + LinesParsed);
-            sb.AppendLine("Textos localizados no jogo: " + EntriesMatched);
-            sb.AppendLine("Textos alterados: " + StringsChanged);
-            sb.AppendLine("Blocos reconstruídos: " + BlocksRebuilt);
+            sb.AppendLine("Text lines read: " + LinesParsed);
+            sb.AppendLine("Texts matched in the game: " + EntriesMatched);
+            sb.AppendLine("Texts changed: " + StringsChanged);
+            sb.AppendLine("Blocks rebuilt: " + BlocksRebuilt);
             if (Errors.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("ERROS (" + Errors.Count + "):");
+                sb.AppendLine("ERRORS (" + Errors.Count + "):");
                 for (int i = 0; i < Errors.Count && i < 20; i++) sb.AppendLine("  " + Errors[i]);
-                if (Errors.Count > 20) sb.AppendLine("  ... e mais " + (Errors.Count - 20));
+                if (Errors.Count > 20) sb.AppendLine("  ... and " + (Errors.Count - 20) + " more");
             }
             if (Warnings.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Avisos (" + Warnings.Count + "):");
+                sb.AppendLine("Warnings (" + Warnings.Count + "):");
                 for (int i = 0; i < Warnings.Count && i < 20; i++) sb.AppendLine("  " + Warnings[i]);
-                if (Warnings.Count > 20) sb.AppendLine("  ... e mais " + (Warnings.Count - 20));
+                if (Warnings.Count > 20) sb.AppendLine("  ... and " + (Warnings.Count - 20) + " more");
             }
             if (GlyphNotes.Count > 0)
             {
                 sb.AppendLine();
-                sb.AppendLine("Fontes (CHAR) x caracteres usados:");
+                sb.AppendLine("Fonts (CHAR) x characters used:");
                 foreach (string n in GlyphNotes) sb.AppendLine("  " + n);
             }
             return sb.ToString();
@@ -152,6 +152,23 @@ namespace ScummEditor.Encoders
             return slice;
         }
 
+        /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
+        private static Scumm6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
+        {
+            if (context.GameInfo != null && context.GameInfo.ScummVersion == 5)
+            {
+                return Scumm5Disassembler.Disassemble(code, start);
+            }
+            return Scumm6Disassembler.Disassemble(code, start);
+        }
+
+        // String kinds that are never exported/imported: internal actor names and
+        // savegame file names (roomOps saveString/loadString).
+        private static bool IsExcludedKind(string kind)
+        {
+            return kind == "actorName" || kind == "file";
+        }
+
         private static int ObnaNameLength(ObjectCode obcd)
         {
             int n = 0;
@@ -178,12 +195,13 @@ namespace ScummEditor.Encoders
 
                 byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
                 int start = source.Script != null ? source.Script.CodeOffset : 0;
-                Scumm6Disassembler.Result scan = Scumm6Disassembler.Disassemble(buf, start);
+                BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
+                Scumm6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 for (int k = 0; k < scan.Strings.Count; k++)
                 {
                     Scumm6Disassembler.StringRef s = scan.Strings[k];
-                    if (s.Kind == "actorName") continue; // internal actor names are not translated
+                    if (IsExcludedKind(s.Kind)) continue; // internal names / filenames are not translated
 
                     string text = codec.Decode(buf, s.Offset, s.Length - (s.Terminated ? 1 : 0));
                     if (!HasTranslatableContent(text)) continue; // empty or escape-tokens-only line
@@ -292,7 +310,7 @@ namespace ScummEditor.Encoders
                     if (codec == null && trimmed.StartsWith("charmap:"))
                     {
                         try { codec = GameTextCodec.FromMapSpec(trimmed.Substring(8).Trim()); }
-                        catch (FormatException ex) { report.Errors.Add("linha " + (n + 1) + ": " + ex.Message); }
+                        catch (FormatException ex) { report.Errors.Add("line " + (n + 1) + ": " + ex.Message); }
                     }
                     continue;
                 }
@@ -300,7 +318,7 @@ namespace ScummEditor.Encoders
                 int eq = line.IndexOf('=');
                 if (eq <= 0)
                 {
-                    report.Errors.Add("linha " + (n + 1) + ": formato inválido (esperado 'ID = texto')");
+                    report.Errors.Add("line " + (n + 1) + ": invalid format (expected 'ID = text')");
                     continue;
                 }
                 string id = line.Substring(0, eq).Trim();
@@ -309,7 +327,7 @@ namespace ScummEditor.Encoders
 
                 if (fileTexts.ContainsKey(id))
                 {
-                    report.Errors.Add("linha " + (n + 1) + ": ID duplicado '" + id + "'");
+                    report.Errors.Add("line " + (n + 1) + ": duplicated ID '" + id + "'");
                     continue;
                 }
                 fileTexts.Add(id, text);
@@ -318,7 +336,7 @@ namespace ScummEditor.Encoders
 
             if (codec == null)
             {
-                report.Errors.Add("arquivo sem uma linha '; charmap: ...' válida no cabeçalho - a importação depende dela para reconstruir o mapeamento de caracteres");
+                report.Errors.Add("the file has no valid '; charmap: ...' header line - the import depends on it to rebuild the character mapping");
                 return report;
             }
 
@@ -352,7 +370,8 @@ namespace ScummEditor.Encoders
                 // script or VERB bytecode source
                 byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
                 int start = source.Script != null ? source.Script.CodeOffset : 0;
-                Scumm6Disassembler.Result scan = Scumm6Disassembler.Disassemble(buf, start);
+                BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
+                Scumm6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 var replacements = new Dictionary<int, byte[]>();
                 for (int k = 0; k < scan.Strings.Count; k++)
@@ -360,7 +379,7 @@ namespace ScummEditor.Encoders
                     string id = source.Id + ".t" + k.ToString("D3");
                     string newText;
                     if (!fileTexts.TryGetValue(id, out newText)) continue;
-                    if (scan.Strings[k].Kind == "actorName") { matchedIds.Add(id); continue; } // never imported
+                    if (IsExcludedKind(scan.Strings[k].Kind)) { matchedIds.Add(id); continue; } // never imported
                     matchedIds.Add(id);
 
                     string error;
@@ -378,15 +397,15 @@ namespace ScummEditor.Encoders
 
                 if (!scan.DecodedToEnd)
                 {
-                    report.Errors.Add(source.Id + ": o bytecode não decodifica até o fim; bloco não foi alterado");
+                    report.Errors.Add(source.Id + ": the bytecode does not decode to the end; block left unchanged");
                     continue;
                 }
 
                 string rebuildError;
-                byte[] rebuilt = RebuildCode(buf, start, scan, replacements, out rebuildError);
+                byte[] rebuilt = RebuildCode(contextBlock, buf, start, scan, replacements, out rebuildError);
                 if (rebuilt == null)
                 {
-                    report.Errors.Add(source.Id + ": " + rebuildError + "; bloco não foi alterado");
+                    report.Errors.Add(source.Id + ": " + rebuildError + "; block left unchanged");
                     continue;
                 }
 
@@ -399,7 +418,7 @@ namespace ScummEditor.Encoders
                     string verbError;
                     if (!ReplaceVerbCode(source.Obcd, rebuilt, scan, replacements, out verbError))
                     {
-                        report.Errors.Add(source.Id + ": " + verbError + "; bloco não foi alterado");
+                        report.Errors.Add(source.Id + ": " + verbError + "; block left unchanged");
                         continue;
                     }
                 }
@@ -411,7 +430,7 @@ namespace ScummEditor.Encoders
             report.EntriesMatched = matchedIds.Count;
             foreach (KeyValuePair<string, string> kv in fileTexts)
                 if (!matchedIds.Contains(kv.Key) && report.Warnings.Count < 50)
-                    report.Warnings.Add("ID não encontrado no jogo: " + kv.Key);
+                    report.Warnings.Add("ID not found in the game: " + kv.Key);
 
             ValidateGlyphs(dataFile, changedBytes, codec, report);
             return report;
@@ -434,7 +453,7 @@ namespace ScummEditor.Encoders
         /// Returns null (with an error message) if anything cannot be remapped safely; the
         /// result is re-disassembled and verified before being accepted.
         /// </summary>
-        private static byte[] RebuildCode(byte[] buf, int codeStart, Scumm6Disassembler.Result scan,
+        private static byte[] RebuildCode(BlockBase context, byte[] buf, int codeStart, Scumm6Disassembler.Result scan,
                                           Dictionary<int, byte[]> replacements, out string error)
         {
             error = null;
@@ -480,7 +499,7 @@ namespace ScummEditor.Encoders
                     Scumm6Disassembler.StringRef s = strings[k];
                     if (s.Offset + s.Length <= pos) { delta += newLengths[k] - s.Length; continue; }
                     if (pos > s.Offset && mapError == null)
-                        mapError = "posição 0x" + pos.ToString("X4") + " cai dentro de uma string";
+                        mapError = "position 0x" + pos.ToString("X4") + " falls inside a string";
                     break;
                 }
                 return pos + delta;
@@ -496,7 +515,7 @@ namespace ScummEditor.Encoders
                 int rel = targetNew - (opNew + 2);
                 if (rel < short.MinValue || rel > short.MaxValue)
                 {
-                    error = "salto excede +-32767 bytes após a tradução (encurte os textos deste bloco)";
+                    error = "a jump exceeds +-32767 bytes after the translation (shorten the texts of this block)";
                     return null;
                 }
                 result[opNew] = (byte)(rel & 0xFF);
@@ -504,19 +523,19 @@ namespace ScummEditor.Encoders
             }
 
             // --- verify: the rebuilt code must decode to an identical structure ---
-            Scumm6Disassembler.Result rescan = Scumm6Disassembler.Disassemble(result, codeStart);
+            Scumm6Disassembler.Result rescan = Disassemble(context, result, codeStart);
             if (!rescan.DecodedToEnd ||
                 rescan.Strings.Count != strings.Count ||
                 rescan.Jumps.Count != scan.Jumps.Count)
             {
-                error = "verificação falhou: o código reconstruído não decodifica de forma idêntica";
+                error = "verification failed: the rebuilt code does not decode identically";
                 return null;
             }
             for (int k = 0; k < strings.Count; k++)
             {
                 if (rescan.Strings[k].Offset != newStarts[k] || rescan.Strings[k].Length != newLengths[k])
                 {
-                    error = "verificação falhou: strings desalinhadas após reconstrução";
+                    error = "verification failed: strings misaligned after the rebuild";
                     return null;
                 }
             }
@@ -525,7 +544,7 @@ namespace ScummEditor.Encoders
                 if (rescan.Jumps[j].OperandOffset != map(scan.Jumps[j].OperandOffset) ||
                     rescan.Jumps[j].Target != map(scan.Jumps[j].Target))
                 {
-                    error = "verificação falhou: saltos desalinhados após reconstrução";
+                    error = "verification failed: jumps misaligned after the rebuild";
                     return null;
                 }
             }
@@ -569,13 +588,13 @@ namespace ScummEditor.Encoders
                 int sliceRel = obcd.VerbBlockOffset + obcd.VerbEntries[e].Offset - obcd.VerbCodeOffset;
                 if (sliceRel < 0 || sliceRel >= obcd.VerbCodeLength)
                 {
-                    error = "offset do verbo " + obcd.VerbEntries[e].Id + " fora da região de código";
+                    error = "verb " + obcd.VerbEntries[e].Id + " offset outside the code region";
                     return false;
                 }
                 int newOff = headerToCode + map(sliceRel);
                 if (newOff > 0xFFFF)
                 {
-                    error = "offset do verbo " + obcd.VerbEntries[e].Id + " excede 0xFFFF após a tradução";
+                    error = "verb " + obcd.VerbEntries[e].Id + " offset exceeds 0xFFFF after the translation";
                     return false;
                 }
                 newOffsets[e] = newOff;
@@ -606,7 +625,7 @@ namespace ScummEditor.Encoders
 
             if (obcd.VerbCodeLength != newCode.Length)
             {
-                error = "verificação falhou: VERB reconstruído não re-parseia";
+                error = "verification failed: the rebuilt VERB block does not re-parse";
                 return false;
             }
             return true;
@@ -689,9 +708,9 @@ namespace ScummEditor.Encoders
                 if (mapped.Length == 1) label += " ('" + mapped + "')";
 
                 if (present == 0)
-                    report.Warnings.Add("byte " + label + " não tem glifo em NENHUMA fonte do jogo - vai renderizar errado");
+                    report.Warnings.Add("byte " + label + " has no glyph in ANY font of the game - it will render wrong");
                 else if (present < charsets.Count)
-                    report.GlyphNotes.Add(label + ": glifo presente em " + present + " de " + charsets.Count + " fontes");
+                    report.GlyphNotes.Add(label + ": glyph present in " + present + " of " + charsets.Count + " fonts");
             }
         }
 

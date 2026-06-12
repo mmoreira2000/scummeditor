@@ -46,18 +46,15 @@ namespace ScummEditor.Structures.DataFile
 
         private void LoadScummV5(Stream binaryReader)
         {
-            //Leitura Simplificada dos Blocos, le todos e ignora os desconhecidos. Assim a leitura fica mais generica.
-            //Isso vai possibilitar ler arquivos como o primeiro monkey island com full speech, que teve sua estrutura não padronizada.
+            // Generic walk: the room children end where the ROOM block ends. Block types we
+            // know get typed objects; anything else (e.g. the stray "021_" block the Ultimate
+            // Talkie packer leaves behind, or loose CDHD/VERB/OBNA in the MI2 Talkie) is kept
+            // as a byte-preserved generic block, so unusual files still load and round-trip.
+            long endPosition = binaryReader.Position - 8 + BlockSize;
 
-            //Adicionado CDHD e VERB e OBNA, nenhum jogo testado por mim antes tinha esse bloco - apareceu apenas no Monkey Island 2 - Talkie.
-            //Esses tres verbos deveriam ficar sempre dentro do OBCD...
-            var blocosPossiveis = new [] { "RMHD", "CYCL", "TRNS", "EPAL", "BOXD", "BOXM", 
-                                                 "CLUT", "SCAL", "RMIM", "OBIM", "OBCD", "EXCD",
-                                                 "ENCD", "NLSC", "LSCR", "CDHD", "VERB", "OBNA"};
-
-            string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
-            while (blocosPossiveis.Any(x => x.Equals(typeRead)))
+            while (binaryReader.Position < endPosition)
             {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
                 switch (typeRead)
                 {
                     case "RMHD":
@@ -84,6 +81,12 @@ namespace ScummEditor.Structures.DataFile
                         Childrens.Add(CLUT);
                         break;
 
+                    case "EPAL":
+                        var EPAL = new EgaPalette(this);
+                        EPAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(EPAL);
+                        break;
+
                     case "RMIM":
                         var RMIM = new RoomImage(this, this);
                         RMIM.LoadFromBinaryReader(binaryReader);
@@ -94,6 +97,48 @@ namespace ScummEditor.Structures.DataFile
                         var OBIM = new ObjectImage(this);
                         OBIM.LoadFromBinaryReader(binaryReader);
                         Childrens.Add(OBIM);
+                        break;
+
+                    case "OBCD":
+                        var OBCD = new ObjectCode(this);
+                        OBCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBCD);
+                        break;
+
+                    case "EXCD":
+                        var EXCD = new ScriptBlock(this, "EXCD");
+                        EXCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(EXCD);
+                        break;
+
+                    case "ENCD":
+                        var ENCD = new ScriptBlock(this, "ENCD");
+                        ENCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(ENCD);
+                        break;
+
+                    case "LSCR":
+                        var LSCR = new ScriptBlock(this, "LSCR");
+                        LSCR.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(LSCR);
+                        break;
+
+                    case "BOXD":
+                        var BOXD = new BoxData(this);
+                        BOXD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXD);
+                        break;
+
+                    case "BOXM":
+                        var BOXM = new BoxMatrix(this);
+                        BOXM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXM);
+                        break;
+
+                    case "SCAL":
+                        var SCAL = new Scale(this);
+                        SCAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(SCAL);
                         break;
 
                     case "NLSC":
@@ -108,8 +153,6 @@ namespace ScummEditor.Structures.DataFile
                         Childrens.Add(Default);
                         break;
                 }
-
-                typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
             }
 
 

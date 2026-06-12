@@ -23,15 +23,17 @@ namespace ScummEditor.Structures.DataFile
         {
             base.LoadFromBinaryReader(binaryReader);
 
+            // The LFLF children end where the LFLF block ends; unknown block types are kept
+            // as byte-preserved generic blocks (some fan editions pack stray blocks here).
+            long endPosition = binaryReader.Position - 8 + BlockSize;
+
             var ROOM = new RoomBlock(this);
             ROOM.LoadFromBinaryReader(binaryReader);
             Childrens.Add(ROOM);
 
-            var blocosPossiveis = new [] { "SCRP", "SOUN", "COST", "CHAR"};
-
-            string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
-            while (blocosPossiveis.Any(x => x.Equals(typeRead)))
+            while (binaryReader.Position < endPosition)
             {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
                 switch (typeRead)
                 {
                     case "COST":
@@ -41,52 +43,25 @@ namespace ScummEditor.Structures.DataFile
                         break;
 
                     case "SOUN":
-                        // Only decode SOUN on v6; v5 (e.g. MI2 talkie) keeps the generic
-                        // block so its byte-preserving quirks stay untouched.
-                        if (_gameInfo.ScummVersion == 6)
-                        {
-                            var soundBlock = new SoundBlock(this);
-                            soundBlock.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(soundBlock);
-                        }
-                        else
-                        {
-                            var soundDefault = new NotImplementedDataBlock(this, typeRead);
-                            soundDefault.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(soundDefault);
-                        }
+                        // The sound block keeps its original bytes and only parses for display,
+                        // so it is safe on both v5 (iMUSE in MI2/Indy4) and v6.
+                        var soundBlock = new SoundBlock(this);
+                        soundBlock.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(soundBlock);
                         break;
 
                     case "SCRP":
-                        // v6 only: typed script block (disassemblable). v5 stays generic.
-                        if (_gameInfo.ScummVersion == 6)
-                        {
-                            var scriptBlock = new ScriptBlock(this, "SCRP");
-                            scriptBlock.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(scriptBlock);
-                        }
-                        else
-                        {
-                            var scriptDefault = new NotImplementedDataBlock(this, typeRead);
-                            scriptDefault.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(scriptDefault);
-                        }
+                        // Typed script block; the disassembler is picked by SCUMM version.
+                        var scriptBlock = new ScriptBlock(this, "SCRP");
+                        scriptBlock.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(scriptBlock);
                         break;
 
                     case "CHAR":
-                        // v6 only: typed charset/font block (glyph viewer). v5 stays generic.
-                        if (_gameInfo.ScummVersion == 6)
-                        {
-                            var charsetBlock = new Charset(this);
-                            charsetBlock.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(charsetBlock);
-                        }
-                        else
-                        {
-                            var charsetDefault = new NotImplementedDataBlock(this, typeRead);
-                            charsetDefault.LoadFromBinaryReader(binaryReader);
-                            Childrens.Add(charsetDefault);
-                        }
+                        // The charset format (color map + offsets + glyphs) is the same on v5 and v6.
+                        var charsetBlock = new Charset(this);
+                        charsetBlock.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(charsetBlock);
                         break;
 
                     default:
@@ -95,8 +70,6 @@ namespace ScummEditor.Structures.DataFile
                         Childrens.Add(Default);
                         break;
                 }
-
-                typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
             }
 
             /*

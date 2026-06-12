@@ -63,8 +63,8 @@ namespace ScummEditor.Structures.DataFile
             int stripSize;
             for (int i = 0; i < (numStrips - 1); i++)
             {
-                //O tamanho do strip é determinando pegando a posição do próximo Strip - 1 (porque o primeiro byte é destinado a informações de CODEC)
-                //e subtraindo da posição do Strip atual.
+                //The strip size is the next strip position - 1 (the first byte of the next strip)
+                //minus the current strip position.
                 stripSize = (int)((Strips[i + 1].OffSet - Strips[i].OffSet));
 
                 //Strips[i].CodecId = binaryReader.ReadByte1();

@@ -34,7 +34,7 @@ namespace ScummEditor.Structures.DataFile
             base.LoadFromBinaryReader(binaryReader);
             Contents = binaryReader.ReadBytes((int)(BlockSize - 8));
 
-            //Hack para o monkey island 2 com vozes.
+            //Hack for the Monkey Island 2 talkie edition.
             if (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "021_")
             {
                 var lstBytes = new List<byte>(Contents);

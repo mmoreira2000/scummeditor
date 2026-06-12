@@ -65,7 +65,7 @@ namespace ScummEditor.Encoders
             _indexMatrix = new byte[_width, _height];
 
             //if (_pictureData.ImageData.Length == 0
-            //    || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) return; //Algumas imagens são vazias!!
+            //    || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) return; //Some images are empty.
 
             /*
              Each line start with a 16le storing the size of the encoded line (without the size header itself) followed by the RLE data.

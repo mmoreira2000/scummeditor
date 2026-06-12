@@ -97,7 +97,7 @@ namespace ScummEditor.Encoders
                 {
                     if (currentLineInformation.RepeatSameLine)
                     {
-                        //Mudou de REPETIR para NÃO REPETIR
+                        //Switched from REPEAT to NO-REPEAT
                         linesInformation.Add(currentLineInformation);
 
                         currentLineInformation = new LineInformation();
@@ -108,7 +108,7 @@ namespace ScummEditor.Encoders
                 {
                     if (!currentLineInformation.RepeatSameLine)
                     {
-                        //Mudou de NÃO REPETIR para REPETIR
+                        //Switched from NO-REPEAT to REPEAT
                         linesInformation.Add(currentLineInformation);
 
                         currentLineInformation = new LineInformation();
@@ -122,7 +122,7 @@ namespace ScummEditor.Encoders
             }
             linesInformation.Add(currentLineInformation);
 
-            //Segunda passagem - verifica a lista de itens não repetidos para ver se o ultimo elemento é um elemento da lista repetida seguinte.
+            //Second pass - checks the non-repeated list: when its last element repeats the first element of the next repeated list, it must move there.
             for (int i = 1; i < linesInformation.Count; i++)
             {
                 var previous = linesInformation[i - 1];
@@ -131,7 +131,7 @@ namespace ScummEditor.Encoders
 
                 if (!previous.RepeatSameLine && current.RepeatSameLine && previous.Lines[previousLastIndex] == current.Lines[0])
                 {
-                    //move o item da lista anterior para a lista atual
+                    //moves the item from the previous list to the current one
                     current.Lines.Insert(0, previous.Lines[previousLastIndex]);
 
                     previous.Lines.RemoveAt(previousLastIndex);
@@ -139,7 +139,7 @@ namespace ScummEditor.Encoders
             }
 
             //Terceira passagem - procura por listas que eventualmente ficaram vazias, e as remove.
-            //É importante percorrer a lista ao contrários, caso contrário a lista sera lida errada, além de dar IndexOutOfBounds no final.
+            //The list must be walked backwards, otherwise it would be read wrong and throw IndexOutOfBounds at the end.
             for (int i = linesInformation.Count - 1; i >= 0; i--)
             {
                 if (linesInformation[i].Lines.Count == 0)
@@ -148,7 +148,7 @@ namespace ScummEditor.Encoders
                 }
             }
 
-            //Quarta passagem, divide as listas com mais de 127 itens em varias listas, pois 127 é o limite máximo de 7 bits.
+            //Fourth pass: splits lists with more than 127 items, since 127 is the encoding limit per chunk.
             var finalLinesInformation = new List<LineInformation>();
             foreach (LineInformation lineInformation in linesInformation)
             {
@@ -180,8 +180,8 @@ namespace ScummEditor.Encoders
                 }
                 else
                 {
-                    //Verifica se o different line não tinha apenas 1 linha antes de gravar a informação, isso pode acontecer
-                    //em situações onde a linha 1 e 2 são A e 3 e 4 são B, por exemplo.
+                    //Checks whether the different-lines run had only 1 line before writing it; this can happen
+                    //when lines 1 and 2 are A and lines 3 and 4 are B, for example.
                     byte repeatByte = BinaryHelper.Compose2Bytes(0, (byte)lineInformation.Lines.Count, 7);
                     bitStream.AddByte(repeatByte);
                     foreach (byte differentLine in lineInformation.Lines)

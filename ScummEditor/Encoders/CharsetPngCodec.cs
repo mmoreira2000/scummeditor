@@ -34,7 +34,11 @@ namespace ScummEditor.Encoders
     {
         private const int Columns = 16;
         private const int Rows = 16;     // always 256 slots so fonts can be extended
-        private const int Margin = 8;    // glyph origin inside each cell = (Margin, Margin)
+        // The glyph origin inside each cell sits at (marginX, marginY). The margins are at
+        // least 8 pixels and grow when the font has glyphs with offsets below -8 (some
+        // European MI2 fonts do). Import recomputes the same margins from the same font,
+        // so the convention stays self-describing.
+        private const int MinimumMargin = 8;
         private const int GridIndex = 255; // palette slot used for the cell divider lines (ignored on import)
         private const int OffsetBase = 0x15;
         private const int TableStart = 0x19;
@@ -45,8 +49,8 @@ namespace ScummEditor.Encoders
 
         public static void ExportPng(Charset charset, string pngPath, string guidePath)
         {
-            int cellW, cellH;
-            CellSize(charset, out cellW, out cellH);
+            int marginX, marginY, cellW, cellH;
+            ComputeLayout(charset, out marginX, out marginY, out cellW, out cellH);
             int width = Columns * cellW, height = Rows * cellH;
 
             var matrix = new byte[width, height];
@@ -60,7 +64,7 @@ namespace ScummEditor.Encoders
             for (int slot = 0; slot < charset.Glyphs.Count && slot < 256; slot++)
             {
                 DrawGlyph(charset, charset.Glyphs[slot], matrix,
-                    (slot % Columns) * cellW, (slot / Columns) * cellH);
+                    (slot % Columns) * cellW, (slot / Columns) * cellH, marginX, marginY);
             }
 
             // No tRNS chunk: GDI+ reloads a paletted PNG with transparency as 32bpp ARGB,
@@ -70,7 +74,7 @@ namespace ScummEditor.Encoders
                 bitmap.Save(pngPath, ImageFormat.Png);
             }
 
-            using (Bitmap guide = BuildGuide(charset, cellW, cellH))
+            using (Bitmap guide = BuildGuide(charset, cellW, cellH, marginX, marginY))
             {
                 guide.Save(guidePath, ImageFormat.Png);
             }
@@ -102,23 +106,30 @@ namespace ScummEditor.Encoders
             return palette;
         }
 
-        private static void CellSize(Charset charset, out int cellW, out int cellH)
+        /// <summary>
+        /// Per-font atlas layout: the margins grow to fit the most negative glyph offsets,
+        /// and the cell fits the largest glyph extent plus a fixed right/bottom editing room.
+        /// </summary>
+        private static void ComputeLayout(Charset charset, out int marginX, out int marginY, out int cellW, out int cellH)
         {
+            marginX = MinimumMargin;
+            marginY = MinimumMargin;
             int maxX = 8, maxY = Math.Max(8, charset.FontHeight);
+
             foreach (Glyph g in charset.Glyphs)
             {
                 if (!g.Present) continue;
-                if (g.XOffset < -Margin || g.YOffset < -Margin)
-                    throw new InvalidOperationException(
-                        "Fonte com offsets de glifo menores que -8 não é suportada pela exportação PNG.");
+                if (-g.XOffset > marginX) marginX = -g.XOffset;
+                if (-g.YOffset > marginY) marginY = -g.YOffset;
                 if (g.XOffset + g.Width > maxX) maxX = g.XOffset + g.Width;
                 if (g.YOffset + g.Height > maxY) maxY = g.YOffset + g.Height;
             }
-            cellW = Margin + maxX + Margin;
-            cellH = Margin + maxY + Margin;
+            cellW = marginX + maxX + MinimumMargin;
+            cellH = marginY + maxY + MinimumMargin;
         }
 
-        private static void DrawGlyph(Charset charset, Glyph glyph, byte[,] matrix, int cellX, int cellY)
+        private static void DrawGlyph(Charset charset, Glyph glyph, byte[,] matrix, int cellX, int cellY,
+                                      int marginX, int marginY)
         {
             if (glyph == null || !glyph.Present || glyph.Width <= 0 || glyph.Height <= 0) return;
 
@@ -129,14 +140,14 @@ namespace ScummEditor.Encoders
                 for (int x = 0; x < glyph.Width; x++)
                 {
                     if (values[x, y] == 0) continue;
-                    int px = cellX + Margin + glyph.XOffset + x;
-                    int py = cellY + Margin + glyph.YOffset + y;
+                    int px = cellX + marginX + glyph.XOffset + x;
+                    int py = cellY + marginY + glyph.YOffset + y;
                     if (px >= 0 && px < width && py >= 0 && py < height) matrix[px, py] = values[x, y];
                 }
             }
         }
 
-        private static Bitmap BuildGuide(Charset charset, int cellW, int cellH)
+        private static Bitmap BuildGuide(Charset charset, int cellW, int cellH, int marginX, int marginY)
         {
             var bitmap = new Bitmap(Columns * cellW, Rows * cellH, PixelFormat.Format24bppRgb);
             using (Graphics gfx = Graphics.FromImage(bitmap))
@@ -160,9 +171,9 @@ namespace ScummEditor.Encoders
 
                     gfx.DrawRectangle(gridPen, cx, cy, cellW - 1, cellH - 1);
 
-                    // origin marks: the glyph origin is at (Margin, Margin) in each cell
-                    gfx.DrawLine(originPen, cx + Margin, cy + Margin - 3, cx + Margin, cy + Margin + 3);
-                    gfx.DrawLine(originPen, cx + Margin - 3, cy + Margin, cx + Margin + 3, cy + Margin);
+                    // origin marks: the glyph origin is at (marginX, marginY) in each cell
+                    gfx.DrawLine(originPen, cx + marginX, cy + marginY - 3, cx + marginX, cy + marginY + 3);
+                    gfx.DrawLine(originPen, cx + marginX - 3, cy + marginY, cx + marginX + 3, cy + marginY);
 
                     // current glyph, as editing context
                     if (slot < charset.Glyphs.Count)
@@ -175,7 +186,7 @@ namespace ScummEditor.Encoders
                                 for (int x = 0; x < glyph.Width; x++)
                                     if (values[x, y] != 0)
                                         gfx.FillRectangle(glyphBrush,
-                                            cx + Margin + glyph.XOffset + x, cy + Margin + glyph.YOffset + y, 1, 1);
+                                            cx + marginX + glyph.XOffset + x, cy + marginY + glyph.YOffset + y, 1, 1);
                         }
                     }
 
@@ -215,9 +226,9 @@ namespace ScummEditor.Encoders
                     Path.Combine(folder, "charset_" + i + ".png"),
                     Path.Combine(folder, "charset_" + i + ".guide.png"));
             }
-            return charsets.Count + " fontes exportadas para:\n" + folder
-                + "\n\nArquivos: charset_0.png ... charset_" + (charsets.Count - 1)
-                + ".png (+ os .guide.png de referência).";
+            return charsets.Count + " fonts exported to:\n" + folder
+                + "\n\nFiles: charset_0.png ... charset_" + (charsets.Count - 1)
+                + ".png (+ the .guide.png reference images).";
         }
 
         /// <summary>Imports every charset_N.png found in the folder back into the game's charsets.</summary>
@@ -234,7 +245,7 @@ namespace ScummEditor.Encoders
                 if (!File.Exists(path))
                 {
                     missing++;
-                    report.AppendLine(file + ": não encontrado (pulado)");
+                    report.AppendLine(file + ": not found (skipped)");
                     continue;
                 }
 
@@ -247,12 +258,12 @@ namespace ScummEditor.Encoders
                 catch (Exception ex)
                 {
                     failed++;
-                    report.AppendLine(file + ": ERRO - " + ex.Message);
+                    report.AppendLine(file + ": ERROR - " + ex.Message);
                 }
             }
 
             report.AppendLine();
-            report.Append(string.Format("{0} fonte(s) processada(s), {1} sem arquivo, {2} com erro.",
+            report.Append(string.Format("{0} font(s) processed, {1} without a file, {2} with errors.",
                 imported, missing, failed));
             return report.ToString();
         }
@@ -277,7 +288,7 @@ namespace ScummEditor.Encoders
             {
                 if (!IndexedImageHelper.IsIndexed(loaded))
                     throw new InvalidDataException(
-                        "O PNG precisa estar em modo indexado (8 bits). Use o arquivo exportado pelo editor e mantenha o modo de cor.");
+                        "The PNG must be in indexed color mode (8 bits). Use the file exported by the editor and keep its color mode.");
                 pixels = IndexedImageHelper.GetIndexMatrix(loaded);
                 width = loaded.Width;
                 height = loaded.Height;
@@ -285,7 +296,7 @@ namespace ScummEditor.Encoders
 
             if (width % Columns != 0 || height % Rows != 0)
                 throw new InvalidDataException(string.Format(
-                    "Dimensões {0}x{1} inválidas: precisam ser múltiplas de {2}x{3} (grade de 256 slots).",
+                    "Invalid dimensions {0}x{1}: they must be multiples of {2}x{3} (the 256-slot grid).",
                     width, height, Columns, Rows));
             int cellW = width / Columns, cellH = height / Rows;
             int maxVal = (1 << charset.BitsPerPixel) - 1;
@@ -294,6 +305,10 @@ namespace ScummEditor.Encoders
             for (int y = 0; y < height; y++)
                 for (int x = 0; x < width; x++)
                     if (pixels[x, y] == GridIndex) pixels[x, y] = 0;
+
+            // Same per-font margins the export used (recomputed from the same font).
+            int marginX, marginY, layoutCellW, layoutCellH;
+            ComputeLayout(charset, out marginX, out marginY, out layoutCellW, out layoutCellH);
 
             // Stored glyph boxes are usually larger than the ink (empty right column = cursor
             // advance, empty top rows = line position). New glyphs get the font's typical
@@ -319,7 +334,7 @@ namespace ScummEditor.Encoders
                         byte v = pixels[cellX + x, cellY + y];
                         if (v == 0) continue;
                         if (v > maxVal && badValues.Count < 8)
-                            badValues.Add(string.Format("slot 0x{0:X2}: valor {1} (máximo {2})", slot, v, maxVal));
+                            badValues.Add(string.Format("slot 0x{0:X2}: value {1} (maximum {2})", slot, v, maxVal));
                         if (x < left) left = x;
                         if (y < top) top = y;
                         if (x > right) right = x;
@@ -331,7 +346,7 @@ namespace ScummEditor.Encoders
                 Glyph original = slot < charset.Glyphs.Count ? charset.Glyphs[slot] : null;
                 bool origPresent = original != null && original.Present;
 
-                if (CellMatchesOriginal(charset, original, pixels, cellX, cellY, cellW, cellH))
+                if (CellMatchesOriginal(charset, original, pixels, cellX, cellY, cellW, cellH, marginX, marginY))
                 {
                     if (origPresent)
                         plans[slot] = new SlotPlan { Present = true, KeepOriginal = original };
@@ -349,8 +364,8 @@ namespace ScummEditor.Encoders
                 if (origPresent && original.Width > 0 && original.Height > 0)
                 {
                     // edited glyph: keep the original box (metrics/advance), grow only if the ink leaks out
-                    boxL = Margin + original.XOffset;
-                    boxT = Margin + original.YOffset;
+                    boxL = marginX + original.XOffset;
+                    boxT = marginY + original.YOffset;
                     boxR = boxL + original.Width - 1;
                     boxB = boxT + original.Height - 1;
                     if (left < boxL) boxL = left;
@@ -361,17 +376,17 @@ namespace ScummEditor.Encoders
                 else
                 {
                     // new glyph: box anchored at the origin, plus the font's modal padding
-                    boxL = Math.Min(left, Margin);
-                    boxT = Math.Min(top, Margin);
+                    boxL = Math.Min(left, marginX);
+                    boxT = Math.Min(top, marginY);
                     boxR = right + slackRight;
                     boxB = bottom + slackBottom;
                 }
 
                 int w = boxR - boxL + 1, h = boxB - boxT + 1;
-                int xoff = boxL - Margin, yoff = boxT - Margin;
+                int xoff = boxL - marginX, yoff = boxT - marginY;
                 if (w > 255 || h > 255 || xoff < -128 || xoff > 127 || yoff < -128 || yoff > 127)
                     throw new InvalidDataException(string.Format(
-                        "slot 0x{0:X2}: glifo {1}x{2} com offset ({3},{4}) fora dos limites do formato.",
+                        "slot 0x{0:X2}: glyph {1}x{2} with offset ({3},{4}) outside the format limits.",
                         slot, w, h, xoff, yoff));
 
                 var values = new byte[w, h];
@@ -391,17 +406,17 @@ namespace ScummEditor.Encoders
             }
 
             if (badValues.Count > 0)
-                throw new InvalidDataException("Pixels com valores inválidos para " + charset.BitsPerPixel
+                throw new InvalidDataException("Pixels with invalid values for " + charset.BitsPerPixel
                     + " bpp:\n  " + string.Join("\n  ", badValues.ToArray()));
 
             if (changed + added + removed == 0)
-                return "Nenhuma alteração encontrada - a fonte não foi modificada.";
+                return "No changes found - the font was not modified.";
 
             RebuildRawContent(charset, plans);
 
             var report = new StringBuilder();
-            report.AppendLine(string.Format("Glifos alterados: {0}, adicionados: {1}, removidos: {2}.", changed, added, removed));
-            report.Append(string.Format("numChars: {0} (use 'Save Changes' para gravar no jogo).", charset.NumChars));
+            report.AppendLine(string.Format("Glyphs changed: {0}, added: {1}, removed: {2}.", changed, added, removed));
+            report.Append(string.Format("numChars: {0} (use 'Save Changes' to write it to the game files).", charset.NumChars));
             return report.ToString();
         }
 
@@ -442,7 +457,8 @@ namespace ScummEditor.Encoders
 
         /// <summary>True when the cell pixels are exactly what ExportPng would produce for this glyph.</summary>
         private static bool CellMatchesOriginal(Charset charset, Glyph original, byte[,] pixels,
-                                                int cellX, int cellY, int cellW, int cellH)
+                                                int cellX, int cellY, int cellW, int cellH,
+                                                int marginX, int marginY)
         {
             var expected = new byte[cellW, cellH];
             if (original != null && original.Present && original.Width > 0 && original.Height > 0)
@@ -453,8 +469,8 @@ namespace ScummEditor.Encoders
                     for (int x = 0; x < original.Width; x++)
                     {
                         if (values[x, y] == 0) continue;
-                        int px = Margin + original.XOffset + x;
-                        int py = Margin + original.YOffset + y;
+                        int px = marginX + original.XOffset + x;
+                        int py = marginY + original.YOffset + y;
                         if (px < 0 || px >= cellW || py < 0 || py >= cellH) return false; // does not fit -> not comparable
                         expected[px, py] = values[x, y];
                     }

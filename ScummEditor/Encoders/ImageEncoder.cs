@@ -482,8 +482,8 @@ namespace ScummEditor.Encoders
             0x22 .. 0x26 	1st method  	Vertical 	            Yes 	        0x1E 	
             0x2C .. 0x30 	1st method  	Horizontal           	Yes          	0x28 	
             
-            0x40 .. 0x44 	2nd method  	Horizontal 	            No 	            0x3C 	            //Não sei se essas duas linhas estão certas, pois nenhuma imagem no DOTT ou SAM&MAX utiliza essas compressões
-            0x54 .. 0x58 	2nd method  	Horizontal          	Yes         	0x50 	            //Não sei se essas duas linhas estão certas, pois nenhuma umagem no DOTT ou SAM&MAX utiliza essas compressões
+            0x40 .. 0x44 	2nd method  	Horizontal 	            No 	            0x3C 	            //Not sure these two lines are right.
+            0x54 .. 0x58 	2nd method  	Horizontal          	Yes         	0x50 	            //Not sure these two lines are right.
             0x68 .. 0x6C 	2nd method  	Horizontal           	No  	        0x64 	            Same as 0x54 .. 0x58 //Eu inverti essas 2 transparencias, estava errado no site.
             0x7C .. 0x80 	2nd method  	Horizontal 	            Yes	            0x78 	            Same as 0x40 .. 0x44 //Eu inverti essas 2 transparencias, estava errado no site.
              */

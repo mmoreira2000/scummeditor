@@ -55,14 +55,14 @@ namespace ScummEditor.Gui
                 string guidePath = GuidePathFor(dlg.FileName);
                 CharsetPngCodec.ExportPng(_charset, dlg.FileName, guidePath);
                 MessageBox.Show(this,
-                    "Fonte exportada para:\n" + dlg.FileName +
-                    "\n\nGuia com os IDs dos slots:\n" + guidePath +
-                    "\n\nDesenhe os glifos no PNG principal (modo indexado) usando o guia como camada de referência.",
+                    "Font exported to:\n" + dlg.FileName +
+                    "\n\nGuide image with the slot ids:\n" + guidePath +
+                    "\n\nDraw the glyphs in the main PNG (indexed mode) using the guide as a reference layer.",
                     "Export PNG", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao exportar: " + ex.Message, "Export PNG",
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export PNG",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
@@ -82,7 +82,7 @@ namespace ScummEditor.Gui
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, "Falha ao importar: " + ex.Message, "Import PNG",
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Import PNG",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
