@@ -1,3 +1,17 @@
+1.3.0.0
+-------
+* Game text translation support. "File > Export game texts" writes every translatable string of the game (dialogues, prints, verb names, object names) to a single .txt file: one line per text with a stable id, control codes as readable tokens ({br}, {wait}, {sound:N}...) and accented characters mapped through a charmap stored in the file header. "File > Import game texts" reads the file back and rebuilds the bytecode - jump offsets and the verb offset tables are remapped automatically when a translation is shorter or longer than the original, and every rebuilt script is re-disassembled and verified before being accepted.
+
+* The charmap is under the team's control: the import rebuilds the character mapping from the "; charmap:" header line, so free font slots can be mapped to new characters or used directly in the text as {0xNN} (e.g. custom ligatures like "Cla{0xC1}e"). On export the translator can optionally paste the charmap of an in-progress translation to keep its custom characters. Lines with nothing to translate (empty names, sound-only strings) are left out of the file, and imported texts are validated against the game fonts, reporting characters that have no glyph.
+
+* Charset (font) editing via PNG. Each CHAR block - or all of them at once through "File > Export/Import game fonts" - can be exported as an editable 8-bit indexed PNG atlas (256 slots separated by divider lines) plus a guide image showing the hex id, the origin mark and the current glyph of every slot. Drawing in an empty slot adds the glyph to the font, extending the character table when needed; untouched slots keep their original bytes, and edited glyphs preserve the font metrics (cursor advance / spacing).
+
+* New OBCD viewer: the object properties (code header, name) and the verb table are shown as fields, with the disassembled verb bytecode below and a label at each verb entry point.
+
+* Script listings now render messages with the same friendly tokens and accented characters used by the text export, instead of raw escape bytes.
+
+* Index file viewers for MAXS (engine limits), DOBJ (object owners/states/classes), AARY (array directory - previously missing from the tree) and RNAM (room names, populated on SCUMM v5 games); the palette offset block (OFFS) also gained a viewer.
+
 1.1.1.0
 -------
 * Decoded the room navigation and object-code blocks, each with its own viewer: BOXD (walk boxes), BOXM (box matrix), SCAL (scale slots) and OBCD (object code, showing the object name and verb count).

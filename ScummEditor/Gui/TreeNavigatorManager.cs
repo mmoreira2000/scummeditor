@@ -41,7 +41,9 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(BoxData).Name, structuredBlockControl);
             _controlViewers.Add(typeof(BoxMatrix).Name, structuredBlockControl);
             _controlViewers.Add(typeof(Scale).Name, structuredBlockControl);
-            _controlViewers.Add(typeof(ObjectCode).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(PaletteOffset).Name, structuredBlockControl);
+
+            _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
 
             _controlViewers.Add(typeof(SoundBlock).Name, new SoundBlockControl());
 
@@ -57,6 +59,12 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(DirectoryOfCostumes).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfScripts).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfSounds).Name, directoryOfItemsControlGeneric);
+
+            var indexDetailsControl = new IndexDetailsControl();
+            _controlViewers.Add(typeof(MaximumValues).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(DirectoryOfObjects).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(DirectoryOfArrays).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(RoomNamesV6).Name, indexDetailsControl);
 
             _treeView = treeView;
             _displayPanel = displayPanel;
@@ -118,6 +126,7 @@ namespace ScummEditor.Gui
             CreateNode(scummV6IndexFile.DCOS, node);
             CreateNode(scummV6IndexFile.DCHR, node);
             CreateNode(scummV6IndexFile.DOBJ, node);
+            if (scummV6IndexFile.AARY != null) CreateNode(scummV6IndexFile.AARY, node);
         }
 
         private static TreeNode CreateNode(BlockBase blockBase, TreeNode parentNode, int index = -1)

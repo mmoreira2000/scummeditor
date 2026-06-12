@@ -36,6 +36,11 @@
             this.toolStripSeparator4 = new System.Windows.Forms.ToolStripSeparator();
             this.exportAllRoomBackgroundImagesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.ImportGameGraphics = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
+            this.exportGameTextsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.importGameTextsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportGameFontsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.importGameFontsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -86,6 +91,11 @@
             this.toolStripSeparator4,
             this.exportAllRoomBackgroundImagesToolStripMenuItem,
             this.ImportGameGraphics,
+            this.toolStripSeparator5,
+            this.exportGameTextsToolStripMenuItem,
+            this.importGameTextsToolStripMenuItem,
+            this.exportGameFontsToolStripMenuItem,
+            this.importGameFontsToolStripMenuItem,
             this.toolStripSeparator3,
             this.exitToolStripMenuItem});
             this.fileToolStripMenuItem.Name = "fileToolStripMenuItem";
@@ -128,9 +138,42 @@
             this.ImportGameGraphics.Size = new System.Drawing.Size(191, 22);
             this.ImportGameGraphics.Text = "Import game graphics";
             this.ImportGameGraphics.Click += new System.EventHandler(this.ImportGameGraphics_Click);
-            // 
+            //
+            // toolStripSeparator5
+            //
+            this.toolStripSeparator5.Name = "toolStripSeparator5";
+            this.toolStripSeparator5.Size = new System.Drawing.Size(188, 6);
+            //
+            // exportGameTextsToolStripMenuItem
+            //
+            this.exportGameTextsToolStripMenuItem.Name = "exportGameTextsToolStripMenuItem";
+            this.exportGameTextsToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
+            this.exportGameTextsToolStripMenuItem.Text = "Export game texts...";
+            this.exportGameTextsToolStripMenuItem.Click += new System.EventHandler(this.exportGameTextsToolStripMenuItem_Click);
+            //
+            // importGameTextsToolStripMenuItem
+            //
+            this.importGameTextsToolStripMenuItem.Name = "importGameTextsToolStripMenuItem";
+            this.importGameTextsToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
+            this.importGameTextsToolStripMenuItem.Text = "Import game texts...";
+            this.importGameTextsToolStripMenuItem.Click += new System.EventHandler(this.importGameTextsToolStripMenuItem_Click);
+            //
+            // exportGameFontsToolStripMenuItem
+            //
+            this.exportGameFontsToolStripMenuItem.Name = "exportGameFontsToolStripMenuItem";
+            this.exportGameFontsToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
+            this.exportGameFontsToolStripMenuItem.Text = "Export game fonts...";
+            this.exportGameFontsToolStripMenuItem.Click += new System.EventHandler(this.exportGameFontsToolStripMenuItem_Click);
+            //
+            // importGameFontsToolStripMenuItem
+            //
+            this.importGameFontsToolStripMenuItem.Name = "importGameFontsToolStripMenuItem";
+            this.importGameFontsToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
+            this.importGameFontsToolStripMenuItem.Text = "Import game fonts...";
+            this.importGameFontsToolStripMenuItem.Click += new System.EventHandler(this.importGameFontsToolStripMenuItem_Click);
+            //
             // toolStripSeparator3
-            // 
+            //
             this.toolStripSeparator3.Name = "toolStripSeparator3";
             this.toolStripSeparator3.Size = new System.Drawing.Size(188, 6);
             // 
@@ -388,6 +431,11 @@
         private System.Windows.Forms.ToolStripMenuItem helpToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem HelpAbout;
         private System.Windows.Forms.ToolStripMenuItem ImportGameGraphics;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
+        private System.Windows.Forms.ToolStripMenuItem exportGameTextsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem importGameTextsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exportGameFontsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem importGameFontsToolStripMenuItem;
         private System.Windows.Forms.ToolStripButton ImportGameGraphicsButton;
         private System.Windows.Forms.ToolStripButton AboutToolbar;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;

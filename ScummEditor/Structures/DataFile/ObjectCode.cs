@@ -50,9 +50,23 @@ namespace ScummEditor.Structures.DataFile
 
         // VERB
         public int NumVerbs { get; set; }
+        /// <summary>Verb offset-table entries; offsets are relative to the VERB tag position.</summary>
+        public List<VerbEntry> VerbEntries { get; private set; }
+        /// <summary>Position of the VERB tag within RawContent, or -1 when absent.</summary>
+        public int VerbBlockOffset { get; private set; }
+        /// <summary>Total VERB block size (8-byte header + table + bytecode).</summary>
+        public int VerbBlockSize { get; private set; }
+        /// <summary>First bytecode position within RawContent (after the offset table), or -1.</summary>
+        public int VerbCodeOffset { get; private set; }
+        public int VerbCodeLength { get; private set; }
 
         // OBNA
         public string Name { get; set; }
+        /// <summary>Position of the OBNA tag within RawContent, or -1 when absent.</summary>
+        public int ObnaBlockOffset { get; private set; }
+        /// <summary>Position/length of the OBNA body (name bytes + terminator + padding).</summary>
+        public int ObnaBodyOffset { get; private set; }
+        public int ObnaBodyLength { get; private set; }
 
         public override void CalculateBlockSize()
         {
@@ -76,6 +90,11 @@ namespace ScummEditor.Structures.DataFile
         private void ParseForDisplay()
         {
             Name = string.Empty;
+            VerbEntries = new List<VerbEntry>();
+            VerbBlockOffset = -1;
+            VerbCodeOffset = -1;
+            ObnaBlockOffset = -1;
+            ObnaBodyOffset = -1;
 
             // Walk the sub-blocks (type:4, size:32be, body) embedded in OBCD.
             int p = 0;
@@ -94,9 +113,14 @@ namespace ScummEditor.Structures.DataFile
                         ParseCodeHeader(bodyStart, bodyLength);
                         break;
                     case "VERB":
+                        VerbBlockOffset = p;
+                        VerbBlockSize = (int)size;
                         ParseVerbTable(bodyStart, bodyLength);
                         break;
                     case "OBNA":
+                        ObnaBlockOffset = p;
+                        ObnaBodyOffset = bodyStart;
+                        ObnaBodyLength = bodyLength;
                         Name = ReadCString(bodyStart, bodyLength);
                         break;
                 }
@@ -127,10 +151,16 @@ namespace ScummEditor.Structures.DataFile
             while (p < end)
             {
                 byte entry = RawContent[p];
-                if (entry == 0x00) break; // end of offset table
+                if (entry == 0x00) { p++; break; } // end of offset table
+                if (p + 3 > end) { p = end; break; }
                 NumVerbs++;
+                VerbEntries.Add(new VerbEntry { Id = entry, Offset = ReadUInt16(p + 1) });
                 p += 3; // entry (8) + offset (16le)
             }
+
+            // Bytecode runs from the end of the table to the end of the VERB block.
+            VerbCodeOffset = p;
+            VerbCodeLength = end - p;
         }
 
         private string ReadCString(int p, int length)
@@ -155,5 +185,18 @@ namespace ScummEditor.Structures.DataFile
         {
             return (uint)((RawContent[p] << 24) | (RawContent[p + 1] << 16) | (RawContent[p + 2] << 8) | RawContent[p + 3]);
         }
+
+        /// <summary>Re-parses the structural info after RawContent is replaced (text import).</summary>
+        public void Reparse()
+        {
+            ParseForDisplay();
+        }
+    }
+
+    public class VerbEntry
+    {
+        public byte Id { get; set; }
+        /// <summary>Bytecode offset relative to the VERB tag position (as used by the engine).</summary>
+        public int Offset { get; set; }
     }
 }
