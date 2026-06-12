@@ -121,9 +121,9 @@ namespace ScummEditor
             {
                 if (bitArray[i])
                 {
-                    //Como os bit são armazenados em ordem reversa, ou seja, do menos significativo para o mais significativo
-                    //Então aqui ele precisa ser reconstruido em ordem reversa também.
-                    //set os bits estivessem na ordem certa, então a linha abaixo seria:
+                    //The bits are stored in reverse order (least significant first),
+                    //So it must be rebuilt in reverse order here as well.
+                    //If the bits were in the right order, the line below would be:
                     //bytes[byteIndex] |= (byte)(1 << (7 - bitIndex));
                     bytes[byteIndex] |= (byte)(1 << bitIndex);
                 }
@@ -149,9 +149,9 @@ namespace ScummEditor
             {
                 if (bitArray[i])
                 {
-                    //Como os bit são armazenados em ordem reversa, ou seja, do menos significativo para o mais significativo
-                    //Então aqui ele precisa ser reconstruido em ordem reversa também.
-                    //set os bits estivessem na ordem certa, então a linha abaixo seria:
+                    //The bits are stored in reverse order (least significant first),
+                    //So it must be rebuilt in reverse order here as well.
+                    //If the bits were in the right order, the line below would be:
                     //bytes[byteIndex] |= (byte)(1 << (7 - bitIndex));
                     resultByte |= (byte)(1 << i);
                 }

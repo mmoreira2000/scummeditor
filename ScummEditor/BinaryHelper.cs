@@ -95,7 +95,7 @@ namespace ScummEditor
 
             byte[] bytes = BitConverter.GetBytes(value);
 
-            if (bytes.Length != 2) throw new ConversionException(string.Format("Erro! A conversão deveria gerar 2 bytes, porem gerou {0}", bytes.Length));
+            if (bytes.Length != 2) throw new ConversionException(string.Format("Error: the conversion should produce 2 bytes but produced {0}", bytes.Length));
 
             if (bigEndian)
             {
@@ -110,7 +110,7 @@ namespace ScummEditor
 
             byte[] bytes = BitConverter.GetBytes(value);
 
-            if (bytes.Length != 2) throw new ConversionException(string.Format("Erro! A conversão deveria gerar 2 bytes, porem gerou {0}", bytes.Length));
+            if (bytes.Length != 2) throw new ConversionException(string.Format("Error: the conversion should produce 2 bytes but produced {0}", bytes.Length));
 
             if (bigEndian)
             {
@@ -125,7 +125,7 @@ namespace ScummEditor
 
             byte[] bytes = BitConverter.GetBytes(value);
 
-            if (bytes.Length != 4) throw new ConversionException(string.Format("Erro! A conversão deveria gerar 4 bytes, porem gerou {0}", bytes.Length));
+            if (bytes.Length != 4) throw new ConversionException(string.Format("Error: the conversion should produce 4 bytes but produced {0}", bytes.Length));
 
             if (bigEndian)
             {
@@ -140,7 +140,7 @@ namespace ScummEditor
 
             byte[] bytes = BitConverter.GetBytes(value);
 
-            if (bytes.Length != 8) throw new ConversionException(string.Format("Erro! A conversão deveria gerar 8 bytes, porem gerou {0}", bytes.Length));
+            if (bytes.Length != 8) throw new ConversionException(string.Format("Error: the conversion should produce 8 bytes but produced {0}", bytes.Length));
 
             if (bigEndian)
             {

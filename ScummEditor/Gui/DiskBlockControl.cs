@@ -102,7 +102,7 @@ namespace ScummEditor.Gui
 
             var roomBlock = (RoomBlock)_diskBlock.Childrens.Single(r => r.GetType() == typeof(RoomBlock));
 
-            //Configurando as palettas Padrão
+            //Configuring the default palettes
             PalettesData pals = roomBlock.GetPALS();
             List<PaletteData> paletteDatas = null;
             if (pals != null)
@@ -123,7 +123,7 @@ namespace ScummEditor.Gui
             }
             if (Palettes.SelectedIndex < 0) Palettes.SelectedIndex = 0;
             Palettes.Visible = Palettes.Items.Count != 1;
-            //Termino de configuração das palettas padrão
+            //Finishes configuring the default palettes
 
             TreeImages.Nodes.Clear();
             _roomImages = new Dictionary<string, RoomBlockImageControl>();
@@ -203,7 +203,7 @@ namespace ScummEditor.Gui
                     }
                 }
 
-                //Remove os itens se não tiver nenhuma imagem neles, só serve para poluir a tela.
+                //Removes items without any image in them - they only clutter the screen.
                 if (nodeObject.Nodes.Count == 0)
                 {
                     TreeImages.Nodes.Remove(nodeObject);
@@ -220,7 +220,7 @@ namespace ScummEditor.Gui
                 Costume currentCostume = costumesList[i];
                 for (int j = 0; j < currentCostume.Pictures.Count; j++)
                 {
-                    //Vamos filtras apenas os frames que tem imagem para decodificar.
+                    //Keep only the frames that have an image to decode.
                     if (currentCostume.Pictures[j].ImageData.Length == 0
                         || currentCostume.Pictures[j].ImageData.Length == 1 && currentCostume.Pictures[j].ImageData[0] == 0) continue;
 

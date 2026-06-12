@@ -27,10 +27,21 @@ namespace ScummEditor.Structures.DataFile
 
             while (binaryReader.Position < binaryReader.Length)
             {
-                var LFLF = new DiskBlock(this);
-                LFLF.LoadFromBinaryReader(binaryReader);
-
-                Childrens.Add(LFLF);
+                // Anything that is not an LFLF (stray blocks in fan editions) is kept as a
+                // byte-preserved generic block so the file still loads and round-trips.
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
+                if (typeRead == "LFLF")
+                {
+                    var LFLF = new DiskBlock(this);
+                    LFLF.LoadFromBinaryReader(binaryReader);
+                    Childrens.Add(LFLF);
+                }
+                else
+                {
+                    var stray = new NotImplementedDataBlock(this, typeRead);
+                    stray.LoadFromBinaryReader(binaryReader);
+                    Childrens.Add(stray);
+                }
             }
         }
 

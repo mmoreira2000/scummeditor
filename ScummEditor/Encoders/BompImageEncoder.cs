@@ -82,7 +82,7 @@ namespace ScummEditor.Encoders
                     {
                         if (currentSegmentInformation.RepeatSameColor)
                         {
-                            //Mudou de REPETIR para NÃO REPETIR
+                            //Switched from REPEAT to NO-REPEAT
                             lineInformation.Add(currentSegmentInformation);
 
                             currentSegmentInformation = new SegmentInformation();
@@ -93,7 +93,7 @@ namespace ScummEditor.Encoders
                     {
                         if (!currentSegmentInformation.RepeatSameColor)
                         {
-                            //Mudou de NÃO REPETIR para REPETIR
+                            //Switched from NO-REPEAT to REPEAT
                             lineInformation.Add(currentSegmentInformation);
 
                             currentSegmentInformation = new SegmentInformation();
@@ -108,7 +108,7 @@ namespace ScummEditor.Encoders
 
                 lineInformation.Add(currentSegmentInformation);
 
-                //Segunda passagem - verifica a lista de itens não repetidos para ver se o ultimo elemento é um elemento da lista repetida seguinte.
+                //Second pass - checks the non-repeated list: when its last element repeats the first element of the next repeated list, it must move there.
                 for (int i = 1; i < lineInformation.Count; i++)
                 {
                     var previous = lineInformation[i - 1];
@@ -117,7 +117,7 @@ namespace ScummEditor.Encoders
 
                     if (!previous.RepeatSameColor && current.RepeatSameColor && previous.Colors[previousLastIndex] == current.Colors[0])
                     {
-                        //move o item da lista anterior para a lista atual
+                        //moves the item from the previous list to the current one
                         current.Colors.Insert(0, previous.Colors[previousLastIndex]);
 
                         previous.Colors.RemoveAt(previousLastIndex);
@@ -125,7 +125,7 @@ namespace ScummEditor.Encoders
                 }
 
                 //Terceira passagem - procura por listas que eventualmente ficaram vazias, e as remove.
-                //É importante percorrer a lista ao contrários, caso contrário a lista sera lida errada, além de dar IndexOutOfBounds no final.
+                //The list must be walked backwards, otherwise it would be read wrong and throw IndexOutOfBounds at the end.
                 for (int i = lineInformation.Count - 1; i >= 0; i--)
                 {
                     if (lineInformation[i].Colors.Count == 0)
@@ -134,7 +134,7 @@ namespace ScummEditor.Encoders
                     }
                 }
 
-                //Quarta passagem, divide as listas com mais de 128 itens em varias listas, pois 128 é o limite máximo de 7 bits + 1.
+                //Fourth pass: splits lists with more than 128 items, since 128 is the encoding limit per chunk.
                 var finalLineInformation = new List<SegmentInformation>();
                 foreach (SegmentInformation segmentInformation in lineInformation)
                 {

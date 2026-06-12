@@ -39,6 +39,10 @@ namespace ScummEditor.Gui
             {
                 ShowPaletteOffset((PaletteOffset)blockBase);
             }
+            else if (blockBase is EgaPalette)
+            {
+                ShowEgaPalette((EgaPalette)blockBase);
+            }
             else
             {
                 summary.Text = string.Empty;
@@ -112,6 +116,19 @@ namespace ScummEditor.Gui
             for (int i = 0; i < block.Offsets.Count; i++)
             {
                 grid.Rows.Add(i, block.Offsets[i]);
+            }
+        }
+
+        private void ShowEgaPalette(EgaPalette block)
+        {
+            summary.Text = string.Format("EGA dithering palette: {0} entries (two EGA colors per VGA index)", block.EntryCount);
+            AddColumns("VGA index", "Byte", "EGA color 1", "EGA color 2");
+
+            for (int i = 0; i < block.EntryCount; i++)
+            {
+                int low, high;
+                block.GetEntry(i, out low, out high);
+                grid.Rows.Add(i, "0x" + block.RawContent[i].ToString("X2"), low, high);
             }
         }
 

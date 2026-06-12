@@ -64,6 +64,12 @@ namespace ScummEditor.Structures.DataFile
 
         public Scumm6Disassembler.Result Disassemble()
         {
+            // The bytecode language changed at v6: v5 opcodes carry parameter bits, v6 is
+            // stack based. The result shape (listing + string/jump positions) is shared.
+            if (_gameInfo != null && _gameInfo.ScummVersion == 5)
+            {
+                return Scumm5Disassembler.Disassemble(RawContent, CodeOffset);
+            }
             return Scumm6Disassembler.Disassemble(RawContent, CodeOffset);
         }
     }

@@ -65,7 +65,7 @@ namespace ScummEditor.Structures.DataFile
         public List<Limb> Limbs { get; set; }
         public List<CostumeImageData> Pictures { get; set; }
 
-        public byte CloseByte { get; set; } //sei lah, mas parece que os costumes vem com um close byte !?!?
+        public byte CloseByte { get; set; } //for some reason costumes seem to end with a close byte !?!?
         public bool HasCloseByte { get; set; }
         public int PaletteSize { get; private set; }
 
@@ -285,24 +285,22 @@ namespace ScummEditor.Structures.DataFile
                         OR
                         start        : 16le
                         noloop       : 1
-                        end offset   : 7 offset of the last frame, or len-1  (Pelo que entendi, esse não é a posição final, e sim o comprimento do offset.
+                        end offset   : 7 offset of the last frame, or len-1  (As far as I understood this is not the final position but the offset length.)
              */
             Animations = new List<Animation>();
             for (int i = 0; i < AnimOffsets.Count; i++)
             {
-                //Por alguma razão, o NumAnimations não é o numero real de animações. Parece que tem um array "reservando" posições para animações 
-                //não utilizadas.
-                //O que eu quero dizer é que tem o indice de animações, mas esse indice as vezes aponta para um offset de animação 0, ou seja,
-                //o indice existe e diz que não aponta para nenhuma animação, pelo que entendi. Então só vou continuar lendo do binary stream
-                //quando for o indice apontara para a próxima animação.
+                //For some reason NumAnimations is not the real number of animations: the array seems to "reserve"
+                //slots for unused animations. The index sometimes points to animation offset 0, meaning "no
+                //animation here". So we only keep reading the binary stream when the index points to a real one.
                 if (AnimOffsets[i] > 0)
                 {
                     Animation existingAnimation = Animations.SingleOrDefault(x => x.Offset == AnimOffsets[i]);
                     if (existingAnimation == null)
                     {
-                        //Pra isso aqui funciona, a posição do binaryReader deve ser a mesma informada no offset. 
-                        //Se não for, então para no debug, porque tem alguma coisa errada com o meu código e 
-                        //preciso verificar o que é.
+                        //For this to work the binaryReader position must match the announced offset.
+                        //If it does not, break into the debugger: something is wrong with this code
+                        //and it needs to be checked.
                         if (AnimOffsets[i] != DebugGetCurrentRelativePosition(binaryReader)) Debugger.Break();
 
                         var currentAnimation = new Animation();
@@ -325,8 +323,8 @@ namespace ScummEditor.Structures.DataFile
             }
 
 
-            //Segundo o site do SCUMMC, achar o tamanho do CMDArray e outro itens é somente olhando os indices, pois uma coisa começa onde a
-            //outra termina. Segue o texto original abaixo:
+            //According to the SCUMMC site, the size of the CMD array (and other items) comes from the
+            //indexes alone: one thing starts where the previous one ends. Original text below:
             //
             //It seems the data is always properly ordered. That is, the first picture of the first limb comes right after the last limb table. 
             //The first limb table start right after the cmd array, and so on. Currently this seems to be the only way to determine how long the 
@@ -335,9 +333,9 @@ namespace ScummEditor.Structures.DataFile
             //      anim cmds
             //        cmd: 8
 
-            //Essa conta ta ficando 1 byte atrasado. Não sei se a sessão anterior termina com 00 e eu não estou pulando
-            //ou se tem algum erro mesmo. Verificar se nos próximos costumes é sempre 00 ou 00 00...
-            //por hora, vou comentar o código de start+length e calcular igual o site fala.
+            //This count ends up 1 byte behind. Either the previous section ends with a 00 that is not being
+            //skipped, or there is a real bug. Check whether the next costumes always end with 00 or 00 00...
+            //For now the start+length code is commented out and the size is computed the way the site describes.
 
             //Tamanhos do CMD Array
             if (AnimCommandsOffset != (DebugGetCurrentRelativePosition(binaryReader))) Debugger.Break();
@@ -368,8 +366,8 @@ namespace ScummEditor.Structures.DataFile
 
             Limbs = new List<Limb>();
 
-            //Pega uma lista apenas com os limbs distintos, sem as repetições:
-            //, e ignora o ultimo valor, sei lá porque, mas o ultimo valor parece apontar para o final da lista!
+            //Take only the distinct limb offsets, without repetitions, and ignore the last value -
+            //the last value seems to point to the end of the list!
             List<ushort> differentLimbsOnly = LimbsOffsets.Distinct().ToList();
             for (int i = 0; i < differentLimbsOnly.Count - 1; i++)
             {
@@ -379,14 +377,13 @@ namespace ScummEditor.Structures.DataFile
 
                 Limbs.Add(currentLimb);
             }
-            //Para determinar o tamanho do ultimo limb, é preciso saber onde começa a primeira imagem do primeiro limb, 
-            //pois ela vem, segundo o texto do scummc, logo apos a ultima tabela de limb. Então eu pego o offset da
-            //primeira imagem do primeiro limb (dando peek no ushort, que será o primeiro valor lido) 
-            //e subtraio o offset de inicio do ultimo limb, com isso eu descubro o tamanho.
+            //To size the last limb we need to know where the first picture of the first limb starts: per the
+            //SCUMMC text it comes right after the last limb table. So peek the first picture offset of the
+            //first limb (the first ushort to be read) and subtract the start offset of the last limb.
             Limb lastLimb = new Limb();
             lastLimb.OffSet = differentLimbsOnly[differentLimbsOnly.Count - 1];
 
-            //TESTE para tentar descobrir que porra ta acontecendo aqui
+            //TEST to figure out what is going on here
             ushort nextValue = binaryReader.PeekUint16();
             if (nextValue == 0)
             {
@@ -397,13 +394,12 @@ namespace ScummEditor.Structures.DataFile
                 lastLimb.Size = (ushort)(nextValue - lastLimb.OffSet);
             }
 
-            //Eu to achando que se o size for 0, então na verdade esse limb não existe.
-            //O negócio é que eu acho que pra determinar o tamanho do limb, o engine do scumm
-            //desconta o offset do limb seguinte do limb atual, então o ultimo limb, se não
-            //tiver tamanho, era porque seu offset só serviria para determinar o tamanho do limb
+            //If the size is 0 the limb probably does not exist. The SCUMM engine seems to size a limb by
+            //subtracting its offset from the next limb offset, so a size-less last limb would exist
+            //only so its offset can size the previous one.
             //anterior. 
-            //ACHO que talvez por isso, em algumas vezes o nextValue logo acima é 0,
-            //porque por alguma razão o valor não era o do inicio da próxima imagem e dai foi nulado. Mas isso tudo pode ser besteira tb.
+            //MAYBE that is why nextValue above is sometimes 0: the value was not the start of the next
+            //picture and was nulled. This whole theory may also be nonsense.
             if (lastLimb.Size > 0)
             {
                 Limbs.Add(lastLimb);
@@ -415,7 +411,7 @@ namespace ScummEditor.Structures.DataFile
                 if ((limb.Size % 2) != 0) Debugger.Break();
                 if (limb.OffSet != (DebugGetCurrentRelativePosition(binaryReader))) Debugger.Break();
 
-                //Como cada indice tem 2 bytes (ushort), então o total de entradas é o tamanho do limb dividido por 2
+                //Each index entry has 2 bytes (ushort), so the number of entries is the limb size divided by 2
                 for (int i = 0; i < (limb.Size / 2); i++)
                 {
                     ushort currentImageOffset = binaryReader.ReadUint16();
@@ -431,10 +427,10 @@ namespace ScummEditor.Structures.DataFile
                 picturesHeaderSize = 14;
             }
 
-            //Primeiro vamos calcular o tamanho que tera os dados de cada imagem.
-            //Para isso, precisamos pegar a imagem atual + 1, e descontar do offset dela
-            //o offset da imagem atual. Com isso teremos o tamanho total da imagem.
-            //Desse total, descontamos 14 (ou 12), que é o número de bytes do cabeçalho da imagem.
+            //First compute the data size of each picture.
+            //For that we take the next picture offset and subtract this one
+            //the current picture offset, giving the total picture size.
+            //From that total we subtract 14 (or 12), the size of the picture header.
             CostumeImageData lastImageData = null;
             foreach (Limb limb in Limbs)
             {
@@ -478,21 +474,21 @@ namespace ScummEditor.Structures.DataFile
                         sizeVerify = BlockSize - 2;
                         break;
                     case 6:
-                        //pra determinar o tamanho da ultima imagem, vamos usar o parametro size(??) que foi o primeiro valor lido pelo costume.
-                        //Talvez eu deva utilizar o blocksize, não sei... é que esse size não faz muito sentido, visto que o blocksize
-                        //é justamente pra isso. Sei lá, tem alguma pegadinha aqui. Mas em alguns casos o SIZE é 0, dai tem que usar o blocksize mesmo (?)
+                        //To size the last picture we use the size(??) parameter, the first value the costume read.
+                        //Maybe the blocksize should be used instead - this size field makes little sense given the
+                        //blocksize exists exactly for that. When SIZE is 0 the blocksize must be used anyway (?)
                         sizeVerify = Size == 0 ? BlockSize - 8 : Size;
                         break;
                     default:
-                        Debugger.Break(); //Não era pra cair aqui.
+                        Debugger.Break(); //Should never get here.
                         break;
                 }
                 lastImageData.ImageDataSize = (ushort)((sizeVerify - lastImageData.ImageStartOffSet) - picturesHeaderSize);
                 Pictures.Add(lastImageData);
             }
 
-            //Agora sim, finalmente, depois dessa volta MEDONHA, parece que conseguimos chegar de fato aos dados dos frames das
-            //animações... espero que sim pelo menos.
+            //Finally, after this DREADFUL detour, we seem to reach the actual animation frame data...
+            //hopefully, at least.
             foreach (CostumeImageData picture in Pictures)
             {
                 /*
@@ -514,9 +510,8 @@ namespace ScummEditor.Structures.DataFile
                 picture.MoveY = binaryReader.ReadInt16();
                 if (picturesHeaderSize == 14)
                 {
-                    //Mexendo, a impressão que parece é que só tem informações de REDIR_LIMB e REDIR_PICT quando
-                    //o size == 0. Não sei porque, mas é isso que ta parecendo.
-                    //Vou fazer mais uns testes.
+                    //Experimenting, REDIR_LIMB and REDIR_PICT information seems to be present only when
+                    //size == 0. No idea why, but that is how it looks. More tests needed.
                     picture.HasRedirInfo = true;
                     picture.RedirLimb = binaryReader.ReadByte1();
                     picture.RedirPict = binaryReader.ReadByte1();
@@ -529,7 +524,7 @@ namespace ScummEditor.Structures.DataFile
                 uint blockSizeWithoutHeader = (BlockSize - 8);
                 if (blockSizeWithoutHeader == Size)
                 {
-                    //não faz nada
+                    //does nothing
                 }
                 else if (blockSizeWithoutHeader == Size + 1)
                 {
@@ -567,8 +562,9 @@ namespace ScummEditor.Structures.DataFile
         private ushort _limbMask;
         private byte _numLimbs;
 
-        //Como varios indicies tb apontam para o mesmooffset de animação, vou lelo apenas uma vez, para isso, vou armazenar aqui o offset
-        //da animação, assim, já tenho como consulta-lo se ele foi lido ou não. Porem é obvio que ele não entra no calculo do tamanho.
+        //Several indexes can point to the same animation offset, so each animation is read only once:
+        //the offset is stored here to check whether it was already read. Obviously it does not
+        //count towards the size.
         public ushort Offset { get; set; }
 
         public Animation()
@@ -576,7 +572,7 @@ namespace ScummEditor.Structures.DataFile
             AnimDefinitions = new List<AnimationDefinition>();
         }
 
-        //LimbMask contem a quantidade de limbs e suas respectivas posições. Cada bit ligado é um lib que será usado, sendo o indice o mesmo do bit.
+        //LimbMask holds the number of limbs and their positions: each set bit is a limb in use, the limb index being the bit index.
         public ushort LimbMask
         {
             get { return _limbMask; }
@@ -590,7 +586,7 @@ namespace ScummEditor.Structures.DataFile
             }
         }
 
-        //Deixa pré-calculado o numero de limbs.
+        //Pre-computes the number of limbs.
         public byte NumLimbs { get { return _numLimbs; } }
 
         public List<AnimationDefinition> AnimDefinitions { get; set; }
@@ -613,8 +609,8 @@ namespace ScummEditor.Structures.DataFile
         OR
         start        : 16le
         noloop       : 1
-        end offset   : 7 offset of the last frame, or len-1  (Ate onde entendi, isso é o tamanho e não o offset final. O texto abaixo foi tirado
-                                                              do SCUMMC, no github:
+        end offset   : 7 offset of the last frame, or len-1  (As far as I understood this is the size, not the final offset. The text below was
+                                                              taken from SCUMMC, on github:
         if the index is not 0xFFFF, then it’s followed by the length of the sequence (8 bits). 
         The highest bit of the length is used to indicate whether the sequence should loop, if it is set the animation doesn’t loop.
      */
@@ -684,8 +680,8 @@ namespace ScummEditor.Structures.DataFile
      */
     public class CostumeImageData
     {
-        //As propriedades abaixo são calculadas pelo reader para ajudar a extrair a informação e depois regera-la,
-        //atualizando as informações de posição dos limbs.
+        //The properties below are computed by the reader to help extract the data and regenerate it
+        //later, updating the limb position information.
         public int ImageDataSize { get; set; }
         public ushort ImageStartOffSet { get; set; }
         public bool HasRedirInfo { get; set; }

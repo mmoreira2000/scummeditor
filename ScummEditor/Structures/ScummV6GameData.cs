@@ -30,6 +30,12 @@ namespace ScummEditor.Structures
         /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
         public bool IsTalkie { get; set; }
 
+        /// <summary>
+        /// True when the release ships ripped CD audio (CDDA.SOU) instead of a speech file -
+        /// e.g. the Monkey Island 1 CD edition, whose music lives on CD audio tracks.
+        /// </summary>
+        public bool HasCdAudio { get; set; }
+
         public string IndexFile { get; set; }
         public string DataFile { get; set; }
     }
@@ -162,7 +168,7 @@ namespace ScummEditor.Structures
             RoomOffsetTable LOFF = DataFile.GetLOFF();
             List<DiskBlock> diskBlocks = DataFile.GetLFLFs();
 
-            if (diskBlocks.Count != LOFF.Rooms.Count) throw new InvalidFileFormatException("Número de rooms não bate com o de LFLFs");
+            if (diskBlocks.Count != LOFF.Rooms.Count) throw new InvalidFileFormatException("The number of rooms does not match the number of LFLF blocks.");
 
             //Update ROOM positions offset.
             var orderedDisks = OrderDiskBlocks();
@@ -210,11 +216,11 @@ namespace ScummEditor.Structures
         {
             var result = new DiskBlock[IndexFile.DROO.Rooms.Count];
 
-            //a númeração de discos é chata, e pode pular alguns rooms.
-            //o que essa rotina faz é percorrer todos os rooms encontrados
-            //e adiciona-los em um array com o mesmo tamanho do Indice de rooms,
-            //deixando nulo os indices dos rooms que não estão em uso (number 0 no arquivo de indice).
-            //Dessa forma fica muito mais facil atualizar a tabela de offsets de indices.
+            //Disk numbering is annoying and can skip some rooms.
+            //This routine walks every room found and places each one in an array with the
+            //same size as the room index, leaving null the slots of the rooms that are
+            //not in use (number 0 in the index file).
+            //This makes updating the index offset tables much easier.
             List<DiskBlock> diskBlocks = DataFile.GetLFLFs();
 
             int nextRoomIndex = 0;

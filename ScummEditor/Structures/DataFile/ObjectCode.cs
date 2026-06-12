@@ -131,6 +131,24 @@ namespace ScummEditor.Structures.DataFile
 
         private void ParseCodeHeader(int p, int length)
         {
+            // SCUMM v5 CDHD body has 13 bytes; x/y/w/h are bytes in 8-pixel units.
+            //   obj id:16le, x:8, y:8, w:8, h:8, flags:8, parent:8, walk_x:16le, walk_y:16le, actor dir:8
+            if (length == 13)
+            {
+                HasCodeHeader = true;
+                ObjectId = ReadUInt16(p + 0);
+                X = (ushort)(RawContent[p + 2] * 8);
+                Y = (ushort)(RawContent[p + 3] * 8);
+                Width = (ushort)(RawContent[p + 4] * 8);
+                Height = (ushort)(RawContent[p + 5] * 8);
+                Flags = RawContent[p + 6];
+                ParentObject = RawContent[p + 7];
+                // p + 8 .. p + 11 : walk_x:16le, walk_y:16le
+                ActorDirection = RawContent[p + 12];
+                return;
+            }
+
+            // SCUMM v6 CDHD body has 17 bytes, all positions in pixels.
             if (length < 17) return; // 5 * uint16 + 2 * byte + 2 * uint16 (unk) + 1 byte
             HasCodeHeader = true;
             ObjectId = ReadUInt16(p + 0);

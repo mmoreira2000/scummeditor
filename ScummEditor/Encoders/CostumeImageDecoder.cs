@@ -76,7 +76,7 @@ namespace ScummEditor.Encoders
             _indexMatrix = new byte[_pictureData.Width, _pictureData.Height];
 
             if (_pictureData.ImageData.Length == 0
-                || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) //Algumas imagens são vazias!!
+                || (_pictureData.ImageData.Length == 1 && _pictureData.ImageData[0] == 0)) //Some images are empty.
             {
                 BuildIndexedResult();
                 return;

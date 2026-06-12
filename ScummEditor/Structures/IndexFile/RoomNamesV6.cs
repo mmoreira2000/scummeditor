@@ -96,7 +96,7 @@ namespace ScummEditor.Structures.IndexFile
             BlankByte = binaryReader.ReadByte1();
             if (BlankByte != 0)
             {
-                throw new InvalidFileFormatException("Sequencia de caracteres n�o esperada.");
+                throw new InvalidFileFormatException("Unexpected data while reading the room names.");
             }
         }
     }

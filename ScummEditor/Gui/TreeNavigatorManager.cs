@@ -42,6 +42,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(BoxMatrix).Name, structuredBlockControl);
             _controlViewers.Add(typeof(Scale).Name, structuredBlockControl);
             _controlViewers.Add(typeof(PaletteOffset).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(EgaPalette).Name, structuredBlockControl);
 
             _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
 

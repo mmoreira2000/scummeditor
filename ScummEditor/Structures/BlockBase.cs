@@ -15,6 +15,12 @@ namespace ScummEditor.Structures
     {
         protected readonly GameInfo _gameInfo;
 
+        /// <summary>Info of the loaded game (SCUMM version etc.); used to pick version-specific code paths.</summary>
+        public GameInfo GameInfo
+        {
+            get { return _gameInfo; }
+        }
+
         public List<BlockBase> Childrens { get; set; }
 
         public abstract string BlockType { get; }
@@ -107,7 +113,7 @@ namespace ScummEditor.Structures
 
             if (BlockType != typeRead)
             {
-                throw new InvalidFileFormatException(string.Format("Sequencia de caracteres não esperada. Esperado '{0}' mas veio '{1}'", BlockType, typeRead));
+                throw new InvalidFileFormatException(string.Format("Unexpected block tag: expected '{0}' but found '{1}'.", BlockType, typeRead));
             }
 
             BlockSize = binaryReader.ReadUint32(true);
@@ -118,7 +124,7 @@ namespace ScummEditor.Structures
             byte[] headerBytes = BinaryHelper.ConvertUTF8StringToByteArray(BlockType);
             if (headerBytes.Length != 4)
             {
-                throw new InvalidFileFormatException(string.Format("BlockType com tamanho inválido ({0}).", headerBytes.Length));
+                throw new InvalidFileFormatException(string.Format("Block type with invalid length ({0}).", headerBytes.Length));
             }
             binaryWriter.Write(headerBytes);
 
