@@ -1,3 +1,19 @@
+1.4.0.0
+-------
+* Full SCUMM v5 support: The Secret of Monkey Island (CD VGA), Monkey Island 2: LeChuck's Revenge and Indiana Jones and the Fate of Atlantis now have the same feature set as the v6 games. Every block type is decoded with its viewer (scripts, objects, fonts, sounds, walk boxes, palettes - including the v5-only EPAL EGA dithering palette), and images, costumes and charsets round-trip byte-identically.
+
+* New SCUMM v5 script disassembler: the complete v5 opcode set (a different language from v6 - parameters carried inline with variable/literal bits, conditionals with embedded jumps, expression blocks) rendered in the same readable C#-like listing. Every script and every object verb script of the three games decodes 100%.
+
+* Game text translation works on v5: export/import with automatic jump and verb-table remapping, validated against all editions of MI1, MI2 and Indy4 (savegame-name strings are excluded from the export). Font (CHAR) PNG editing also works on v5, with the atlas margins now adapting to fonts that use negative glyph offsets (the European MI2 fonts).
+
+* Language detection now covers the v5 games (the French, German, Italian and Spanish editions are recognized).
+
+* CD edition detection: releases that ship ripped CD audio (a CDDA.SOU of 50 MB or more, like the Monkey Island 1 CD) are reported as the "CD" edition - without being confused with a talkie, since CD audio is music, not speech. The status bar now distinguishes Talkie, CD and Floppy.
+
+* More tolerant game loading: unknown blocks inside rooms and disk sections are kept as raw, byte-preserved blocks instead of aborting the load. This makes the fan-made Ultimate Talkie editions of MI1 and MI2 fully loadable and editable.
+
+* The whole editor speaks English now: all remaining Portuguese messages, dialogs, reports and error texts were translated.
+
 1.3.1.0
 -------
 * Games are now opened by folder: "File > Open Game Folder" detects the game, the SCUMM version and the edition from the content of the selected folder alone (nothing is guessed from folder names or subfolders). The status bar shows the game name, the edition and the SCUMM version.
