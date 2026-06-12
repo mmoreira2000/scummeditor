@@ -22,6 +22,24 @@ namespace ScummEditor.Encoders
             public bool DecodedToEnd { get; set; }
             public List<int> UnknownOpcodes { get; set; }
             public int BytesDecoded { get; set; }
+            public List<StringRef> Strings { get; set; }
+            public List<JumpRef> Jumps { get; set; }
+        }
+
+        /// <summary>An inline message found in the bytecode (positions relative to the scanned buffer).</summary>
+        public class StringRef
+        {
+            public int Offset { get; set; }        // first byte of the string data
+            public int Length { get; set; }        // total bytes consumed, including the 0x00 terminator when present
+            public bool Terminated { get; set; }   // false only when the string ran into the end of the buffer
+            public string Kind { get; set; }       // talk / print* / actorName / verbName / objectName / array
+        }
+
+        /// <summary>A relative-jump operand (positions relative to the scanned buffer).</summary>
+        public class JumpRef
+        {
+            public int OperandOffset { get; set; } // position of the int16le relative offset
+            public int Target { get; set; }        // absolute target (operand end + relative value)
         }
 
         private byte[] _code;
@@ -30,6 +48,8 @@ namespace ScummEditor.Encoders
         private readonly List<Line> _lines = new List<Line>();
         private readonly HashSet<int> _jumpTargets = new HashSet<int>();
         private readonly List<int> _unknown = new List<int>();
+        private readonly List<StringRef> _strings = new List<StringRef>();
+        private readonly List<JumpRef> _jumps = new List<JumpRef>();
         private bool _stopped;
 
         private struct Line
@@ -40,9 +60,18 @@ namespace ScummEditor.Encoders
 
         public static Result Disassemble(byte[] code, int startOffset)
         {
+            return Disassemble(code, startOffset, null);
+        }
+
+        /// <summary>Disassembles with extra named labels rendered at the given offsets (e.g. verb entry points).</summary>
+        public static Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
+        {
             var d = new Scumm6Disassembler();
+            d._namedLabels = namedLabels;
             return d.Run(code, startOffset);
         }
+
+        private IDictionary<int, string> _namedLabels;
 
         private Result Run(byte[] code, int startOffset)
         {
@@ -69,7 +98,9 @@ namespace ScummEditor.Encoders
                 Listing = Render(),
                 DecodedToEnd = !_stopped && _pos >= _code.Length,
                 UnknownOpcodes = _unknown,
-                BytesDecoded = _pos - startOffset
+                BytesDecoded = _pos - startOffset,
+                Strings = _strings,
+                Jumps = _jumps
             };
         }
 
@@ -223,51 +254,38 @@ namespace ScummEditor.Encoders
 
         private string Jump(int offset)
         {
+            int operandOffset = _pos;
             int rel = ReadSignedWord();
             int target = _pos + rel;
             _jumpTargets.Add(target);
+            _jumps.Add(new JumpRef { OperandOffset = operandOffset, Target = target });
             return "L" + target.ToString("X4");
         }
 
-        // Reads an inline SCUMM message string, returning a quoted C-like literal.
-        private string ReadString()
+        // Strings in listings are rendered with the same friendly tokens used by the game
+        // text export: {br} {wait} {sound:N}... plus accented characters via the charmap.
+        private static readonly GameTextCodec ListingCodec = GameTextCodec.Default();
+
+        // Reads an inline SCUMM message string, returning a quoted literal.
+        private string ReadString(string kind = "msg")
         {
-            var sb = new StringBuilder("\"");
+            int start = _pos;
+            bool terminated = false;
             while (_pos < _code.Length)
             {
                 byte b = ReadByte();
-                if (b == 0) break;
+                if (b == 0) { terminated = true; break; }
 
                 if (b == 0xFF || b == 0xFE)
                 {
                     byte code = ReadByte();
-                    switch (code)
-                    {
-                        case 1: sb.Append("\\n"); break;
-                        case 2: sb.Append("\\keep"); break;
-                        case 3: sb.Append("\\wait"); break;
-                        case 8: sb.Append("\\escape"); break;
-                        default:
-                            int val = ReadWord();
-                            sb.Append("\\x" + code.ToString("X2") + "[" + val + "]");
-                            break;
-                    }
-                }
-                else if (b == (byte)'"' || b == (byte)'\\')
-                {
-                    sb.Append('\\').Append((char)b);
-                }
-                else if (b >= 0x20 && b < 0x7F)
-                {
-                    sb.Append((char)b);
-                }
-                else
-                {
-                    sb.Append("\\x" + b.ToString("X2"));
+                    if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
                 }
             }
-            sb.Append('"');
-            return sb.ToString();
+
+            int contentLength = _pos - start - (terminated ? 1 : 0);
+            _strings.Add(new StringRef { Offset = start, Length = _pos - start, Terminated = terminated, Kind = kind });
+            return "\"" + ListingCodec.Decode(_code, start, contentLength).Replace("\"", "\\\"") + "\"";
         }
 
         // -------------------------------------------------------------------------
@@ -276,13 +294,30 @@ namespace ScummEditor.Encoders
 
         private string Render()
         {
+            // Labels can point at an expression-push instruction, which emits no line of its
+            // own (it becomes part of the next statement). Anchor such labels on the first
+            // emitted line at or after the label offset, annotating the real offset.
+            var namedOffsets = new List<int>();
+            if (_namedLabels != null) foreach (int k in _namedLabels.Keys) namedOffsets.Add(k);
+            namedOffsets.Sort();
+            var targets = new List<int>(_jumpTargets);
+            targets.Sort();
+
             var sb = new StringBuilder();
+            int ni = 0, ti = 0;
             foreach (Line line in _lines)
             {
-                if (_jumpTargets.Contains(line.Offset))
-                    sb.AppendLine("L" + line.Offset.ToString("X4") + ":");
+                for (; ni < namedOffsets.Count && namedOffsets[ni] <= line.Offset; ni++)
+                    sb.AppendLine(_namedLabels[namedOffsets[ni]] + ":"
+                        + (namedOffsets[ni] == line.Offset ? "" : "    ; @" + namedOffsets[ni].ToString("X4")));
+                for (; ti < targets.Count && targets[ti] <= line.Offset; ti++)
+                    sb.AppendLine("L" + targets[ti].ToString("X4") + ":");
                 sb.AppendLine("    " + line.Offset.ToString("X4") + "  " + line.Text);
             }
+            for (; ni < namedOffsets.Count; ni++)
+                sb.AppendLine(_namedLabels[namedOffsets[ni]] + ":    ; @" + namedOffsets[ni].ToString("X4"));
+            for (; ti < targets.Count; ti++)
+                sb.AppendLine("L" + targets[ti].ToString("X4") + ":");
             return sb.ToString();
         }
 
@@ -396,7 +431,7 @@ namespace ScummEditor.Encoders
                 case 0x94: { string b = Pop(); string a = Pop(); Push("getVerbFromXY(" + a + ", " + b + ")"); break; }
                 case 0x95: Emit(offset, "beginOverride();"); break;
                 case 0x96: Emit(offset, "endOverride();"); break;
-                case 0x97: { string name = ReadString(); StmtCallWithExtra(offset, "setObjectName", 1, name); break; }
+                case 0x97: { string name = ReadString("objectName"); StmtCallWithExtra(offset, "setObjectName", 1, name); break; }
                 case 0x98: Push("isSoundRunning(" + Pop() + ")"); break;
                 case 0x99: StmtCall(offset, "setBoxFlags", 2); break;
                 case 0x9A: Emit(offset, "createBoxMatrix();"); break;
@@ -417,8 +452,8 @@ namespace ScummEditor.Encoders
                 case 0xB1: StmtCall(offset, "delaySeconds", 1); break;
                 case 0xB2: StmtCall(offset, "delayMinutes", 1); break;
                 case 0xB3: Emit(offset, "stopSentence();"); break;
-                case 0xBA: { string s = ReadString(); StmtCallWithExtra(offset, "talkActor", 1, s); break; }
-                case 0xBB: Emit(offset, "talkEgo(" + ReadString() + ");"); break;
+                case 0xBA: { string s = ReadString("talk"); StmtCallWithExtra(offset, "talkActor", 1, s); break; }
+                case 0xBB: Emit(offset, "talkEgo(" + ReadString("talk") + ");"); break;
                 case 0xBD: Emit(offset, "dummy();"); break;
                 case 0xBE: { string a = PopStackList(); string s = Pop(); Emit(offset, "startObjectQuick(" + s + ", " + a + ");"); break; }
                 case 0xBF: { string a = PopStackList(); string s = Pop(); Emit(offset, "startScriptQuick2(" + s + ", " + a + ");"); break; }
@@ -446,8 +481,8 @@ namespace ScummEditor.Encoders
                 case 0x6B: SubOp(offset, "cursorCommand", CursorCommand); break;
                 case 0x9B: SubOp(offset, "resourceRoutines", ResourceRoutines); break;
                 case 0x9C: SubOp(offset, "roomOps", RoomOps); break;
-                case 0x9D: SubOpMaybeString(offset, "actorOps", 0x58, ActorOps); break;   // SO_ACTOR_NAME -> inline string
-                case 0x9E: SubOpMaybeString(offset, "verbOps", 0x7D, VerbOps); break;      // SO_VERB_NAME -> inline string
+                case 0x9D: SubOpMaybeString(offset, "actorOps", 0x58, ActorOps, "actorName"); break; // SO_ACTOR_NAME -> inline string
+                case 0x9E: SubOpMaybeString(offset, "verbOps", 0x7D, VerbOps, "verbName"); break;    // SO_VERB_NAME -> inline string
                 case 0xA4: ArrayOps(offset); break;
                 case 0xA5: SubOp(offset, "saveRestoreVerbs", SaveRestoreVerbs); break;
                 case 0xA9: WaitOp(offset); break;
@@ -592,13 +627,13 @@ namespace ScummEditor.Encoders
         }
 
         // Sub-opcode group where one sub-op (the "name" op) carries an inline string.
-        private void SubOpMaybeString(int offset, string group, byte stringSub, Dictionary<int, string> table)
+        private void SubOpMaybeString(int offset, string group, byte stringSub, Dictionary<int, string> table, string stringKind)
         {
             byte sub = ReadByte();
             string name = SubName(table, sub);
             if (sub == stringSub)
             {
-                Emit(offset, group + "." + name + "(" + ReadString() + ");");
+                Emit(offset, group + "." + name + "(" + ReadString(stringKind) + ");");
             }
             else
             {
@@ -611,7 +646,7 @@ namespace ScummEditor.Encoders
             byte sub = ReadByte();
             if (sub == 0x4B) // textstring -> inline message
             {
-                Emit(offset, group + ".text(" + ReadString() + ");");
+                Emit(offset, group + ".text(" + ReadString(group) + ");");
             }
             else
             {
@@ -626,7 +661,7 @@ namespace ScummEditor.Encoders
             string arrayName = Var(array);
             if (sub == 0xCD) // assignString -> inline string
             {
-                Emit(offset, arrayName + " = " + ReadString() + ";");
+                Emit(offset, arrayName + " = " + ReadString("array") + ";");
             }
             else
             {

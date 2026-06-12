@@ -182,5 +182,176 @@ namespace ScummEditor
         {
             SaveGame();
         }
+
+        private void exportGameTextsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (scummFile == null || scummFile.DataFile == null)
+            {
+                MessageBox.Show(this, "Open a game first.", "Export game texts");
+                return;
+            }
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "Text file (*.txt)|*.txt|All files (*.*)|*.*",
+                FileName = Path.GetFileNameWithoutExtension(scummFile.LoadedGameInfo.DataFile) + "-texts.txt"
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            GameTextCodec codec;
+            if (!TryPromptCharmap(out codec)) return;
+
+            try
+            {
+                int count = GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec,
+                    Path.GetFileName(scummFile.LoadedGameInfo.DataFile));
+                MessageBox.Show(this, count + " textos exportados para:\n" + dlg.FileName,
+                    "Export game texts", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Falha ao exportar: " + ex.Message, "Export game texts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>
+        /// Optional step of the text export: the translator may paste the "; charmap:" line of an
+        /// in-progress translation so the new export keeps its custom characters. Empty input
+        /// falls back to the default charmap; Cancel aborts the export (returns false).
+        /// </summary>
+        private bool TryPromptCharmap(out GameTextCodec codec)
+        {
+            codec = null;
+            string lastInput = string.Empty;
+
+            while (true)
+            {
+                using (var form = new Form())
+                {
+                    var label = new Label
+                    {
+                        Text = "Optional: paste the \"; charmap:\" line of an existing translation file so this " +
+                               "export keeps its custom characters. Leave empty to use the default charmap."
+                    };
+                    label.SetBounds(12, 9, 596, 42);
+
+                    var input = new TextBox { Text = lastInput };
+                    input.SetBounds(12, 54, 596, 20);
+
+                    var ok = new Button { Text = "OK", DialogResult = DialogResult.OK };
+                    ok.SetBounds(452, 84, 75, 26);
+                    var cancel = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel };
+                    cancel.SetBounds(533, 84, 75, 26);
+
+                    form.Text = "Export game texts - charmap";
+                    form.FormBorderStyle = FormBorderStyle.FixedDialog;
+                    form.MinimizeBox = false;
+                    form.MaximizeBox = false;
+                    form.StartPosition = FormStartPosition.CenterParent;
+                    form.ClientSize = new Size(620, 120);
+                    form.Controls.AddRange(new Control[] { label, input, ok, cancel });
+                    form.AcceptButton = ok;
+                    form.CancelButton = cancel;
+
+                    if (form.ShowDialog(this) != DialogResult.OK) return false;
+                    lastInput = input.Text;
+                }
+
+                try
+                {
+                    codec = GameTextCodec.ParsePastedCharmap(lastInput);
+                    return true;
+                }
+                catch (FormatException ex)
+                {
+                    MessageBox.Show(this, "Charmap inválido: " + ex.Message, "Export game texts",
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        private void importGameTextsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (scummFile == null || scummFile.DataFile == null)
+            {
+                MessageBox.Show(this, "Open a game first.", "Import game texts");
+                return;
+            }
+
+            var dlg = new OpenFileDialog { Filter = "Text file (*.txt)|*.txt|All files (*.*)|*.*" };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                GameTextImportReport report = GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
+
+                string message = report.Summary();
+                if (report.HasChanges)
+                    message += Environment.NewLine + "Use 'Save Changes' para gravar as alterações nos arquivos do jogo.";
+
+                MessageBox.Show(this, message, "Import game texts", MessageBoxButtons.OK,
+                    report.Errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Falha ao importar: " + ex.Message, "Import game texts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void exportGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (scummFile == null || scummFile.DataFile == null)
+            {
+                MessageBox.Show(this, "Open a game first.", "Export game fonts");
+                return;
+            }
+
+            var dlg = new FolderBrowserDialog
+            {
+                Description = "Pasta para salvar as fontes do jogo (charset_N.png + charset_N.guide.png)"
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                string report = CharsetPngCodec.ExportAll(scummFile.DataFile, dlg.SelectedPath);
+                MessageBox.Show(this, report, "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Falha ao exportar: " + ex.Message, "Export game fonts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void importGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (scummFile == null || scummFile.DataFile == null)
+            {
+                MessageBox.Show(this, "Open a game first.", "Import game fonts");
+                return;
+            }
+
+            var dlg = new FolderBrowserDialog
+            {
+                Description = "Pasta com os arquivos charset_N.png a importar"
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                string report = CharsetPngCodec.ImportAll(scummFile.DataFile, dlg.SelectedPath);
+                MessageBox.Show(this,
+                    report + Environment.NewLine + "Use 'Save Changes' para gravar as alterações nos arquivos do jogo.",
+                    "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Falha ao importar: " + ex.Message, "Import game fonts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
     }
 }

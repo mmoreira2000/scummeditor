@@ -96,7 +96,7 @@ namespace ScummEditor.Structures.IndexFile
             BlankByte = binaryReader.ReadByte1();
             if (BlankByte != 0)
             {
-                throw new InvalidFileFormatException("Sequencia de caracteres não esperada.");
+                throw new InvalidFileFormatException("Sequencia de caracteres nï¿½o esperada.");
             }
         }
     }
@@ -116,6 +116,12 @@ namespace ScummEditor.Structures.IndexFile
 
                 _roomName = BinaryHelper.ConvertByteArrayToUTF8String(_roomNameData.Where(b => b != 255).Select(xb => (byte)(xb ^ 0xFF)).ToArray());
             }
+        }
+
+        /// <summary>Decoded room name (the on-disk bytes are XOR'ed with 0xFF).</summary>
+        public string Name
+        {
+            get { return _roomName; }
         }
     }
 }

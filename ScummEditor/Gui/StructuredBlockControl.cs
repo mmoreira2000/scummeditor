@@ -5,7 +5,7 @@ using ScummEditor.Structures.DataFile;
 namespace ScummEditor.Gui
 {
     /// <summary>
-    /// Generic read-only viewer for the structured data blocks (BOXD, BOXM, SCAL, OBCD).
+    /// Generic read-only viewer for the structured data blocks (BOXD, BOXM, SCAL, OFFS).
     /// One instance is shared across those block types; it rebuilds the grid for the
     /// selected block on each refresh.
     /// </summary>
@@ -35,9 +35,9 @@ namespace ScummEditor.Gui
             {
                 ShowScale((Scale)blockBase);
             }
-            else if (blockBase is ObjectCode)
+            else if (blockBase is PaletteOffset)
             {
-                ShowObjectCode((ObjectCode)blockBase);
+                ShowPaletteOffset((PaletteOffset)blockBase);
             }
             else
             {
@@ -104,27 +104,15 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void ShowObjectCode(ObjectCode block)
+        private void ShowPaletteOffset(PaletteOffset block)
         {
-            summary.Text = string.IsNullOrEmpty(block.Name)
-                ? "Object code"
-                : string.Format("Object \"{0}\"", block.Name);
+            summary.Text = string.Format("{0} palette offset(s), relative to the OFFS block", block.Offsets.Count);
+            AddColumns("Palette", "Offset");
 
-            AddColumns("Field", "Value");
-
-            if (block.HasCodeHeader)
+            for (int i = 0; i < block.Offsets.Count; i++)
             {
-                grid.Rows.Add("Object id", block.ObjectId);
-                grid.Rows.Add("X", block.X);
-                grid.Rows.Add("Y", block.Y);
-                grid.Rows.Add("Width", block.Width);
-                grid.Rows.Add("Height", block.Height);
-                grid.Rows.Add("Flags", ToHex(block.Flags));
-                grid.Rows.Add("Parent", block.ParentObject);
-                grid.Rows.Add("Actor direction", block.ActorDirection);
+                grid.Rows.Add(i, block.Offsets[i]);
             }
-            grid.Rows.Add("Verbs", block.NumVerbs);
-            grid.Rows.Add("Name", block.Name);
         }
 
         private static string ToHex(byte value)

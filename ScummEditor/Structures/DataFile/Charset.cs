@@ -163,6 +163,12 @@ namespace ScummEditor.Structures.DataFile
         {
             return (uint)(RawContent[p] | (RawContent[p + 1] << 8) | (RawContent[p + 2] << 16) | (RawContent[p + 3] << 24));
         }
+
+        /// <summary>Re-parses the structural info after RawContent is replaced (PNG import).</summary>
+        public void Reparse()
+        {
+            ParseForDisplay();
+        }
     }
 
     public class Glyph
