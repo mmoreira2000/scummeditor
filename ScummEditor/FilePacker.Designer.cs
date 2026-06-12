@@ -107,7 +107,7 @@
             this.openFileToolStripMenuItem.Image = ((System.Drawing.Image)(resources.GetObject("openFileToolStripMenuItem.Image")));
             this.openFileToolStripMenuItem.Name = "openFileToolStripMenuItem";
             this.openFileToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
-            this.openFileToolStripMenuItem.Text = "Open File";
+            this.openFileToolStripMenuItem.Text = "Open Game Folder";
             this.openFileToolStripMenuItem.Click += new System.EventHandler(this.openFileToolStripMenuItem_Click);
             // 
             // saveChangesToolStripMenuItem
@@ -271,7 +271,7 @@
             this.OpenFileButton.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.OpenFileButton.Name = "OpenFileButton";
             this.OpenFileButton.Size = new System.Drawing.Size(23, 22);
-            this.OpenFileButton.Text = "Open game data file";
+            this.OpenFileButton.Text = "Open game folder";
             this.OpenFileButton.Click += new System.EventHandler(this.OpenFileButton_Click);
             // 
             // SaveDataFile

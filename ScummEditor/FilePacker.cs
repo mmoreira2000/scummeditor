@@ -58,16 +58,70 @@ namespace ScummEditor
 
         private void LoadGame()
         {
-            var dlg = new OpenFileDialog();
-            if (dlg.ShowDialog() == DialogResult.Cancel) return;
+            var dialog = new FolderBrowserDialog
+            {
+                Description = "Select the game folder (the one with the game data files, e.g. TENTACLE.000/.001)."
+            };
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            // The detection looks only at the content of the selected folder.
+            GameInfo gameInfo = Functions.FindScummGameInFolder(dialog.SelectedPath);
+            if (gameInfo.LoadedGame == ScummGame.None)
+            {
+                MessageBox.Show(this,
+                    "No SCUMM game was found in the selected folder.",
+                    "Open game folder", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
 
             scummFile = new ScummV6GameData();
-            scummFile.LoadDataFromDisc(dlg.FileName);
+            scummFile.LoadFromGameInfo(gameInfo);
 
-            LoadedGame.Text = GetGameName(scummFile.LoadedGameInfo.LoadedGame);
+            string language = DetectLanguageSafe();
+            LoadedGame.Text = BuildLoadedGameStatus(scummFile.LoadedGameInfo, language);
 
             treeNavigatorManager.ScummV6GameData = scummFile;
             treeNavigatorManager.LoadTree();
+        }
+
+        /// <summary>Language detection is optional - it must never break the game loading.</summary>
+        private string DetectLanguageSafe()
+        {
+            try
+            {
+                return GameLanguageDetector.Detect(scummFile.DataFile);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Status bar text: game name, its edition (+ language when known) and the SCUMM version.</summary>
+        private string BuildLoadedGameStatus(GameInfo gameInfo, string language)
+        {
+            string gameName = GetGameName(gameInfo.LoadedGame);
+
+            string edition;
+            if (gameInfo.IsTalkie)
+            {
+                edition = "Talkie";
+            }
+            else
+            {
+                edition = "Floppy";
+            }
+
+            string details = edition;
+            if (language != null)
+            {
+                details = edition + ", " + language;
+            }
+
+            return gameName + " (" + details + ")  -  SCUMM v" + gameInfo.ScummVersion;
         }
 
         private void SaveGame()
@@ -99,20 +153,20 @@ namespace ScummEditor
 
         private string GetGameName(ScummGame game)
         {
+            // The edition (Talkie/Floppy) is detected separately - see BuildLoadedGameStatus.
             switch (game)
             {
                 case ScummGame.DayOfTheTentacle:
-                    return "Day of Tentacle (Talkie)";
+                    return "Day of the Tentacle";
                 case ScummGame.SamAndMax:
-                    return "Sam & Max Hit The Road (Talkie)";
+                    return "Sam & Max Hit the Road";
                 case ScummGame.FateOfAtlantis:
-                    return "Indiana Jones And The Fate of Atlantis (Talkie)";
+                    return "Indiana Jones and the Fate of Atlantis";
                 case ScummGame.MonkeyIsland1VGA:
-                    return "The Secret Of Monkey Island (CD)";
                 case ScummGame.MonkeyIsland1VGASpeech:
-                    return "The Secret Of Monkey Island (CD) (Talkie)";
+                    return "The Secret of Monkey Island (CD)";
                 case ScummGame.MonkeyIsland2:
-                    return "Monkey Island 2: LeChuck's Revenge (CD)";
+                    return "Monkey Island 2: LeChuck's Revenge";
                 case ScummGame.None:
                 default:
                     return "None";

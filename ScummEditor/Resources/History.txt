@@ -1,3 +1,13 @@
+1.3.1.0
+-------
+* Games are now opened by folder: "File > Open Game Folder" detects the game, the SCUMM version and the edition from the content of the selected folder alone (nothing is guessed from folder names or subfolders). The status bar shows the game name, the edition and the SCUMM version.
+
+* Talkie x Floppy edition detection: a release is considered talkie when its speech file (MONSTER.SOU, or the FM Towns-style <game>.SOU) is bigger than 50 MB. The floppy editions also ship a MONSTER.SOU, but it only holds sound effects (a few MB), while real recorded speech takes 150 MB or more - the rule now applies to every game, not only Monkey Island 1.
+
+* Best-effort language detection: the editor samples the game's own texts and recognizes English, Portuguese, Spanish, German, French and Italian, showing the language in the status bar when the detection is confident. Validated against 13 real editions, including the ScummBR translation (Portuguese) and the official French/German/Italian/Spanish releases.
+
+* Added the FM Towns release of Indiana Jones and the Fate of Atlantis (INDY4.000/.001) to the known games.
+
 1.3.0.0
 -------
 * Game text translation support. "File > Export game texts" writes every translatable string of the game (dialogues, prints, verb names, object names) to a single .txt file: one line per text with a stable id, control codes as readable tokens ({br}, {wait}, {sound:N}...) and accented characters mapped through a charmap stored in the file header. "File > Import game texts" reads the file back and rebuilds the bytecode - jump offsets and the verb offset tables are remapped automatically when a translation is shorter or longer than the original, and every rebuilt script is re-disassembled and verified before being accepted.

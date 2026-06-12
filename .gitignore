@@ -8,6 +8,9 @@ ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest
 [Bb]in/
 [Oo]bj/
 
+# GameData
+GameData/
+
 # Visual Studio
 .vs/
 *.user
@@ -16,3 +19,5 @@ ScummEditor/bin/Debug/ScummEditor.vshost.exe.manifest
 packages/*
 !packages/repositories.config
 /ScummEditor/Properties/PublishProfiles
+
+

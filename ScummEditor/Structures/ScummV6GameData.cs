@@ -27,6 +27,9 @@ namespace ScummEditor.Structures
         public bool Xored { get; set; }
         public int XorKey { get; set; }
 
+        /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
+        public bool IsTalkie { get; set; }
+
         public string IndexFile { get; set; }
         public string DataFile { get; set; }
     }
@@ -41,13 +44,22 @@ namespace ScummEditor.Structures
         public void LoadDataFromDisc(string filePath)
         {
             LoadedGameInfo = Functions.FindScummGame(filePath);
-            if (LoadedGameInfo.LoadedGame == ScummGame.None)
+            LoadDetectedGame();
+        }
+
+        /// <summary>Loads a game already detected by Functions.FindScummGamesInFolder.</summary>
+        public void LoadFromGameInfo(GameInfo gameInfo)
+        {
+            LoadedGameInfo = gameInfo;
+            LoadDetectedGame();
+        }
+
+        private void LoadDetectedGame()
+        {
+            if (LoadedGameInfo == null || LoadedGameInfo.LoadedGame == ScummGame.None)
             {
                 return;
             }
-
-            //var fileIndex = Path.Combine(Path.GetDirectoryName(filePath), Path.GetFileNameWithoutExtension(filePath) + ".000");
-            //var fileData = Path.Combine(Path.GetDirectoryName(filePath), Path.GetFileNameWithoutExtension(filePath) + ".001");
 
             var fileStream = new XoredFileStream(LoadedGameInfo.XorKey, LoadedGameInfo.IndexFile, FileMode.Open, FileAccess.Read);
 
