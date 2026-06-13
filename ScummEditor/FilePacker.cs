@@ -110,6 +110,11 @@ namespace ScummEditor
             {
                 edition = "Talkie";
             }
+            else if (gameInfo.ScummVersion == 4)
+            {
+                // v4 floppy games: the graphics edition (EGA/VGA) is detected from the data.
+                edition = GetV4EditionName(gameInfo.Edition);
+            }
             else if (gameInfo.HasCdAudio)
             {
                 // CD edition without recorded speech (e.g. Monkey Island 1 CD: music on CD audio).
@@ -127,6 +132,21 @@ namespace ScummEditor
             }
 
             return gameName + " (" + details + ")  -  SCUMM v" + gameInfo.ScummVersion;
+        }
+
+        private static string GetV4EditionName(GameEdition edition)
+        {
+            switch (edition)
+            {
+                case GameEdition.FloppyEga:
+                    return "Floppy EGA";
+                case GameEdition.FloppyVga:
+                    return "Floppy VGA";
+                case GameEdition.Cd:
+                    return "CD";
+                default:
+                    return "Floppy";
+            }
         }
 
         private void SaveGame()
@@ -170,8 +190,12 @@ namespace ScummEditor
                 case ScummGame.MonkeyIsland1VGA:
                 case ScummGame.MonkeyIsland1VGASpeech:
                     return "The Secret of Monkey Island (CD)";
+                case ScummGame.MonkeyIsland1Floppy:
+                    return "The Secret of Monkey Island";
                 case ScummGame.MonkeyIsland2:
                     return "Monkey Island 2: LeChuck's Revenge";
+                case ScummGame.Loom:
+                    return "Loom";
                 case ScummGame.None:
                 default:
                     return "None";
@@ -359,6 +383,21 @@ namespace ScummEditor
             }
         }
 
+        /// <summary>
+        /// Every editable charset of the game, in a stable order: the ones embedded in the data
+        /// file (v5/v6) followed by the standalone font files (v4 90x.LFL). The batch font
+        /// export/import name files charset_N.png by this order.
+        /// </summary>
+        private List<Charset> CollectAllCharsets()
+        {
+            List<Charset> charsets = CharsetPngCodec.CollectCharsets(scummFile.DataFile);
+            foreach (FontResource font in scummFile.Fonts)
+            {
+                charsets.Add(font.Charset);
+            }
+            return charsets;
+        }
+
         private void exportGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (scummFile == null || scummFile.DataFile == null)
@@ -375,7 +414,7 @@ namespace ScummEditor
 
             try
             {
-                string report = CharsetPngCodec.ExportAll(scummFile.DataFile, dlg.SelectedPath);
+                string report = CharsetPngCodec.ExportAll(CollectAllCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this, report, "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -401,7 +440,7 @@ namespace ScummEditor
 
             try
             {
-                string report = CharsetPngCodec.ImportAll(scummFile.DataFile, dlg.SelectedPath);
+                string report = CharsetPngCodec.ImportAll(CollectAllCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this,
                     report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);

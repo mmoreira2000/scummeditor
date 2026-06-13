@@ -80,9 +80,54 @@ namespace ScummEditor.Gui
         {
             _treeView.Nodes.Clear();
 
-            if (ScummV6GameData.IndexFile != null) CreateScummIndexFileTree(ScummV6GameData.IndexFile);
-            if (ScummV6GameData.DataFile != null) CreateScummDataFileTree(ScummV6GameData.DataFile);
+            var v4Index = ScummV6GameData.IndexFile as Scumm4IndexFile;
+            if (v4Index != null)
+            {
+                CreateScummV4IndexFileTree(v4Index);
+            }
+            else if (ScummV6GameData.IndexFile != null)
+            {
+                CreateScummIndexFileTree(ScummV6GameData.IndexFile);
+            }
+
+            // One data node per container (v4 games are spread over several DISKnn.LEC disks).
+            if (ScummV6GameData.DataDisks != null && ScummV6GameData.DataDisks.Count > 0)
+            {
+                foreach (DataDisk disk in ScummV6GameData.DataDisks)
+                {
+                    CreateScummDataFileTree(disk.Tree, System.IO.Path.GetFileName(disk.FilePath));
+                }
+            }
+            else if (ScummV6GameData.DataFile != null)
+            {
+                CreateScummDataFileTree(ScummV6GameData.DataFile, "Data File");
+            }
+
+            CreateFontFileNodes();
             CreateSouFileNodes(ScummV6GameData.LoadedGameInfo);
+        }
+
+        /// <summary>Root nodes for the standalone font files (v4 90x.LFL); the Charset viewer handles them.</summary>
+        private void CreateFontFileNodes()
+        {
+            if (ScummV6GameData.Fonts == null) return;
+
+            foreach (FontResource font in ScummV6GameData.Fonts)
+            {
+                var node = _treeView.Nodes.Add("Font",
+                    "Font (" + System.IO.Path.GetFileName(font.FilePath) + ")");
+                node.Tag = font.Charset;
+            }
+        }
+
+        /// <summary>Index tree for SCUMM v4: a flat list of the index blocks (RN, 0R, 0S, ...).</summary>
+        private void CreateScummV4IndexFileTree(Scumm4IndexFile indexFile)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+            foreach (BlockBase block in indexFile.Blocks)
+            {
+                CreateNode(block, node);
+            }
         }
 
         /// <summary>
@@ -109,9 +154,9 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummDataFileTree(ScummV6DataFile dataFile)
+        private void CreateScummDataFileTree(ScummV6DataFile dataFile, string label)
         {
-            TreeNode dataNode = _treeView.Nodes.Add("DataFile", "Data File");
+            TreeNode dataNode = _treeView.Nodes.Add(label, label);
 
             LoadNextBlock(dataFile, dataNode);
         }

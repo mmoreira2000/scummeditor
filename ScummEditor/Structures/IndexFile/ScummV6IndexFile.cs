@@ -22,7 +22,13 @@ namespace ScummEditor.Structures.IndexFile
             _gameInfo = gameInfo;
         }
 
-        public void LoadFromBinaryReader(Stream binaryReader)
+        /// <summary>Info of the loaded game; exposed so version-specific index readers can use it.</summary>
+        protected GameInfo GameInfo
+        {
+            get { return _gameInfo; }
+        }
+
+        public virtual void LoadFromBinaryReader(Stream binaryReader)
         {
             RNAM = new RoomNamesV6(null, _gameInfo);
             RNAM.LoadFromBinaryReader(binaryReader);
@@ -61,7 +67,7 @@ namespace ScummEditor.Structures.IndexFile
         }
 
 
-        public void SaveToBinaryWriter(Stream binaryWriter)
+        public virtual void SaveToBinaryWriter(Stream binaryWriter)
         {
             RNAM.SaveToBinaryWriter(binaryWriter);
             MAXS.SaveToBinaryWriter(binaryWriter);

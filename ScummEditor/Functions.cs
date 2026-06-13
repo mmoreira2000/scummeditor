@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using ScummEditor.Structures;
 
 namespace ScummEditor
@@ -75,8 +77,10 @@ namespace ScummEditor
                     LoadedGame = candidate.Game,
                     IndexFile = indexPath,
                     DataFile = dataPath,
+                    DataFiles = new List<string> { dataPath }, // v5/v6 keep all data in one file
                     Xored = true,
                     XorKey = 0x69,
+                    IndexXorKey = 0x69, // v5/v6 index is XOR-encrypted like the data
                     ScummVersion = candidate.ScummVersion
                 };
 
@@ -128,9 +132,129 @@ namespace ScummEditor
                 return result;
             }
 
+            // No v5/v6 game matched - try the SCUMM v4 layout (000.LFL + DISKnn.LEC).
+            GameInfo v4 = DetectScummV4(folder);
+            if (v4 != null)
+            {
+                return v4;
+            }
+
             var none = new GameInfo();
             none.LoadedGame = ScummGame.None;
             return none;
+        }
+
+        /// <summary>
+        /// Detects a SCUMM v4 game (Monkey Island 1 floppy, Loom CD). Both share the file names
+        /// 000.LFL + DISK01.LEC, and Loom also exists as a v3 release, so the v4 layout is
+        /// confirmed by content (the index starts with a small-header "RN" block) and the
+        /// specific game is chosen by the EXE next to it.
+        /// </summary>
+        private static GameInfo DetectScummV4(string folder)
+        {
+            string indexPath = Path.Combine(folder, "000.LFL");
+            string dataPath = Path.Combine(folder, "DISK01.LEC");
+
+            if (!File.Exists(indexPath) || !File.Exists(dataPath))
+            {
+                return null;
+            }
+            if (!StartsWithSmallHeaderTag(indexPath, "RN"))
+            {
+                return null;
+            }
+
+            ScummGame game = ScummGame.MonkeyIsland1Floppy;
+            if (File.Exists(Path.Combine(folder, "LOOM.EXE")))
+            {
+                game = ScummGame.Loom;
+            }
+
+            var result = new GameInfo
+            {
+                LoadedGame = game,
+                IndexFile = indexPath,
+                DataFile = dataPath,
+                DataFiles = EnumerateV4DataDisks(folder), // a v4 game is spread over all DISKnn.LEC
+                FontFiles = EnumerateV4Fonts(folder),     // 90x.LFL charset files
+                Xored = true,
+                XorKey = 0x69,      // DISKnn.LEC data
+                IndexXorKey = 0x00, // 000.LFL is plaintext
+                ScummVersion = 4
+            };
+
+            // Loom CD ships ripped CD audio tracks (CDDA.SOU); MI1 floppy has none.
+            var cdAudioInfo = new FileInfo(Path.Combine(folder, "CDDA.SOU"));
+            if (cdAudioInfo.Exists)
+            {
+                result.CdAudioFilePath = cdAudioInfo.FullName;
+                if (cdAudioInfo.Length >= TalkieMinimumSpeechBytes)
+                {
+                    result.HasCdAudio = true;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// All DISKnn.LEC data disks in the folder, ordered by disk number. v4 games spread their
+        /// rooms across several disks (with possible gaps, e.g. MI1 EGA has 01-04 then 09).
+        /// </summary>
+        private static List<string> EnumerateV4DataDisks(string folder)
+        {
+            var disks = new List<KeyValuePair<int, string>>();
+            foreach (string path in Directory.GetFiles(folder, "DISK*.LEC"))
+            {
+                int number = ParseDiskNumber(Path.GetFileNameWithoutExtension(path));
+                disks.Add(new KeyValuePair<int, string>(number, path));
+            }
+
+            return disks.OrderBy(d => d.Key).Select(d => d.Value).ToList();
+        }
+
+        /// <summary>The v4 charset files in the folder: every *.LFL except the 000.LFL index (901-904.LFL).</summary>
+        private static List<string> EnumerateV4Fonts(string folder)
+        {
+            var fonts = new List<string>();
+            foreach (string path in Directory.GetFiles(folder, "*.LFL"))
+            {
+                if (!string.Equals(Path.GetFileName(path), "000.LFL", StringComparison.OrdinalIgnoreCase))
+                {
+                    fonts.Add(path);
+                }
+            }
+            fonts.Sort(StringComparer.OrdinalIgnoreCase);
+            return fonts;
+        }
+
+        /// <summary>Parses the trailing number of a "DISKnn" name (returns 0 when there is none).</summary>
+        private static int ParseDiskNumber(string nameWithoutExtension)
+        {
+            string digits = new string(nameWithoutExtension.Where(char.IsDigit).ToArray());
+            int number;
+            return int.TryParse(digits, out number) ? number : 0;
+        }
+
+        /// <summary>True when the file begins with a v4 small-header block ([size:4 LE][tag:2]) of the given tag.</summary>
+        private static bool StartsWithSmallHeaderTag(string path, string tag)
+        {
+            try
+            {
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    var head = new byte[6];
+                    if (stream.Read(head, 0, head.Length) != head.Length)
+                    {
+                        return false;
+                    }
+                    return (char)head[4] == tag[0] && (char)head[5] == tag[1];
+                }
+            }
+            catch (IOException)
+            {
+                return false;
+            }
         }
     }
 }
