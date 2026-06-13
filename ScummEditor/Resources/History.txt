@@ -1,3 +1,11 @@
+1.5.0.0
+-------
+* Speech file viewer. The standalone speech/effects container of the talkie editions (MONSTER.SOU, or the FM Towns-style "game".SOU) now appears as a node in the tree and lists every voice/effect line with its lip-sync timestamp count, sample rate and duration. Each line can be played in the editor and exported to WAV (one entry or all at once). The file is parsed lazily and the audio is read on demand, so the hundreds-of-MB speech files open instantly.
+
+* CD audio viewer. Releases that ship the CD music ripped as CDDA.SOU now show a node listing each audio track with its start frame and duration; tracks can be played and exported to WAV (44100 Hz, 16-bit stereo), one or all at once.
+
+* MIDI sound blocks now play. The iMUSE tracks use the SMF format 2 that the Windows sequencer rejects; a single-track format 2 is patched to format 0 for playback (the exported bytes are untouched), and MCI errors are now reported instead of failing silently.
+
 1.4.0.0
 -------
 * Full SCUMM v5 support: The Secret of Monkey Island (CD VGA), Monkey Island 2: LeChuck's Revenge and Indiana Jones and the Fate of Atlantis now have the same feature set as the v6 games. Every block type is decoded with its viewer (scripts, objects, fonts, sounds, walk boxes, palettes - including the v5-only EPAL EGA dithering palette), and images, costumes and charsets round-trip byte-identically.
