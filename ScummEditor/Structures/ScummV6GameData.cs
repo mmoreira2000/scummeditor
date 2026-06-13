@@ -36,6 +36,15 @@ namespace ScummEditor.Structures
         /// </summary>
         public bool HasCdAudio { get; set; }
 
+        /// <summary>
+        /// Path of the speech/effects container (MONSTER.SOU or the FM Towns-style
+        /// "game".SOU) when the release ships one, regardless of its size; null otherwise.
+        /// </summary>
+        public string SpeechFilePath { get; set; }
+
+        /// <summary>Path of the ripped CD audio container (CDDA.SOU) when present; null otherwise.</summary>
+        public string CdAudioFilePath { get; set; }
+
         public string IndexFile { get; set; }
         public string DataFile { get; set; }
     }

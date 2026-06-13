@@ -33,7 +33,7 @@ namespace ScummEditor.Gui
             //
             this.split.Dock = System.Windows.Forms.DockStyle.Fill;
             this.split.Name = "split";
-            this.split.Orientation = System.Windows.Forms.Orientation.Horizontal;
+            this.split.Orientation = System.Windows.Forms.Orientation.Vertical;
             //
             // split.Panel1
             //
@@ -42,7 +42,7 @@ namespace ScummEditor.Gui
             // split.Panel2
             //
             this.split.Panel2.Controls.Add(this.code);
-            this.split.SplitterDistance = 170;
+            this.split.SplitterDistance = 230;
             this.split.TabIndex = 0;
             //
             // grid
@@ -60,6 +60,7 @@ namespace ScummEditor.Gui
             //
             // code
             //
+            this.code.BackColor = System.Drawing.Color.White;
             this.code.Dock = System.Windows.Forms.DockStyle.Fill;
             this.code.Font = new System.Drawing.Font("Consolas", 9F);
             this.code.HideSelection = false;

@@ -94,9 +94,15 @@ namespace ScummEditor
 
                 result.IsTalkie = false;
                 var speechInfo = new FileInfo(speechPath);
-                if (speechInfo.Exists && speechInfo.Length >= TalkieMinimumSpeechBytes)
+                if (speechInfo.Exists)
                 {
-                    result.IsTalkie = true;
+                    // The file is exposed in the tree even when small (floppy editions ship an
+                    // effects-only MONSTER.SOU); only a big one marks the talkie edition.
+                    result.SpeechFilePath = speechPath;
+                    if (speechInfo.Length >= TalkieMinimumSpeechBytes)
+                    {
+                        result.IsTalkie = true;
+                    }
                 }
 
                 // Some releases ship the CD audio tracks ripped as CDDA.SOU instead of a speech
@@ -104,9 +110,13 @@ namespace ScummEditor
                 // is NOT speech - the game must not be reported as a talkie because of it.
                 result.HasCdAudio = false;
                 var cdAudioInfo = new FileInfo(Path.Combine(folder, "CDDA.SOU"));
-                if (cdAudioInfo.Exists && cdAudioInfo.Length >= TalkieMinimumSpeechBytes)
+                if (cdAudioInfo.Exists)
                 {
-                    result.HasCdAudio = true;
+                    result.CdAudioFilePath = cdAudioInfo.FullName;
+                    if (cdAudioInfo.Length >= TalkieMinimumSpeechBytes)
+                    {
+                        result.HasCdAudio = true;
+                    }
                 }
 
                 // Monkey Island 1 CD: the speech edition has its own entry in the game list.

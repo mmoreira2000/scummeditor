@@ -14,6 +14,8 @@ namespace ScummEditor.Gui
     {
         private BlockBaseControl _blockBaseControl { get; set; }
         private Dictionary<string, BlockBaseControl> _controlViewers;
+        private readonly SpeechSouControl _speechSouControl = new SpeechSouControl();
+        private readonly CdAudioSouControl _cdAudioSouControl = new CdAudioSouControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -80,6 +82,31 @@ namespace ScummEditor.Gui
 
             if (ScummV6GameData.IndexFile != null) CreateScummIndexFileTree(ScummV6GameData.IndexFile);
             if (ScummV6GameData.DataFile != null) CreateScummDataFileTree(ScummV6GameData.DataFile);
+            CreateSouFileNodes(ScummV6GameData.LoadedGameInfo);
+        }
+
+        /// <summary>
+        /// Root nodes for the standalone audio containers next to the game files: the speech
+        /// file (MONSTER.SOU / "game".SOU) and the ripped CD audio (CDDA.SOU). The files are
+        /// parsed lazily, when their node is first selected.
+        /// </summary>
+        private void CreateSouFileNodes(GameInfo gameInfo)
+        {
+            if (gameInfo == null) return;
+
+            if (gameInfo.SpeechFilePath != null)
+            {
+                var node = _treeView.Nodes.Add("SpeechFile",
+                    "Speech File (" + System.IO.Path.GetFileName(gameInfo.SpeechFilePath) + ")");
+                node.Tag = new SpeechSouFile(gameInfo.SpeechFilePath);
+            }
+
+            if (gameInfo.CdAudioFilePath != null)
+            {
+                var node = _treeView.Nodes.Add("CdAudioFile",
+                    "CD Audio (" + System.IO.Path.GetFileName(gameInfo.CdAudioFilePath) + ")");
+                node.Tag = new CdAudioSouFile(gameInfo.CdAudioFilePath);
+            }
         }
 
         private void CreateScummDataFileTree(ScummV6DataFile dataFile)
@@ -151,6 +178,26 @@ namespace ScummEditor.Gui
         {
             _displayPanel.Controls.Clear();
             if (e.Node.Tag == null) return;
+
+            // The audio container nodes carry their own (non-block) objects and viewers.
+            var speechFile = e.Node.Tag as SpeechSouFile;
+            if (speechFile != null)
+            {
+                _speechSouControl.SetData(speechFile);
+                _displayPanel.Controls.Add(_speechSouControl);
+                _speechSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            var cdAudioFile = e.Node.Tag as CdAudioSouFile;
+            if (cdAudioFile != null)
+            {
+                _cdAudioSouControl.SetData(cdAudioFile);
+                _displayPanel.Controls.Add(_cdAudioSouControl);
+                _cdAudioSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
             var item = (BlockBase)e.Node.Tag;
 
             string name = item.GetType().Name;

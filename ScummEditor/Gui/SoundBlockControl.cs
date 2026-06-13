@@ -22,6 +22,9 @@ namespace ScummEditor.Gui
         [DllImport("winmm.dll", CharSet = CharSet.Auto)]
         private static extern int mciSendString(string command, StringBuilder returnValue, int returnLength, IntPtr callback);
 
+        [DllImport("winmm.dll", CharSet = CharSet.Auto)]
+        private static extern bool mciGetErrorString(int errorCode, StringBuilder errorText, int errorLength);
+
         private const string MciAlias = "scummEditorMidi";
 
         private SoundBlock _block;
@@ -164,12 +167,36 @@ namespace ScummEditor.Gui
                 return;
             }
 
+            // The MCI sequencer rejects the SMF format 2 used by the iMUSE tracks (error 296);
+            // a single-track format 2 is patched to format 0 for playback.
+            midi = SoundConverter.MakeMidiPlayable(midi);
+
             _tempMidiPath = Path.Combine(Path.GetTempPath(), "scummeditor_play.mid");
             File.WriteAllBytes(_tempMidiPath, midi);
 
-            mciSendString("open \"" + _tempMidiPath + "\" type sequencer alias " + MciAlias, null, 0, IntPtr.Zero);
-            mciSendString("play " + MciAlias, null, 0, IntPtr.Zero);
+            int openResult = mciSendString("open \"" + _tempMidiPath + "\" type sequencer alias " + MciAlias, null, 0, IntPtr.Zero);
+            if (openResult != 0)
+            {
+                lblStatus.Text = "MIDI playback failed: " + MciErrorText(openResult);
+                return;
+            }
+
+            int playResult = mciSendString("play " + MciAlias, null, 0, IntPtr.Zero);
+            if (playResult != 0)
+            {
+                mciSendString("close " + MciAlias, null, 0, IntPtr.Zero);
+                lblStatus.Text = "MIDI playback failed: " + MciErrorText(playResult);
+                return;
+            }
+
             _midiOpen = true;
+        }
+
+        private static string MciErrorText(int errorCode)
+        {
+            var text = new StringBuilder(256);
+            mciGetErrorString(errorCode, text, text.Capacity);
+            return "(" + errorCode + ") " + text;
         }
 
         private void StopPlayback()

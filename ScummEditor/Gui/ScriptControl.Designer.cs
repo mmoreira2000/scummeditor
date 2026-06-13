@@ -24,6 +24,7 @@ namespace ScummEditor.Gui
             //
             // code
             //
+            this.code.BackColor = System.Drawing.Color.White;
             this.code.Dock = System.Windows.Forms.DockStyle.Fill;
             this.code.Font = new System.Drawing.Font("Consolas", 9F);
             this.code.HideSelection = false;

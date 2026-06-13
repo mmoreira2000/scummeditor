@@ -22,7 +22,9 @@ namespace ScummEditor.Encoders
         }
 
         private static readonly byte[] MThd = { (byte)'M', (byte)'T', (byte)'h', (byte)'d' };
-        private const string VocSignature = "Creative Voice File\x1A";
+        // The trailing \x1A EOF marker is not checked: some entries in the Sam & Max floppy
+        // effects file have it replaced by \x00.
+        private const string VocSignature = "Creative Voice File";
 
         public static SoundKind Classify(byte[] data)
         {
@@ -51,6 +53,29 @@ namespace ScummEditor.Encoders
             var midi = new byte[data.Length - start];
             Array.Copy(data, start, midi, 0, midi.Length);
             return midi;
+        }
+
+        /// <summary>
+        /// The Windows MCI sequencer only plays SMF format 0/1 files, and the SCUMM (iMUSE)
+        /// tracks are format 2 - which with a single track is structurally identical to
+        /// format 0. Returns a copy with the format word patched to 0 when that is the case;
+        /// otherwise returns the input unchanged. Use it for playback only - exports keep
+        /// the original bytes.
+        /// </summary>
+        public static byte[] MakeMidiPlayable(byte[] midi)
+        {
+            if (midi == null || midi.Length < 14) return midi;
+            if (midi[0] != 'M' || midi[1] != 'T' || midi[2] != 'h' || midi[3] != 'd') return midi;
+
+            int format = (midi[8] << 8) | midi[9];
+            int trackCount = (midi[10] << 8) | midi[11];
+            if (format != 2 || trackCount != 1) return midi;
+
+            var patched = new byte[midi.Length];
+            Array.Copy(midi, patched, midi.Length);
+            patched[8] = 0;
+            patched[9] = 0;
+            return patched;
         }
 
         /// <summary>
