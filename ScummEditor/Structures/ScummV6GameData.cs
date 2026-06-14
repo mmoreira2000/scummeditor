@@ -146,6 +146,7 @@ namespace ScummEditor.Structures
             {
                 LoadAllFonts();
                 DetectV4Edition();
+                LinkDataAndIndexFileV4();
             }
             else
             {
@@ -284,6 +285,176 @@ namespace ScummEditor.Structures
             }
         }
 
+        /// <summary>Where a v4 room lives: its disk container plus the LF/RO blocks.</summary>
+        private class V4RoomLocation
+        {
+            public ScummV6DataFile Disk;
+            public Scumm4DiskBlock Lf;
+            public Scumm4RoomBlock Ro;
+        }
+
+        /// <summary>
+        /// Links each v4 resource-directory entry (0S/0N/0C) to the data block that holds its bytes,
+        /// recording the offset within that block. Done once at load, while block offsets are still
+        /// the original on-disk values, so the offset can be recomputed after edits move blocks.
+        /// FO entries (rooms) need no link - they are matched to LF blocks by room number at save.
+        /// </summary>
+        private void LinkDataAndIndexFileV4()
+        {
+            var index = IndexFile as Scumm4IndexFile;
+            if (index == null)
+            {
+                return;
+            }
+
+            Dictionary<int, V4RoomLocation> rooms = BuildV4RoomMap();
+
+            foreach (Scumm4ResourceDirectory directory in index.ResourceDirectories)
+            {
+                foreach (Scumm4DirectoryEntry entry in directory.Entries)
+                {
+                    entry.ContainingBlockId = null;
+
+                    V4RoomLocation room;
+                    if (entry.RoomNumber == 0 || !rooms.TryGetValue(entry.RoomNumber, out room))
+                    {
+                        continue; // empty slot or a room we do not have; leave it untouched on save
+                    }
+
+                    // 0S/0N/0C offsets are measured from the room's RO block (RO = LF + 8).
+                    long absolutePosition = room.Ro.BlockOffSet + entry.Offset;
+                    BlockBase containing = FindContainingBlock(room.Disk, absolutePosition);
+                    if (containing == null)
+                    {
+                        continue;
+                    }
+
+                    entry.ContainingBlockId = containing.UniqueId;
+                    entry.OffsetWithinBlock = (uint)(absolutePosition - containing.BlockOffSet);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Recomputes the v4 index offsets after edits: each disk's FO room-offset table (disk-absolute
+        /// LF positions) and the 0S/0N/0C directories (room-relative resource positions). Runs after
+        /// every disk's block sizes/offsets have been recalculated, so block positions are current.
+        /// </summary>
+        private void PostProcessChangesV4()
+        {
+            var index = IndexFile as Scumm4IndexFile;
+            if (index == null)
+            {
+                return;
+            }
+
+            Dictionary<int, V4RoomLocation> rooms = BuildV4RoomMap();
+
+            var blocksById = new Dictionary<string, BlockBase>();
+            foreach (DataDisk disk in DataDisks)
+            {
+                CollectBlocks(disk.Tree, blocksById);
+            }
+
+            // FO (one per disk): each room entry points at that room's LF block (disk-absolute).
+            foreach (DataDisk disk in DataDisks)
+            {
+                RoomOffsetTable fo = disk.Tree.Childrens.OfType<RoomOffsetTable>().FirstOrDefault();
+                if (fo == null)
+                {
+                    continue;
+                }
+
+                var lfByRoom = new Dictionary<int, Scumm4DiskBlock>();
+                foreach (Scumm4DiskBlock lf in disk.Tree.Childrens.OfType<Scumm4DiskBlock>())
+                {
+                    lfByRoom[lf.RoomNumber] = lf;
+                }
+
+                foreach (RoomOffsetTableItem item in fo.Rooms)
+                {
+                    Scumm4DiskBlock lf;
+                    if (lfByRoom.TryGetValue(item.Id, out lf))
+                    {
+                        item.OffSet = (uint)lf.BlockOffSet;
+                    }
+                }
+            }
+
+            // 0S/0N/0C: recompute each linked entry from its containing block's new position.
+            foreach (Scumm4ResourceDirectory directory in index.ResourceDirectories)
+            {
+                foreach (Scumm4DirectoryEntry entry in directory.Entries)
+                {
+                    BlockBase containing;
+                    V4RoomLocation room;
+                    if (entry.ContainingBlockId == null
+                        || !blocksById.TryGetValue(entry.ContainingBlockId, out containing)
+                        || !rooms.TryGetValue(entry.RoomNumber, out room))
+                    {
+                        continue;
+                    }
+
+                    long newAbsolutePosition = containing.BlockOffSet + entry.OffsetWithinBlock;
+                    entry.Offset = (uint)(newAbsolutePosition - room.Ro.BlockOffSet);
+                }
+            }
+        }
+
+        private Dictionary<int, V4RoomLocation> BuildV4RoomMap()
+        {
+            var rooms = new Dictionary<int, V4RoomLocation>();
+            foreach (DataDisk disk in DataDisks)
+            {
+                foreach (Scumm4DiskBlock lf in disk.Tree.Childrens.OfType<Scumm4DiskBlock>())
+                {
+                    Scumm4RoomBlock ro = lf.Childrens.OfType<Scumm4RoomBlock>().FirstOrDefault();
+                    if (ro == null)
+                    {
+                        continue;
+                    }
+                    rooms[lf.RoomNumber] = new V4RoomLocation { Disk = disk.Tree, Lf = lf, Ro = ro };
+                }
+            }
+            return rooms;
+        }
+
+        /// <summary>The deepest block in the disk tree whose byte range contains the given position.</summary>
+        private static BlockBase FindContainingBlock(BlockBase diskTree, long absolutePosition)
+        {
+            BlockBase best = null;
+            FindContainingBlock(diskTree, absolutePosition, ref best);
+            return best;
+        }
+
+        private static void FindContainingBlock(BlockBase block, long absolutePosition, ref BlockBase best)
+        {
+            bool contains = block.BlockOffSet <= absolutePosition
+                            && absolutePosition < block.BlockOffSet + block.BlockSize;
+            if (!contains)
+            {
+                return;
+            }
+
+            if (best == null || block.BlockOffSet > best.BlockOffSet)
+            {
+                best = block;
+            }
+            foreach (BlockBase child in block.Childrens)
+            {
+                FindContainingBlock(child, absolutePosition, ref best);
+            }
+        }
+
+        private static void CollectBlocks(BlockBase block, Dictionary<string, BlockBase> map)
+        {
+            map[block.UniqueId] = block;
+            foreach (BlockBase child in block.Childrens)
+            {
+                CollectBlocks(child, map);
+            }
+        }
+
         public void SaveDataToDisk()
         {
             PostProcessChanges();
@@ -355,10 +526,10 @@ namespace ScummEditor.Structures
                 disk.Tree.CalculateOffsets();
             }
 
-            // The directory/offset fix-up below is the v5/v6 model; the v4 index linking is
-            // layered on separately once its directories are parsed.
+            // The directory/offset fix-up below is the v5/v6 model; v4 uses its own.
             if (LoadedGameInfo.ScummVersion == 4)
             {
+                PostProcessChangesV4();
                 return;
             }
 

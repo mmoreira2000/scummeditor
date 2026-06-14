@@ -83,22 +83,50 @@ namespace ScummEditor.Encoders
             }
             _indexMatrix = IndexedImageHelper.GetIndexMatrix(_imageToEncode);
 
-            _strips.Strips.Clear();
-            int stripCount = _width / 8;
-            for (int i = 0; i < stripCount; i++)
-            {
-                _currentOffset = i * 8;//each strip has 8 pixels width, so with multiply the current strip by 8 to get the proper offset where it should be rendered.
+            _strips.Strips = EncodeStrips(_indexMatrix, _width, _height, _transparency, EncodeSettings);
 
-                _strips.Strips.Add(GetNextStrip());
-            }
-
-            //calculaOffSets
+            //calculaOffSets (relative to the SMAP block, which v5/v6 use)
             var cOffSet = (uint)(BinaryHelper.ConvertUTF8StringToByteArray(_strips.BlockType).Length + 4 + (_strips.Strips.Count * 4));
             foreach (StripData stripData in _strips.Strips)
             {
                 stripData.OffSet = cOffSet;
                 cOffSet += (uint)(stripData.ImageData.Length + 1);
             }
+        }
+
+        /// <summary>
+        /// Encodes an index matrix into one StripData per 8-pixel column, picking the codec per
+        /// <paramref name="settings"/>. This is the container-agnostic core shared by the v5/v6
+        /// SMAP path and the SCUMM v4 image path; it does NOT compute the (container-specific)
+        /// strip offsets - the caller assigns those. The returned StripData carry CodecId + the
+        /// raw bitstream (ImageData).
+        /// </summary>
+        /// <param name="transparency">
+        /// Palette index treated as transparent for codec selection. Pass a value no pixel uses
+        /// (e.g. a sentinel) to force non-transparent codecs - v4 has no TRNS block.
+        /// </param>
+        public List<StripData> EncodeStrips(byte[,] indexMatrix, int width, int height, byte transparency, EncodeTypeSettings settings)
+        {
+            if (indexMatrix == null || indexMatrix.GetLength(0) != width || indexMatrix.GetLength(1) != height)
+            {
+                throw new ImageEncodeException("The index matrix dimensions must match width x height.");
+            }
+
+            _indexMatrix = indexMatrix;
+            _width = (ushort)width;
+            _height = (ushort)height;
+            _transparency = transparency;
+            EncodeSettings = settings;
+
+            var strips = new List<StripData>();
+            int stripCount = width / 8;
+            for (int i = 0; i < stripCount; i++)
+            {
+                _currentOffset = i * 8; //each strip is 8 pixels wide; column i starts at pixel i*8.
+                strips.Add(GetNextStrip());
+            }
+
+            return strips;
         }
 
         private StripData GetNextStrip()

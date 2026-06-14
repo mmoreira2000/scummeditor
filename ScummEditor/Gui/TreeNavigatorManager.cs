@@ -32,6 +32,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(RoomImageHeader).Name, new RoomImageHeaderControl());
             _controlViewers.Add(typeof(RoomHeader).Name, new RoomHeaderControl());
             _controlViewers.Add(typeof(DiskBlock).Name, new DiskBlockControl());
+            _controlViewers.Add(typeof(Scumm4RoomBlock).Name, new Scumm4RoomImageControl());
             _controlViewers.Add(typeof(NotImplementedDataBlock).Name, new NotImplementedDataBlockControl());
             _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());

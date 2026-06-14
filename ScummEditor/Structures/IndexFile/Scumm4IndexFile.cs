@@ -23,9 +23,27 @@ namespace ScummEditor.Structures.IndexFile
     {
         public List<BlockBase> Blocks { get; private set; }
 
+        /// <summary>The script directory (0S); offsets are room-relative. Null if absent.</summary>
+        public Scumm4ResourceDirectory ScriptDirectory { get; private set; }
+        /// <summary>The sound directory (0N); offsets are room-relative. Null if absent.</summary>
+        public Scumm4ResourceDirectory SoundDirectory { get; private set; }
+        /// <summary>The costume directory (0C); offsets are room-relative. Null if absent.</summary>
+        public Scumm4ResourceDirectory CostumeDirectory { get; private set; }
+
         public Scumm4IndexFile(GameInfo gameInfo) : base(gameInfo)
         {
             Blocks = new List<BlockBase>();
+        }
+
+        /// <summary>The directories whose offsets must be recomputed after edits (0S, 0N, 0C).</summary>
+        public IEnumerable<Scumm4ResourceDirectory> ResourceDirectories
+        {
+            get
+            {
+                if (ScriptDirectory != null) yield return ScriptDirectory;
+                if (SoundDirectory != null) yield return SoundDirectory;
+                if (CostumeDirectory != null) yield return CostumeDirectory;
+            }
         }
 
         public override void LoadFromBinaryReader(Stream binaryReader)
@@ -35,9 +53,26 @@ namespace ScummEditor.Structures.IndexFile
             while (binaryReader.Position < binaryReader.Length)
             {
                 string tag = BlockBase.PeekTag(binaryReader, GameInfo);
-                var block = new NotImplementedDataBlock(null, tag, GameInfo);
-                block.LoadFromBinaryReader(binaryReader);
-                Blocks.Add(block);
+
+                // 0S/0N/0C carry room-relative resource offsets that shift when resources are
+                // edited, so they are typed and rewritten. RN/0R/0O have no movable offsets
+                // (0R room offsets are always 0; 0O has none) and are kept verbatim.
+                if (tag == "0S" || tag == "0N" || tag == "0C")
+                {
+                    var directory = new Scumm4ResourceDirectory(null, tag, GameInfo);
+                    directory.LoadFromBinaryReader(binaryReader);
+                    Blocks.Add(directory);
+
+                    if (tag == "0S") ScriptDirectory = directory;
+                    else if (tag == "0N") SoundDirectory = directory;
+                    else CostumeDirectory = directory;
+                }
+                else
+                {
+                    var block = new NotImplementedDataBlock(null, tag, GameInfo);
+                    block.LoadFromBinaryReader(binaryReader);
+                    Blocks.Add(block);
+                }
             }
         }
 

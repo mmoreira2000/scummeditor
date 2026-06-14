@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace ScummEditor.Structures.DataFile
 {
@@ -113,6 +115,42 @@ namespace ScummEditor.Structures.DataFile
                 child.SaveToBinaryWriter(binaryWriter);
             }
         }
+
+        /// <summary>The room header (HD = v5/v6 RMHD), carrying the room width/height/object count.</summary>
+        public RoomHeader GetHD()
+        {
+            return Childrens.OfType<RoomHeader>().FirstOrDefault();
+        }
+
+        /// <summary>The room palette (PA = v5/v6 CLUT). Null for EGA rooms, which store no palette.</summary>
+        public PaletteData GetPA()
+        {
+            return Childrens.OfType<PaletteData>().FirstOrDefault();
+        }
+
+        /// <summary>The room background image (BM).</summary>
+        public Scumm4ImageBlock GetBM()
+        {
+            return Childrens.OfType<Scumm4ImageBlock>().FirstOrDefault(b => b.BlockType == "BM");
+        }
+
+        /// <summary>The object images (OI), in file order.</summary>
+        public List<Scumm4ImageBlock> GetObjectImages()
+        {
+            return Childrens.OfType<Scumm4ImageBlock>().Where(b => b.BlockType == "OI").ToList();
+        }
+
+        /// <summary>The object code/metadata blocks (OC), in file order.</summary>
+        public List<ObjectCode> GetObjectCodes()
+        {
+            return Childrens.OfType<ObjectCode>().ToList();
+        }
+
+        /// <summary>True for the 16-color EGA edition, whose image codec differs from VGA.</summary>
+        public bool IsEga
+        {
+            get { return GameInfo != null && GameInfo.Edition == GameEdition.FloppyEga; }
+        }
     }
 
     /// <summary>Shared walk for the v4 containers: read child blocks until the parent block ends.</summary>
@@ -145,6 +183,8 @@ namespace ScummEditor.Structures.DataFile
         {
             switch (tag)
             {
+                case "FO":
+                    return new RoomOffsetTable(parent); // room offset table (= v5/v6 LOFF)
                 case "LF":
                     return new Scumm4DiskBlock(parent);
                 case "RO":
@@ -153,6 +193,12 @@ namespace ScummEditor.Structures.DataFile
                     return new RoomHeader(parent);
                 case "PA": // room palette (= v5/v6 CLUT)
                     return new PaletteData(parent, "PA");
+                case "BM": // room background image (= v5/v6 RMIM/IM00/SMAP combined)
+                    return new Scumm4ImageBlock(parent, "BM");
+                case "OI": // object image (= v5/v6 OBIM/IMnn/SMAP combined)
+                    return new Scumm4ImageBlock(parent, "OI");
+                case "OC": // object code/metadata (= v5/v6 OBCD)
+                    return new ObjectCode(parent);
                 default:
                     return new NotImplementedDataBlock(parent, tag);
             }
@@ -218,6 +264,7 @@ namespace ScummEditor.Structures.DataFile
         {
             BlockOffSet = binaryReader.Position;
             Contents = binaryReader.ReadBytes(_length);
+            BlockSize = (uint)Contents.Length; // header-less: the block size is just its length
         }
 
         public override void SaveToBinaryWriter(Stream binaryWriter)

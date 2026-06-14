@@ -30,9 +30,10 @@ namespace ScummEditor.Structures.DataFile
     {
         public ObjectCode(BlockBase blockBase) : base(blockBase) { }
 
+        // v4 calls this block "OC"; v5/v6 call it "OBCD".
         public override string BlockType
         {
-            get { return "OBCD"; }
+            get { return IsSmallHeader ? "OC" : "OBCD"; }
         }
 
         public byte[] RawContent { get; set; }
@@ -77,8 +78,16 @@ namespace ScummEditor.Structures.DataFile
         public override void LoadFromBinaryReader(Stream binaryReader)
         {
             base.LoadFromBinaryReader(binaryReader);
-            RawContent = binaryReader.ReadBytes((int)(BlockSize - 8));
-            ParseForDisplay();
+            RawContent = binaryReader.ReadBytes((int)(BlockSize - HeaderLength));
+
+            if (IsSmallHeader)
+            {
+                ParseV4CodeHeader();
+            }
+            else
+            {
+                ParseForDisplay();
+            }
         }
 
         public override void SaveToBinaryWriter(Stream binaryWriter)
@@ -127,6 +136,46 @@ namespace ScummEditor.Structures.DataFile
 
                 p += (int)size;
             }
+        }
+
+        /// <summary>
+        /// Parses the SCUMM v4 object header. Unlike v5/v6, a v4 OC block has no inner CDHD tag:
+        /// its body IS the header, with a layout of its own (taken from ScummVM
+        /// ScummEngine_v4::resetRoomObject). The verb scripts and object name follow the header
+        /// and are kept in RawContent for byte-exact save; they are parsed by the text pipeline.
+        ///   obj id : 16le @ +0
+        ///   (unused): 8   @ +2
+        ///   x      : 8    @ +3  (8-pixel units)
+        ///   y      : 8    @ +4  (low 7 bits, 8-pixel units; bit 7 = parent state)
+        ///   width  : 8    @ +5  (8-pixel units)
+        ///   parent : 8    @ +6
+        ///   walk x : 16le @ +7
+        ///   walk y : 16le @ +9
+        ///   dir/h  : 8    @ +11 (low 3 bits = actor direction; high 5 bits = height in pixels)
+        /// </summary>
+        private void ParseV4CodeHeader()
+        {
+            Name = string.Empty;
+            VerbEntries = new List<VerbEntry>();
+            VerbBlockOffset = -1;
+            VerbCodeOffset = -1;
+            ObnaBlockOffset = -1;
+            ObnaBodyOffset = -1;
+
+            if (RawContent.Length < 12)
+            {
+                return;
+            }
+
+            HasCodeHeader = true;
+            ObjectId = ReadUInt16(0);
+            X = (ushort)(RawContent[3] * 8);
+            Y = (ushort)((RawContent[4] & 0x7F) * 8);
+            Width = (ushort)(RawContent[5] * 8);
+            ParentObject = RawContent[6];
+            // +7 .. +10 : walk_x:16le, walk_y:16le
+            ActorDirection = (byte)(RawContent[11] & 0x07);
+            Height = (ushort)(RawContent[11] & 0xF8); // already a multiple of 8 (pixels)
         }
 
         private void ParseCodeHeader(int p, int length)

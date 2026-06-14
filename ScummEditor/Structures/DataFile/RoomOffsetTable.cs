@@ -15,9 +15,10 @@ namespace ScummEditor.Structures.DataFile
         public byte NumOfRooms { get; set; }
         public List<RoomOffsetTableItem> Rooms { get; set; }
 
+        // v4 calls this block "FO"; v5/v6 call it "LOFF". The body (count + [id:1][offset:4]) is identical.
         public override string BlockType
         {
-            get { return "LOFF"; }
+            get { return IsSmallHeader ? "FO" : "LOFF"; }
         }
 
         public override void CalculateBlockSize()
