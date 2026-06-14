@@ -81,21 +81,4 @@ namespace ScummEditor.Structures.DataFile
             if (current.Links.Count > 0) Rows.Add(current);
         }
     }
-
-    public class MatrixRow
-    {
-        public MatrixRow()
-        {
-            Links = new List<BoxLink>();
-        }
-
-        public List<BoxLink> Links { get; set; }
-    }
-
-    public class BoxLink
-    {
-        public byte Start { get; set; }
-        public byte End { get; set; }
-        public byte Box { get; set; }
-    }
 }

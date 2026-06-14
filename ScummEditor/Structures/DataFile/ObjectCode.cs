@@ -259,11 +259,4 @@ namespace ScummEditor.Structures.DataFile
             ParseForDisplay();
         }
     }
-
-    public class VerbEntry
-    {
-        public byte Id { get; set; }
-        /// <summary>Bytecode offset relative to the VERB tag position (as used by the engine).</summary>
-        public int Offset { get; set; }
-    }
 }

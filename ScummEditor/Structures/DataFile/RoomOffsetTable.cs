@@ -66,10 +66,4 @@ namespace ScummEditor.Structures.DataFile
         #endregion
     }
 
-    public class RoomOffsetTableItem
-    {
-        public byte Id { get; set; }
-        public uint OffSet { get; set; }
-    }
-
 }

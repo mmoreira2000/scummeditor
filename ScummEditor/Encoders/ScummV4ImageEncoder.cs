@@ -8,49 +8,49 @@ namespace ScummEditor.Encoders
 {
     /// <summary>
     /// Re-encodes an edited bitmap back into a SCUMM v4 image block (BM room background or OI object
-    /// image), the inverse of Scumm4ImageDecoder. The trailing z-planes are preserved unchanged.
+    /// image), the inverse of ScummV4ImageDecoder. The trailing z-planes are preserved unchanged.
     ///
     /// To keep the result as close to the original as possible, it works STRIP BY STRIP: each
     /// 8-pixel-wide column whose pixels are unchanged keeps its original bytes verbatim, so an
     /// untouched image round-trips byte-for-byte and a partially translated one differs only where
     /// it was actually edited. Only changed columns are re-encoded (VGA via the shared ImageEncoder
-    /// codecs; EGA via Scumm4EgaStripEncoder).
+    /// codecs; EGA via ScummV4EgaStripEncoder).
     ///
     /// The imported bitmap must be palette-indexed and exactly the original size, so the stored
     /// palette indexes survive losslessly (the same rule as the v5/v6 importer).
     /// </summary>
-    public class Scumm4ImageEncoder
+    public class ScummV4ImageEncoder
     {
         // Transparent codec ids sit a fixed 0x14 above their non-transparent counterparts for every
         // compression method, so an originally-transparent strip can keep its transparency after a
         // (non-transparent) re-encode just by shifting the codec id - the bitstream is identical.
         private const int TransparentCodecShift = 0x14;
 
-        public void EncodeBackground(Scumm4RoomBlock room, Bitmap bitmap)
+        public void EncodeBackground(ScummV4RoomBlock room, Bitmap bitmap)
         {
             RoomHeader header = room.GetHD();
-            Scumm4ImageBlock background = room.GetBM();
+            ScummV4ImageBlock background = room.GetBM();
             if (header == null || background == null)
             {
                 throw new ImageEncodeException("This room has no background image to import into.");
             }
 
-            byte[,] original = DecodeToMatrix(new Scumm4ImageDecoder().DecodeBackground(room));
+            byte[,] original = DecodeToMatrix(new ScummV4ImageDecoder().DecodeBackground(room));
             Encode(background, header.Width, header.Height, room.IsEga, bitmap, original);
         }
 
-        public void EncodeObject(Scumm4RoomBlock room, Scumm4ImageBlock objectImage, ObjectCode objectCode, Bitmap bitmap)
+        public void EncodeObject(ScummV4RoomBlock room, ScummV4ImageBlock objectImage, ObjectCode objectCode, Bitmap bitmap)
         {
             if (objectImage == null || objectCode == null || objectCode.Width == 0 || objectCode.Height == 0)
             {
                 throw new ImageEncodeException("This object has no image to import into.");
             }
 
-            byte[,] original = DecodeToMatrix(new Scumm4ImageDecoder().DecodeObject(room, objectImage, objectCode));
+            byte[,] original = DecodeToMatrix(new ScummV4ImageDecoder().DecodeObject(room, objectImage, objectCode));
             Encode(objectImage, objectCode.Width, objectCode.Height, room.IsEga, bitmap, original);
         }
 
-        private void Encode(Scumm4ImageBlock block, int width, int height, bool isEga, Bitmap bitmap, byte[,] original)
+        private void Encode(ScummV4ImageBlock block, int width, int height, bool isEga, Bitmap bitmap, byte[,] original)
         {
             if (bitmap.Width != width || bitmap.Height != height)
             {
@@ -69,7 +69,7 @@ namespace ScummEditor.Encoders
 
             if (isEga)
             {
-                List<byte[]> newStrips = Scumm4EgaStripEncoder.EncodeImage(newMatrix, width, height);
+                List<byte[]> newStrips = ScummV4EgaStripEncoder.EncodeImage(newMatrix, width, height);
                 List<byte[]> originalStrips = ExtractEgaStrips(block, numStrips);
 
                 var finalStrips = new List<byte[]>(numStrips);
@@ -144,7 +144,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Parses the original VGA strips (codec + bitstream) for reuse; null if malformed.</summary>
-        private List<StripData> ExtractVgaStrips(Scumm4ImageBlock block, int numStrips)
+        private List<StripData> ExtractVgaStrips(ScummV4ImageBlock block, int numStrips)
         {
             byte[] body = block.Contents;
             int baseIndex = block.StripTableStart;
@@ -185,7 +185,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Parses the original EGA strips (raw RLE bytes) for reuse; null if malformed.</summary>
-        private List<byte[]> ExtractEgaStrips(Scumm4ImageBlock block, int numStrips)
+        private List<byte[]> ExtractEgaStrips(ScummV4ImageBlock block, int numStrips)
         {
             byte[] body = block.Contents;
             int baseIndex = block.StripTableStart;

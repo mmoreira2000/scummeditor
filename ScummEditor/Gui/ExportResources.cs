@@ -12,7 +12,7 @@ namespace ScummEditor.Gui
 {
     public partial class ExportResources : Form
     {
-        private ScummV6GameData _scummFile;
+        private ScummGameData _scummFile;
 
         private bool _cancelExport;
         private bool _exporting;
@@ -210,7 +210,7 @@ namespace ScummEditor.Gui
             Close();
         }
 
-        public void ShowDialog(ScummV6GameData scummFile, Form form)
+        public void ShowDialog(ScummGameData scummFile, Form form)
         {
             _scummFile = scummFile;
             ShowDialog(form);

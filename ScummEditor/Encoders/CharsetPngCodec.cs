@@ -202,7 +202,7 @@ namespace ScummEditor.Encoders
         // ---------------------------------------------------------------------
 
         /// <summary>Charsets of the game in tree (file) order - the index defines the file names.</summary>
-        public static List<Charset> CollectCharsets(ScummV6DataFile dataFile)
+        public static List<Charset> CollectCharsets(ScummV5V6DataFile dataFile)
         {
             var result = new List<Charset>();
             Collect(dataFile, result);
@@ -217,7 +217,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Exports the charsets embedded in the data file (v5/v6).</summary>
-        public static string ExportAll(ScummV6DataFile dataFile, string folder)
+        public static string ExportAll(ScummV5V6DataFile dataFile, string folder)
         {
             return ExportAll(CollectCharsets(dataFile), folder);
         }
@@ -237,7 +237,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Imports the charsets embedded in the data file (v5/v6).</summary>
-        public static string ImportAll(ScummV6DataFile dataFile, string folder)
+        public static string ImportAll(ScummV5V6DataFile dataFile, string folder)
         {
             return ImportAll(CollectCharsets(dataFile), folder);
         }

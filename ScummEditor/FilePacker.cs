@@ -19,7 +19,7 @@ namespace ScummEditor
     public partial class FilePacker : Form
     {
         private TreeNavigatorManager treeNavigatorManager;
-        private ScummV6GameData scummFile;
+        private ScummGameData scummFile;
 
         public FilePacker()
         {
@@ -77,13 +77,12 @@ namespace ScummEditor
                 return;
             }
 
-            scummFile = new ScummV6GameData();
-            scummFile.LoadFromGameInfo(gameInfo);
+            scummFile = ScummGameData.LoadFromGameInfo(gameInfo);
 
             string language = DetectLanguageSafe();
             LoadedGame.Text = BuildLoadedGameStatus(scummFile.LoadedGameInfo, language);
 
-            treeNavigatorManager.ScummV6GameData = scummFile;
+            treeNavigatorManager.GameData = scummFile;
             treeNavigatorManager.LoadTree();
         }
 

@@ -19,24 +19,24 @@ namespace ScummEditor.Structures.IndexFile
     For now the six blocks are kept byte-for-byte so the index round-trips identically; typed
     parsing (room names, directory entries) is layered on top in later steps.
     */
-    public class Scumm4IndexFile : ScummV6IndexFile
+    public class ScummV4IndexFile : ScummV5V6IndexFile
     {
         public List<BlockBase> Blocks { get; private set; }
 
         /// <summary>The script directory (0S); offsets are room-relative. Null if absent.</summary>
-        public Scumm4ResourceDirectory ScriptDirectory { get; private set; }
+        public ScummV4ResourceDirectory ScriptDirectory { get; private set; }
         /// <summary>The sound directory (0N); offsets are room-relative. Null if absent.</summary>
-        public Scumm4ResourceDirectory SoundDirectory { get; private set; }
+        public ScummV4ResourceDirectory SoundDirectory { get; private set; }
         /// <summary>The costume directory (0C); offsets are room-relative. Null if absent.</summary>
-        public Scumm4ResourceDirectory CostumeDirectory { get; private set; }
+        public ScummV4ResourceDirectory CostumeDirectory { get; private set; }
 
-        public Scumm4IndexFile(GameInfo gameInfo) : base(gameInfo)
+        public ScummV4IndexFile(GameInfo gameInfo) : base(gameInfo)
         {
             Blocks = new List<BlockBase>();
         }
 
         /// <summary>The directories whose offsets must be recomputed after edits (0S, 0N, 0C).</summary>
-        public IEnumerable<Scumm4ResourceDirectory> ResourceDirectories
+        public IEnumerable<ScummV4ResourceDirectory> ResourceDirectories
         {
             get
             {
@@ -59,7 +59,7 @@ namespace ScummEditor.Structures.IndexFile
                 // (0R room offsets are always 0; 0O has none) and are kept verbatim.
                 if (tag == "0S" || tag == "0N" || tag == "0C")
                 {
-                    var directory = new Scumm4ResourceDirectory(null, tag, GameInfo);
+                    var directory = new ScummV4ResourceDirectory(null, tag, GameInfo);
                     directory.LoadFromBinaryReader(binaryReader);
                     Blocks.Add(directory);
 

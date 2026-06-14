@@ -75,12 +75,4 @@ namespace ScummEditor.Structures.DataFile
             return (ushort)(RawContent[p] | (RawContent[p + 1] << 8));
         }
     }
-
-    public class ScaleSlot
-    {
-        public ushort Scale1 { get; set; }
-        public ushort Y1 { get; set; }
-        public ushort Scale2 { get; set; }
-        public ushort Y2 { get; set; }
-    }
 }

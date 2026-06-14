@@ -17,18 +17,18 @@ namespace ScummEditor.Structures.IndexFile
     0R (rooms: room offsets are always 0, located via each disk's FO) and 0O (objects: no offsets)
     do NOT need typing and are kept verbatim.
     */
-    public class Scumm4ResourceDirectory : BlockBase
+    public class ScummV4ResourceDirectory : BlockBase
     {
         private readonly string _blockType;
 
-        public Scumm4ResourceDirectory(BlockBase blockBase, string blockType, GameInfo gameInfo)
+        public ScummV4ResourceDirectory(BlockBase blockBase, string blockType, GameInfo gameInfo)
             : base(blockBase, gameInfo)
         {
             _blockType = blockType;
-            Entries = new List<Scumm4DirectoryEntry>();
+            Entries = new List<ScummV4DirectoryEntry>();
         }
 
-        public List<Scumm4DirectoryEntry> Entries { get; private set; }
+        public List<ScummV4DirectoryEntry> Entries { get; private set; }
 
         public override string BlockType
         {
@@ -45,11 +45,11 @@ namespace ScummEditor.Structures.IndexFile
         {
             base.LoadFromBinaryReader(binaryReader);
 
-            Entries = new List<Scumm4DirectoryEntry>();
+            Entries = new List<ScummV4DirectoryEntry>();
             int count = binaryReader.ReadUint16();
             for (int i = 0; i < count; i++)
             {
-                var entry = new Scumm4DirectoryEntry();
+                var entry = new ScummV4DirectoryEntry();
                 entry.RoomNumber = binaryReader.ReadByte1();
                 entry.Offset = binaryReader.ReadUint32();
                 Entries.Add(entry);
@@ -61,28 +61,11 @@ namespace ScummEditor.Structures.IndexFile
             base.SaveToBinaryWriter(binaryWriter);
 
             binaryWriter.Write((ushort)Entries.Count);
-            foreach (Scumm4DirectoryEntry entry in Entries)
+            foreach (ScummV4DirectoryEntry entry in Entries)
             {
                 binaryWriter.Write(entry.RoomNumber);
                 binaryWriter.Write(entry.Offset);
             }
         }
-    }
-
-    /// <summary>
-    /// One entry of a v4 resource directory. Besides the stored room/offset, it carries a link to
-    /// the tree block that holds the resource (resolved once at load), so the offset can be
-    /// recomputed from that block's new position after edits change resource sizes.
-    /// </summary>
-    public class Scumm4DirectoryEntry
-    {
-        public byte RoomNumber { get; set; }
-        public uint Offset { get; set; }
-
-        /// <summary>UniqueId of the deepest tree block that contains this resource's bytes (or null if unlinked).</summary>
-        public string ContainingBlockId { get; set; }
-
-        /// <summary>Offset of the resource within that containing block.</summary>
-        public uint OffsetWithinBlock { get; set; }
     }
 }

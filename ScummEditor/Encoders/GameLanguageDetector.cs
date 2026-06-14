@@ -62,7 +62,7 @@ namespace ScummEditor.Encoders
         private const int MinimumHits = 25;
 
         /// <summary>Returns the detected language name, or null when it cannot be decided.</summary>
-        public static string Detect(ScummV6DataFile dataFile)
+        public static string Detect(ScummV5V6DataFile dataFile)
         {
             List<GameTextEntry> entries;
             try

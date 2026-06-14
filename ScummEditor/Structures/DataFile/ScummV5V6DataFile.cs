@@ -6,9 +6,9 @@ namespace ScummEditor.Structures.DataFile
     //LECF - Main Container
     //  LOFF     - Room offsets table
     //  LFLF * n - Game Rooms.
-    public class ScummV6DataFile : BlockBase
+    public class ScummV5V6DataFile : BlockBase
     {
-        public ScummV6DataFile(BlockBase blockBase, GameInfo loadedGameInfo) : base(blockBase, loadedGameInfo) { }
+        public ScummV5V6DataFile(BlockBase blockBase, GameInfo loadedGameInfo) : base(blockBase, loadedGameInfo) { }
 
         public override string BlockType
         {

@@ -13,10 +13,10 @@ namespace ScummEditor.Gui
     /// <summary>
     /// Image viewer for a SCUMM v4 room (RO block): a tree of the room background and its object
     /// images on the left, the decoded picture on the right, with PNG export. v4 rooms have a flat
-    /// image layout (BM/OI) with no TRNS/PALS, so this uses Scumm4ImageDecoder rather than the
+    /// image layout (BM/OI) with no TRNS/PALS, so this uses ScummV4ImageDecoder rather than the
     /// v5/v6 DiskBlockControl/RoomBlockImageControl path.
     /// </summary>
-    public class Scumm4RoomImageControl : BlockBaseControl
+    public class ScummV4RoomImageControl : BlockBaseControl
     {
         private readonly SplitContainer _split;
         private readonly TreeView _tree;
@@ -24,10 +24,10 @@ namespace ScummEditor.Gui
         private readonly PictureBox _picture;
         private readonly Button _exportButton;
         private readonly Button _importButton;
-        private readonly Scumm4ImageDecoder _decoder = new Scumm4ImageDecoder();
-        private readonly Scumm4ImageEncoder _encoder = new Scumm4ImageEncoder();
+        private readonly ScummV4ImageDecoder _decoder = new ScummV4ImageDecoder();
+        private readonly ScummV4ImageEncoder _encoder = new ScummV4ImageEncoder();
 
-        private Scumm4RoomBlock _room;
+        private ScummV4RoomBlock _room;
         private ImageTarget _currentTarget;
         private Bitmap _currentImage;
         private bool _splitterApplied;
@@ -36,11 +36,11 @@ namespace ScummEditor.Gui
         private class ImageTarget
         {
             public bool IsBackground { get; set; }
-            public Scumm4ImageBlock ObjectImage { get; set; }
+            public ScummV4ImageBlock ObjectImage { get; set; }
             public ObjectCode ObjectCode { get; set; }
         }
 
-        public Scumm4RoomImageControl()
+        public ScummV4RoomImageControl()
         {
             _split = new SplitContainer
             {
@@ -75,11 +75,14 @@ namespace ScummEditor.Gui
 
         // The splitter distance can only be set once the control is wide enough; setting it in the
         // constructor (when the control still has its small default size) would throw.
+        // NOTE: the base BlockBaseControl constructor sets the control's Size (which raises
+        // OnSizeChanged) BEFORE this class's constructor assigns _split, so _split can still be null
+        // here on the very first call - guard against it.
         protected override void OnSizeChanged(EventArgs e)
         {
             base.OnSizeChanged(e);
 
-            if (!_splitterApplied && _split.Width > 200)
+            if (_split != null && !_splitterApplied && _split.Width > 200)
             {
                 _split.SplitterDistance = 170;
                 _splitterApplied = true;
@@ -90,7 +93,7 @@ namespace ScummEditor.Gui
         {
             base.SetAndRefreshData(blockBase);
 
-            _room = blockBase as Scumm4RoomBlock;
+            _room = blockBase as ScummV4RoomBlock;
             _tree.Nodes.Clear();
             _picture.Image = null;
             _currentTarget = null;
@@ -111,7 +114,7 @@ namespace ScummEditor.Gui
 
             // Objects: pair each OI with its OC (by object id); only those with an image are listed.
             List<ObjectCode> codes = _room.GetObjectCodes();
-            foreach (Scumm4ImageBlock objectImage in _room.GetObjectImages())
+            foreach (ScummV4ImageBlock objectImage in _room.GetObjectImages())
             {
                 ObjectCode code = codes.Find(c => c.ObjectId == objectImage.ObjectId);
                 if (code == null || code.Width == 0 || code.Height == 0)

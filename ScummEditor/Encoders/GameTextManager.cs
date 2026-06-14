@@ -7,57 +7,6 @@ using ScummEditor.Structures.DataFile;
 
 namespace ScummEditor.Encoders
 {
-    /// <summary>One translatable text with its stable id (e.g. "LF003.SCRP000.t005").</summary>
-    public class GameTextEntry
-    {
-        public string Id { get; set; }
-        public string Kind { get; set; }
-        public string Text { get; set; }
-    }
-
-    public class GameTextImportReport
-    {
-        public int LinesParsed { get; set; }
-        public int EntriesMatched { get; set; }
-        public int StringsChanged { get; set; }
-        public int BlocksRebuilt { get; set; }
-        public List<string> Errors = new List<string>();
-        public List<string> Warnings = new List<string>();
-        public List<string> GlyphNotes = new List<string>();
-
-        public bool HasChanges { get { return StringsChanged > 0; } }
-
-        public string Summary()
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("Text lines read: " + LinesParsed);
-            sb.AppendLine("Texts matched in the game: " + EntriesMatched);
-            sb.AppendLine("Texts changed: " + StringsChanged);
-            sb.AppendLine("Blocks rebuilt: " + BlocksRebuilt);
-            if (Errors.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("ERRORS (" + Errors.Count + "):");
-                for (int i = 0; i < Errors.Count && i < 20; i++) sb.AppendLine("  " + Errors[i]);
-                if (Errors.Count > 20) sb.AppendLine("  ... and " + (Errors.Count - 20) + " more");
-            }
-            if (Warnings.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("Warnings (" + Warnings.Count + "):");
-                for (int i = 0; i < Warnings.Count && i < 20; i++) sb.AppendLine("  " + Warnings[i]);
-                if (Warnings.Count > 20) sb.AppendLine("  ... and " + (Warnings.Count - 20) + " more");
-            }
-            if (GlyphNotes.Count > 0)
-            {
-                sb.AppendLine();
-                sb.AppendLine("Fonts (CHAR) x characters used:");
-                foreach (string n in GlyphNotes) sb.AppendLine("  " + n);
-            }
-            return sb.ToString();
-        }
-    }
-
     /*
     Exports every translatable game text to a flat .txt (one string per line, stable ids,
     control codes as {tokens}) and imports it back, rebuilding the affected bytecode.
@@ -87,7 +36,7 @@ namespace ScummEditor.Encoders
             public bool IsName;
         }
 
-        private static List<Source> EnumerateSources(ScummV6DataFile dataFile)
+        private static List<Source> EnumerateSources(ScummV5V6DataFile dataFile)
         {
             var list = new List<Source>();
             List<DiskBlock> lflfs = dataFile.GetLFLFs();
@@ -153,13 +102,13 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
-        private static Scumm6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
+        private static ScummV6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
         {
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 5)
             {
                 return Scumm5Disassembler.Disassemble(code, start);
             }
-            return Scumm6Disassembler.Disassemble(code, start);
+            return ScummV6Disassembler.Disassemble(code, start);
         }
 
         // String kinds that are never exported/imported: internal actor names and
@@ -180,7 +129,7 @@ namespace ScummEditor.Encoders
         // Export
         // ---------------------------------------------------------------------
 
-        public static List<GameTextEntry> Extract(ScummV6DataFile dataFile, GameTextCodec codec)
+        public static List<GameTextEntry> Extract(ScummV5V6DataFile dataFile, GameTextCodec codec)
         {
             var entries = new List<GameTextEntry>();
             foreach (Source source in EnumerateSources(dataFile))
@@ -196,11 +145,11 @@ namespace ScummEditor.Encoders
                 byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
                 int start = source.Script != null ? source.Script.CodeOffset : 0;
                 BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
-                Scumm6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
+                ScummV6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 for (int k = 0; k < scan.Strings.Count; k++)
                 {
-                    Scumm6Disassembler.StringRef s = scan.Strings[k];
+                    ScummV6Disassembler.StringRef s = scan.Strings[k];
                     if (IsExcludedKind(s.Kind)) continue; // internal names / filenames are not translated
 
                     string text = codec.Decode(buf, s.Offset, s.Length - (s.Terminated ? 1 : 0));
@@ -253,7 +202,7 @@ namespace ScummEditor.Encoders
             return false;
         }
 
-        public static int ExportToFile(ScummV6DataFile dataFile, string path, GameTextCodec codec, string gameLabel)
+        public static int ExportToFile(ScummV5V6DataFile dataFile, string path, GameTextCodec codec, string gameLabel)
         {
             List<GameTextEntry> entries = Extract(dataFile, codec);
 
@@ -291,7 +240,7 @@ namespace ScummEditor.Encoders
         // Import
         // ---------------------------------------------------------------------
 
-        public static GameTextImportReport ImportFromFile(ScummV6DataFile dataFile, string path)
+        public static GameTextImportReport ImportFromFile(ScummV5V6DataFile dataFile, string path)
         {
             var report = new GameTextImportReport();
 
@@ -371,7 +320,7 @@ namespace ScummEditor.Encoders
                 byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
                 int start = source.Script != null ? source.Script.CodeOffset : 0;
                 BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
-                Scumm6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
+                ScummV6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 var replacements = new Dictionary<int, byte[]>();
                 for (int k = 0; k < scan.Strings.Count; k++)
@@ -386,7 +335,7 @@ namespace ScummEditor.Encoders
                     byte[] content = codec.Encode(newText, out error);
                     if (content == null) { report.Errors.Add(id + ": " + error); continue; }
 
-                    Scumm6Disassembler.StringRef s = scan.Strings[k];
+                    ScummV6Disassembler.StringRef s = scan.Strings[k];
                     int contentLen = s.Length - (s.Terminated ? 1 : 0);
                     if (SliceEquals(buf, s.Offset, contentLen, content)) continue;
 
@@ -453,11 +402,11 @@ namespace ScummEditor.Encoders
         /// Returns null (with an error message) if anything cannot be remapped safely; the
         /// result is re-disassembled and verified before being accepted.
         /// </summary>
-        private static byte[] RebuildCode(BlockBase context, byte[] buf, int codeStart, Scumm6Disassembler.Result scan,
+        private static byte[] RebuildCode(BlockBase context, byte[] buf, int codeStart, ScummV6Disassembler.Result scan,
                                           Dictionary<int, byte[]> replacements, out string error)
         {
             error = null;
-            List<Scumm6Disassembler.StringRef> strings = scan.Strings;
+            List<ScummV6Disassembler.StringRef> strings = scan.Strings;
 
             // --- splice ---------------------------------------------------------
             var output = new List<byte>(buf.Length + 64);
@@ -466,7 +415,7 @@ namespace ScummEditor.Encoders
             int prev = 0;
             for (int k = 0; k < strings.Count; k++)
             {
-                Scumm6Disassembler.StringRef s = strings[k];
+                ScummV6Disassembler.StringRef s = strings[k];
                 for (int i = prev; i < s.Offset; i++) output.Add(buf[i]);
 
                 newStarts[k] = output.Count;
@@ -496,7 +445,7 @@ namespace ScummEditor.Encoders
                 int delta = 0;
                 for (int k = 0; k < strings.Count; k++)
                 {
-                    Scumm6Disassembler.StringRef s = strings[k];
+                    ScummV6Disassembler.StringRef s = strings[k];
                     if (s.Offset + s.Length <= pos) { delta += newLengths[k] - s.Length; continue; }
                     if (pos > s.Offset && mapError == null)
                         mapError = "position 0x" + pos.ToString("X4") + " falls inside a string";
@@ -506,7 +455,7 @@ namespace ScummEditor.Encoders
             };
 
             // --- jump fix-up ------------------------------------------------------
-            foreach (Scumm6Disassembler.JumpRef jump in scan.Jumps)
+            foreach (ScummV6Disassembler.JumpRef jump in scan.Jumps)
             {
                 int opNew = map(jump.OperandOffset);
                 int targetNew = map(jump.Target);
@@ -523,7 +472,7 @@ namespace ScummEditor.Encoders
             }
 
             // --- verify: the rebuilt code must decode to an identical structure ---
-            Scumm6Disassembler.Result rescan = Disassemble(context, result, codeStart);
+            ScummV6Disassembler.Result rescan = Disassemble(context, result, codeStart);
             if (!rescan.DecodedToEnd ||
                 rescan.Strings.Count != strings.Count ||
                 rescan.Jumps.Count != scan.Jumps.Count)
@@ -552,7 +501,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Splices a rebuilt VERB bytecode region back into the OBCD, remapping the verb offset table.</summary>
-        private static bool ReplaceVerbCode(ObjectCode obcd, byte[] newCode, Scumm6Disassembler.Result scan,
+        private static bool ReplaceVerbCode(ObjectCode obcd, byte[] newCode, ScummV6Disassembler.Result scan,
                                             Dictionary<int, byte[]> replacements, out string error)
         {
             error = null;
@@ -571,7 +520,7 @@ namespace ScummEditor.Encoders
                 int delta = 0;
                 for (int k = 0; k < scan.Strings.Count; k++)
                 {
-                    Scumm6Disassembler.StringRef s = scan.Strings[k];
+                    ScummV6Disassembler.StringRef s = scan.Strings[k];
                     if (s.Offset + s.Length <= pos) delta += newLengths[k] - s.Length;
                     else break;
                 }
@@ -667,7 +616,7 @@ namespace ScummEditor.Encoders
         // Glyph validation: warn when an imported byte has no glyph in the fonts
         // ---------------------------------------------------------------------
 
-        private static void ValidateGlyphs(ScummV6DataFile dataFile, List<byte[]> changedContents,
+        private static void ValidateGlyphs(ScummV5V6DataFile dataFile, List<byte[]> changedContents,
                                            GameTextCodec codec, GameTextImportReport report)
         {
             var used = new HashSet<byte>();

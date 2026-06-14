@@ -13,16 +13,16 @@ namespace ScummEditor.Structures.DataFile
         BM body:  [strip table]
         OI body:  [obj id:2 LE][strip table]
 
-    The strip table itself is read by Scumm4ImageDecoder (its VGA/EGA layout depends on the
+    The strip table itself is read by ScummV4ImageDecoder (its VGA/EGA layout depends on the
     graphics edition, which is not known per-block). Here we only keep the raw body verbatim so
     the file always round-trips byte-for-byte, and expose the object id and where the strip table
     starts within the body.
     */
-    public class Scumm4ImageBlock : BlockBase
+    public class ScummV4ImageBlock : BlockBase
     {
         private readonly string _blockType;
 
-        public Scumm4ImageBlock(BlockBase blockBase, string blockType) : base(blockBase)
+        public ScummV4ImageBlock(BlockBase blockBase, string blockType) : base(blockBase)
         {
             _blockType = blockType;
         }

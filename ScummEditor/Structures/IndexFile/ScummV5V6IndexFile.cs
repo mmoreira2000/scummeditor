@@ -4,10 +4,10 @@ using ScummEditor.Exceptions;
 
 namespace ScummEditor.Structures.IndexFile
 {
-    public class ScummV6IndexFile
+    public class ScummV5V6IndexFile
     {
         private readonly GameInfo _gameInfo;
-        public RoomNamesV6 RNAM { get; set; }
+        public RoomNamesV5V6 RNAM { get; set; }
         public MaximumValues MAXS { get; set; }
         public DirectoryOfRooms DROO { get; set; }
         public DirectoryOfScripts DSCR { get; set; }
@@ -17,7 +17,7 @@ namespace ScummEditor.Structures.IndexFile
         public DirectoryOfObjects DOBJ { get; set; }
         public DirectoryOfArrays AARY { get; set; }
 
-        public ScummV6IndexFile(GameInfo gameInfo)
+        public ScummV5V6IndexFile(GameInfo gameInfo)
         {
             _gameInfo = gameInfo;
         }
@@ -30,7 +30,7 @@ namespace ScummEditor.Structures.IndexFile
 
         public virtual void LoadFromBinaryReader(Stream binaryReader)
         {
-            RNAM = new RoomNamesV6(null, _gameInfo);
+            RNAM = new RoomNamesV5V6(null, _gameInfo);
             RNAM.LoadFromBinaryReader(binaryReader);
 
             MAXS = new MaximumValues(null, _gameInfo);

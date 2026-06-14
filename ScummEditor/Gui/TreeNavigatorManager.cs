@@ -32,7 +32,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(RoomImageHeader).Name, new RoomImageHeaderControl());
             _controlViewers.Add(typeof(RoomHeader).Name, new RoomHeaderControl());
             _controlViewers.Add(typeof(DiskBlock).Name, new DiskBlockControl());
-            _controlViewers.Add(typeof(Scumm4RoomBlock).Name, new Scumm4RoomImageControl());
+            _controlViewers.Add(typeof(ScummV4RoomBlock).Name, new ScummV4RoomImageControl());
             _controlViewers.Add(typeof(NotImplementedDataBlock).Name, new NotImplementedDataBlockControl());
             _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
@@ -68,52 +68,52 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(MaximumValues).Name, indexDetailsControl);
             _controlViewers.Add(typeof(DirectoryOfObjects).Name, indexDetailsControl);
             _controlViewers.Add(typeof(DirectoryOfArrays).Name, indexDetailsControl);
-            _controlViewers.Add(typeof(RoomNamesV6).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(RoomNamesV5V6).Name, indexDetailsControl);
 
             _treeView = treeView;
             _displayPanel = displayPanel;
             _treeView.AfterSelect += AfterNodeSelectedEvent;
         }
 
-        public ScummV6GameData ScummV6GameData { get; set; }
+        public ScummGameData GameData { get; set; }
 
         public void LoadTree()
         {
             _treeView.Nodes.Clear();
 
-            var v4Index = ScummV6GameData.IndexFile as Scumm4IndexFile;
+            var v4Index = GameData.IndexFile as ScummV4IndexFile;
             if (v4Index != null)
             {
                 CreateScummV4IndexFileTree(v4Index);
             }
-            else if (ScummV6GameData.IndexFile != null)
+            else if (GameData.IndexFile != null)
             {
-                CreateScummIndexFileTree(ScummV6GameData.IndexFile);
+                CreateScummIndexFileTree(GameData.IndexFile);
             }
 
             // One data node per container (v4 games are spread over several DISKnn.LEC disks).
-            if (ScummV6GameData.DataDisks != null && ScummV6GameData.DataDisks.Count > 0)
+            if (GameData.DataDisks != null && GameData.DataDisks.Count > 0)
             {
-                foreach (DataDisk disk in ScummV6GameData.DataDisks)
+                foreach (DataDisk disk in GameData.DataDisks)
                 {
                     CreateScummDataFileTree(disk.Tree, System.IO.Path.GetFileName(disk.FilePath));
                 }
             }
-            else if (ScummV6GameData.DataFile != null)
+            else if (GameData.DataFile != null)
             {
-                CreateScummDataFileTree(ScummV6GameData.DataFile, "Data File");
+                CreateScummDataFileTree(GameData.DataFile, "Data File");
             }
 
             CreateFontFileNodes();
-            CreateSouFileNodes(ScummV6GameData.LoadedGameInfo);
+            CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
         /// <summary>Root nodes for the standalone font files (v4 90x.LFL); the Charset viewer handles them.</summary>
         private void CreateFontFileNodes()
         {
-            if (ScummV6GameData.Fonts == null) return;
+            if (GameData.Fonts == null) return;
 
-            foreach (FontResource font in ScummV6GameData.Fonts)
+            foreach (FontResource font in GameData.Fonts)
             {
                 var node = _treeView.Nodes.Add("Font",
                     "Font (" + System.IO.Path.GetFileName(font.FilePath) + ")");
@@ -122,7 +122,7 @@ namespace ScummEditor.Gui
         }
 
         /// <summary>Index tree for SCUMM v4: a flat list of the index blocks (RN, 0R, 0S, ...).</summary>
-        private void CreateScummV4IndexFileTree(Scumm4IndexFile indexFile)
+        private void CreateScummV4IndexFileTree(ScummV4IndexFile indexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
             foreach (BlockBase block in indexFile.Blocks)
@@ -155,7 +155,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummDataFileTree(ScummV6DataFile dataFile, string label)
+        private void CreateScummDataFileTree(ScummV5V6DataFile dataFile, string label)
         {
             TreeNode dataNode = _treeView.Nodes.Add(label, label);
 
@@ -188,7 +188,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummIndexFileTree(ScummV6IndexFile scummV6IndexFile)
+        private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
 

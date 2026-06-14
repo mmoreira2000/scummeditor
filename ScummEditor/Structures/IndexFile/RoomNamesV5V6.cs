@@ -6,11 +6,11 @@ using ScummEditor.Exceptions;
 
 namespace ScummEditor.Structures.IndexFile
 {
-    public class RoomNamesV6 : BlockBase
+    public class RoomNamesV5V6 : BlockBase
     {
         public List<RoomName> Rooms { get; set; }
 
-        public RoomNamesV6(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo)
+        public RoomNamesV5V6(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo)
         {
             Rooms=new List<RoomName>();
         }
@@ -98,30 +98,6 @@ namespace ScummEditor.Structures.IndexFile
             {
                 throw new InvalidFileFormatException("Unexpected data while reading the room names.");
             }
-        }
-    }
-
-    public class RoomName
-    {
-        public byte RoomNumber { get; set; }
-
-        private byte[] _roomNameData;
-        private string _roomName;
-        public byte[] RoomNameData
-        {
-            get { return _roomNameData; }
-            set
-            {
-                _roomNameData = value;
-
-                _roomName = BinaryHelper.ConvertByteArrayToUTF8String(_roomNameData.Where(b => b != 255).Select(xb => (byte)(xb ^ 0xFF)).ToArray());
-            }
-        }
-
-        /// <summary>Decoded room name (the on-disk bytes are XOR'ed with 0xFF).</summary>
-        public string Name
-        {
-            get { return _roomName; }
         }
     }
 }

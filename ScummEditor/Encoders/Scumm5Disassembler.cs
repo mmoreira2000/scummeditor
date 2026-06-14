@@ -25,8 +25,8 @@ namespace ScummEditor.Encoders
         private readonly List<Line> _lines = new List<Line>();
         private readonly HashSet<int> _jumpTargets = new HashSet<int>();
         private readonly List<int> _unknown = new List<int>();
-        private readonly List<Scumm6Disassembler.StringRef> _strings = new List<Scumm6Disassembler.StringRef>();
-        private readonly List<Scumm6Disassembler.JumpRef> _jumps = new List<Scumm6Disassembler.JumpRef>();
+        private readonly List<ScummV6Disassembler.StringRef> _strings = new List<ScummV6Disassembler.StringRef>();
+        private readonly List<ScummV6Disassembler.JumpRef> _jumps = new List<ScummV6Disassembler.JumpRef>();
         private IDictionary<int, string> _namedLabels;
         private bool _stopped;
 
@@ -36,19 +36,19 @@ namespace ScummEditor.Encoders
             public string Text;
         }
 
-        public static Scumm6Disassembler.Result Disassemble(byte[] code, int startOffset)
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset)
         {
             return Disassemble(code, startOffset, null);
         }
 
-        public static Scumm6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
         {
             var d = new Scumm5Disassembler();
             d._namedLabels = namedLabels;
             return d.Run(code, startOffset);
         }
 
-        private Scumm6Disassembler.Result Run(byte[] code, int startOffset)
+        private ScummV6Disassembler.Result Run(byte[] code, int startOffset)
         {
             _code = code;
             _pos = startOffset;
@@ -69,7 +69,7 @@ namespace ScummEditor.Encoders
                 }
             }
 
-            return new Scumm6Disassembler.Result
+            return new ScummV6Disassembler.Result
             {
                 Listing = Render(),
                 DecodedToEnd = !_stopped && _pos >= _code.Length,
@@ -182,7 +182,7 @@ namespace ScummEditor.Encoders
             int rel = ReadSignedWord();
             int target = _pos + rel;
             _jumpTargets.Add(target);
-            _jumps.Add(new Scumm6Disassembler.JumpRef { OperandOffset = operandOffset, Target = target });
+            _jumps.Add(new ScummV6Disassembler.JumpRef { OperandOffset = operandOffset, Target = target });
             return "L" + target.ToString("X4");
         }
 
@@ -192,7 +192,7 @@ namespace ScummEditor.Encoders
         /// </summary>
         private void CondJump(int offset, string conditionWhenBodyRuns)
         {
-            string negated = Scumm6Disassembler.NegateCondition(conditionWhenBodyRuns);
+            string negated = ScummV6Disassembler.NegateCondition(conditionWhenBodyRuns);
             Emit(offset, "if (" + negated + ") goto " + Jump(offset) + ";");
         }
 
@@ -206,7 +206,7 @@ namespace ScummEditor.Encoders
                 _nestedResult = expr;
                 return;
             }
-            Emit(offset, target + " = " + Scumm6Disassembler.StripParens(expr) + ";");
+            Emit(offset, target + " = " + ScummV6Disassembler.StripParens(expr) + ";");
         }
 
         // Strings use the same friendly tokens as the v6 listings and the text export.
@@ -229,7 +229,7 @@ namespace ScummEditor.Encoders
             }
 
             int contentLength = _pos - start - (terminated ? 1 : 0);
-            _strings.Add(new Scumm6Disassembler.StringRef
+            _strings.Add(new ScummV6Disassembler.StringRef
             {
                 Offset = start,
                 Length = _pos - start,
@@ -948,7 +948,7 @@ namespace ScummEditor.Encoders
             }
 
             string expr = stack.Count > 0 ? stack[stack.Count - 1] : "<empty>";
-            Emit(offset, result + " = " + Scumm6Disassembler.StripParens(expr) + ";");
+            Emit(offset, result + " = " + ScummV6Disassembler.StripParens(expr) + ";");
         }
 
         private static void ExpressionOp(List<string> stack, string op)

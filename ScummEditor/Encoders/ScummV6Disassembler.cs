@@ -14,7 +14,7 @@ namespace ScummEditor.Encoders
     /// labels (not reconstructed if/while), and a few rare opcodes may be incomplete. Decoding
     /// stops cleanly at the first unknown opcode so the output never desynchronises into garbage.
     /// </summary>
-    public class Scumm6Disassembler
+    public class ScummV6Disassembler
     {
         public class Result
         {
@@ -66,7 +66,7 @@ namespace ScummEditor.Encoders
         /// <summary>Disassembles with extra named labels rendered at the given offsets (e.g. verb entry points).</summary>
         public static Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
         {
-            var d = new Scumm6Disassembler();
+            var d = new ScummV6Disassembler();
             d._namedLabels = namedLabels;
             return d.Run(code, startOffset);
         }

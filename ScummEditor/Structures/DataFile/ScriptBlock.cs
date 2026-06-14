@@ -10,7 +10,7 @@ namespace ScummEditor.Structures.DataFile
       EXCD - exit script  (runs when leaving the room)
       ENCD - entry script (runs when entering the room)
 
-    The bytecode is disassembled on demand by Scumm6Disassembler. This is a read-only view:
+    The bytecode is disassembled on demand by ScummV6Disassembler. This is a read-only view:
     the original bytes are kept and written back verbatim on save, so rebuilding the game file
     is always byte-identical.
     */
@@ -62,7 +62,7 @@ namespace ScummEditor.Structures.DataFile
             binaryWriter.WriteBytes(RawContent);
         }
 
-        public Scumm6Disassembler.Result Disassemble()
+        public ScummV6Disassembler.Result Disassemble()
         {
             // The bytecode language changed at v6: v5 opcodes carry parameter bits, v6 is
             // stack based. The result shape (listing + string/jump positions) is shared.
@@ -70,7 +70,7 @@ namespace ScummEditor.Structures.DataFile
             {
                 return Scumm5Disassembler.Disassemble(RawContent, CodeOffset);
             }
-            return Scumm6Disassembler.Disassemble(RawContent, CodeOffset);
+            return ScummV6Disassembler.Disassemble(RawContent, CodeOffset);
         }
     }
 }

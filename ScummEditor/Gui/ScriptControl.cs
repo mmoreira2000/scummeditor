@@ -21,7 +21,7 @@ namespace ScummEditor.Gui
             base.SetAndRefreshData(blockBase);
 
             var script = (ScriptBlock)blockBase;
-            Scumm6Disassembler.Result result = script.Disassemble();
+            ScummV6Disassembler.Result result = script.Disassemble();
 
             var sb = new StringBuilder();
             sb.Append("// ").Append(script.BlockType);

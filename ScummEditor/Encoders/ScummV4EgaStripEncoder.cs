@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ScummEditor.Encoders
 {
     /// <summary>
-    /// Encodes SCUMM v4 EGA image strips - the inverse of Scumm4ImageDecoder.DecodeEgaStrip.
+    /// Encodes SCUMM v4 EGA image strips - the inverse of ScummV4ImageDecoder.DecodeEgaStrip.
     ///
     /// It walks each 8-pixel-wide column top-to-bottom (then the next column) and, at every
     /// position, greedily picks the cheapest of the three drawStripEGA operations for the run that
@@ -14,7 +14,7 @@ namespace ScummEditor.Encoders
     ///   - dither run  : N pixels alternating two colors (the dithering used for EGA gradients).
     /// This keeps re-encoded strips about as small as the originals (a plain literal-only encoder
     /// would bloat dithered areas). The output need not match the game's exact bytes - only decode
-    /// back to the same pixels, which Scumm4ImageDecoder is the authority on.
+    /// back to the same pixels, which ScummV4ImageDecoder is the authority on.
     ///
     /// Op encoding (matches the decoder):
     ///   literal  : bit7=0. run in the high nibble (1..7), index in the low. run 0 = escape: the
@@ -24,7 +24,7 @@ namespace ScummEditor.Encoders
     ///              run 0 = escape: 0xC0, the color byte, then a run byte (64..255).
     /// Runs longer than 255 are split.
     /// </summary>
-    public static class Scumm4EgaStripEncoder
+    public static class ScummV4EgaStripEncoder
     {
         /// <summary>Encodes every 8-pixel-wide strip of the image; returns one raw byte run per strip.</summary>
         public static List<byte[]> EncodeImage(byte[,] indexMatrix, int width, int height)

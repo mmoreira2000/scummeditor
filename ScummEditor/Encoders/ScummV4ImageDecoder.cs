@@ -19,13 +19,13 @@ namespace ScummEditor.Encoders
     /// All offsets are relative to "base" (the position of the leading smapLen word), and the last
     /// strip ends at smapLen (NOT the block size, which also covers the trailing z-planes).
     /// </summary>
-    public class Scumm4ImageDecoder
+    public class ScummV4ImageDecoder
     {
         /// <summary>Decodes the room background (BM block). Returns null when the room has no image.</summary>
-        public Bitmap DecodeBackground(Scumm4RoomBlock room)
+        public Bitmap DecodeBackground(ScummV4RoomBlock room)
         {
             RoomHeader header = room.GetHD();
-            Scumm4ImageBlock background = room.GetBM();
+            ScummV4ImageBlock background = room.GetBM();
             if (header == null || background == null)
             {
                 return null;
@@ -35,7 +35,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>Decodes one object image (OI block), sized by its paired object code (OC) block.</summary>
-        public Bitmap DecodeObject(Scumm4RoomBlock room, Scumm4ImageBlock objectImage, ObjectCode objectCode)
+        public Bitmap DecodeObject(ScummV4RoomBlock room, ScummV4ImageBlock objectImage, ObjectCode objectCode)
         {
             if (objectImage == null || objectCode == null || objectCode.Width == 0 || objectCode.Height == 0)
             {
@@ -45,7 +45,7 @@ namespace ScummEditor.Encoders
             return Decode(objectImage, objectCode.Width, objectCode.Height, room.IsEga, room.GetPA());
         }
 
-        private Bitmap Decode(Scumm4ImageBlock image, int width, int height, bool isEga, PaletteData palette)
+        private Bitmap Decode(ScummV4ImageBlock image, int width, int height, bool isEga, PaletteData palette)
         {
             if (width == 0 || height == 0)
             {
@@ -163,7 +163,7 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>
-        /// Decodes a list of raw EGA strips (no codec byte, as produced by Scumm4EgaStripEncoder)
+        /// Decodes a list of raw EGA strips (no codec byte, as produced by ScummV4EgaStripEncoder)
         /// straight into an index matrix. Used to verify the EGA encoder round-trips losslessly.
         /// </summary>
         public byte[,] DecodeEgaStripsToMatrix(List<byte[]> rawStrips, int width, int height)
