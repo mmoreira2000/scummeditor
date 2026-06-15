@@ -50,6 +50,115 @@ namespace ScummEditor.Encoders
             Encode(objectImage, objectCode.Width, objectCode.Height, room.IsEga, bitmap, original);
         }
 
+        /// <summary>Re-encodes an edited room-background z-plane mask back into the BM block.</summary>
+        public void EncodeBackgroundZPlane(ScummV4RoomBlock room, int zPlaneIndex, Bitmap bitmap)
+        {
+            RoomHeader header = room.GetHD();
+            ScummV4ImageBlock background = room.GetBM();
+            if (header == null || background == null)
+            {
+                throw new ImageEncodeException("This room has no background to import a z-plane into.");
+            }
+            EncodeZPlane(background, header.Width, header.Height, room.IsEga, zPlaneIndex, bitmap);
+        }
+
+        /// <summary>Re-encodes an edited object z-plane mask back into the OI block.</summary>
+        public void EncodeObjectZPlane(ScummV4RoomBlock room, ScummV4ImageBlock objectImage, ObjectCode objectCode, int zPlaneIndex, Bitmap bitmap)
+        {
+            if (objectImage == null || objectCode == null || objectCode.Width == 0 || objectCode.Height == 0)
+            {
+                throw new ImageEncodeException("This object has no image to import a z-plane into.");
+            }
+            EncodeZPlane(objectImage, objectCode.Width, objectCode.Height, room.IsEga, zPlaneIndex, bitmap);
+        }
+
+        private void EncodeZPlane(ScummV4ImageBlock block, int width, int height, bool isEga, int zPlaneIndex, Bitmap bitmap)
+        {
+            if (bitmap.Width != width || bitmap.Height != height)
+            {
+                throw new ImageEncodeException(string.Format(
+                    "The z-plane image must be {0}x{1} (the original size), but it is {2}x{3}.",
+                    width, height, bitmap.Width, bitmap.Height));
+            }
+
+            int numStrips = width / 8;
+            List<(int Start, int Length)> regions = block.GetZPlaneRegions(numStrips, isEga);
+            if (zPlaneIndex < 0 || zPlaneIndex >= regions.Count)
+            {
+                throw new ImageEncodeException("This image has no z-plane at that position to import into.");
+            }
+
+            // A z-plane mask is black/white (black = masked); the strips are encoded with a simple
+            // run-length scheme that is the exact inverse of ZPlaneDecoder, so an unchanged mask
+            // re-encodes to the same pixels.
+            int numStripsForMask = width / 8;
+            var strips = new List<ZPlaneStripData>(numStripsForMask);
+            for (int n = 0; n < numStripsForMask; n++)
+            {
+                strips.Add(new ZPlaneStripData { ImageData = EncodeMaskStrip(bitmap, n * 8, height) });
+            }
+            block.RebuildZPlane(regions[zPlaneIndex].Start, regions[zPlaneIndex].Length, strips);
+        }
+
+        /// <summary>
+        /// Encodes one 8-pixel-wide z-plane mask strip as run-length rows (the inverse of
+        /// ZPlaneDecoder): a repeat run is 0x80|count + the row byte; a copy run is count + that many
+        /// distinct row bytes. Each row byte holds 8 pixels (bit set = masked/black). Runs are capped
+        /// at 127 so the decoder reads them back unchanged.
+        /// </summary>
+        private static byte[] EncodeMaskStrip(Bitmap bitmap, int x0, int height)
+        {
+            var rows = new byte[height];
+            for (int y = 0; y < height; y++)
+            {
+                byte row = 0;
+                for (int i = 0; i < 8; i++)
+                {
+                    Color pixel = bitmap.GetPixel(x0 + i, y);
+                    if (pixel.R == 0 && pixel.G == 0 && pixel.B == 0)
+                    {
+                        row |= (byte)(1 << (7 - i));
+                    }
+                }
+                rows[y] = row;
+            }
+
+            var output = new List<byte>();
+            int line = 0;
+            while (line < height)
+            {
+                int repeat = 1;
+                while (line + repeat < height && rows[line + repeat] == rows[line] && repeat < 127)
+                {
+                    repeat++;
+                }
+
+                if (repeat >= 2)
+                {
+                    output.Add((byte)(0x80 | repeat));
+                    output.Add(rows[line]);
+                    line += repeat;
+                }
+                else
+                {
+                    // Collect distinct rows until a repeat run starts (or the strip/cap ends).
+                    var literals = new List<byte>();
+                    while (line < height && literals.Count < 127)
+                    {
+                        if (line + 1 < height && rows[line + 1] == rows[line])
+                        {
+                            break; // a repeat run starts here; leave it for the repeat branch
+                        }
+                        literals.Add(rows[line]);
+                        line++;
+                    }
+                    output.Add((byte)literals.Count);
+                    output.AddRange(literals);
+                }
+            }
+            return output.ToArray();
+        }
+
         private void Encode(ScummV4ImageBlock block, int width, int height, bool isEga, Bitmap bitmap, byte[,] original)
         {
             if (bitmap.Width != width || bitmap.Height != height)

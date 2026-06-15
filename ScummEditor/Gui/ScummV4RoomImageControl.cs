@@ -32,12 +32,18 @@ namespace ScummEditor.Gui
         private Bitmap _currentImage;
         private bool _splitterApplied;
 
-        /// <summary>What a tree node renders: the background, or one object image.</summary>
+        /// <summary>
+        /// What a tree node renders: the room background, one object image, or a z-plane (mask) of
+        /// either. A z-plane node keeps its parent's IsBackground / ObjectImage / ObjectCode so the
+        /// decoder knows which block to read, plus which z-plane index within it.
+        /// </summary>
         private class ImageTarget
         {
             public bool IsBackground { get; set; }
             public ScummV4ImageBlock ObjectImage { get; set; }
             public ObjectCode ObjectCode { get; set; }
+            public bool IsZPlane { get; set; }
+            public int ZPlaneIndex { get; set; }
         }
 
         public ScummV4RoomImageControl()
@@ -105,14 +111,24 @@ namespace ScummEditor.Gui
                 return;
             }
 
-            // Background.
+            // Background, with one child node per z-plane (mask) embedded in it.
             if (_room.GetBM() != null)
             {
                 var node = _tree.Nodes.Add("Room Background");
                 node.Tag = new ImageTarget { IsBackground = true };
+
+                int backgroundZPlanes = _decoder.CountBackgroundZPlanes(_room);
+                for (int z = 0; z < backgroundZPlanes; z++)
+                {
+                    var zNode = node.Nodes.Add("Z-Plane " + z);
+                    zNode.Tag = new ImageTarget { IsBackground = true, IsZPlane = true, ZPlaneIndex = z };
+                }
+                node.Expand();
             }
 
-            // Objects: pair each OI with its OC (by object id); only those with an image are listed.
+            // Objects: pair each OI with its OC (by object id). Only objects that actually decode to
+            // an image are listed - many objects carry a hotspot size in their OC but no pixels in
+            // their OI (those would just render blank), so they are skipped (as the v5/v6 viewer does).
             List<ObjectCode> codes = _room.GetObjectCodes();
             foreach (ScummV4ImageBlock objectImage in _room.GetObjectImages())
             {
@@ -121,9 +137,20 @@ namespace ScummEditor.Gui
                 {
                     continue;
                 }
+                if (_decoder.DecodeObject(_room, objectImage, code) == null)
+                {
+                    continue; // hotspot-only object: declared size but no image pixels
+                }
 
                 var node = _tree.Nodes.Add("Object " + objectImage.ObjectId);
                 node.Tag = new ImageTarget { ObjectImage = objectImage, ObjectCode = code };
+
+                int objectZPlanes = _decoder.CountObjectZPlanes(_room, objectImage, code);
+                for (int z = 0; z < objectZPlanes; z++)
+                {
+                    var zNode = node.Nodes.Add("Z-Plane " + z);
+                    zNode.Tag = new ImageTarget { ObjectImage = objectImage, ObjectCode = code, IsZPlane = true, ZPlaneIndex = z };
+                }
             }
 
             if (_tree.Nodes.Count > 0)
@@ -148,9 +175,18 @@ namespace ScummEditor.Gui
                 return;
             }
 
-            _currentImage = _currentTarget.IsBackground
-                ? _decoder.DecodeBackground(_room)
-                : _decoder.DecodeObject(_room, _currentTarget.ObjectImage, _currentTarget.ObjectCode);
+            if (_currentTarget.IsZPlane)
+            {
+                _currentImage = _currentTarget.IsBackground
+                    ? _decoder.DecodeBackgroundZPlane(_room, _currentTarget.ZPlaneIndex)
+                    : _decoder.DecodeObjectZPlane(_room, _currentTarget.ObjectImage, _currentTarget.ObjectCode, _currentTarget.ZPlaneIndex);
+            }
+            else
+            {
+                _currentImage = _currentTarget.IsBackground
+                    ? _decoder.DecodeBackground(_room)
+                    : _decoder.DecodeObject(_room, _currentTarget.ObjectImage, _currentTarget.ObjectCode);
+            }
 
             _picture.Image = _currentImage;
             _exportButton.Enabled = _currentImage != null;
@@ -194,7 +230,18 @@ namespace ScummEditor.Gui
                 {
                     using (var imported = (Bitmap)Image.FromFile(dialog.FileName))
                     {
-                        if (_currentTarget.IsBackground)
+                        if (_currentTarget.IsZPlane)
+                        {
+                            if (_currentTarget.IsBackground)
+                            {
+                                _encoder.EncodeBackgroundZPlane(_room, _currentTarget.ZPlaneIndex, imported);
+                            }
+                            else
+                            {
+                                _encoder.EncodeObjectZPlane(_room, _currentTarget.ObjectImage, _currentTarget.ObjectCode, _currentTarget.ZPlaneIndex, imported);
+                            }
+                        }
+                        else if (_currentTarget.IsBackground)
                         {
                             _encoder.EncodeBackground(_room, imported);
                         }

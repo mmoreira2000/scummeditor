@@ -9,7 +9,7 @@ namespace ScummEditor.Encoders
     {
         private ushort _width;
         private ushort _height;
-        private ZPlane _zPlane;
+        private List<ZPlaneStripData> _strips;
 
         private Bitmap _resultBitmap;
 
@@ -21,7 +21,7 @@ namespace ScummEditor.Encoders
 
             _width = IMHD.Width;
             _height = IMHD.Height;
-            _zPlane = obj.GetIMxx()[imageIndex].GetZPlanes()[zPlaneIndex];
+            _strips = obj.GetIMxx()[imageIndex].GetZPlanes()[zPlaneIndex].Strips;
 
             Decode();
 
@@ -34,10 +34,24 @@ namespace ScummEditor.Encoders
 
             _width = RMHD.Width;
             _height = RMHD.Height;
-            _zPlane = roomBlock.GetRMIM().GetIM00().GetZPlanes()[zPlaneIndex];
+            _strips = roomBlock.GetRMIM().GetIM00().GetZPlanes()[zPlaneIndex].Strips;
 
             Decode();
 
+            return _resultBitmap;
+        }
+
+        /// <summary>
+        /// Decodes a z-plane mask directly from its strips, without the v5/v6 room navigation. Used
+        /// by the SCUMM v4 path, whose z-planes are embedded in the BM/OI block rather than in ZPnn
+        /// sub-blocks. A strip with no data is a "full of 0" mask (drawn as unmasked / white).
+        /// </summary>
+        public Bitmap Decode(List<ZPlaneStripData> strips, int width, int height)
+        {
+            _strips = strips;
+            _width = (ushort)width;
+            _height = (ushort)height;
+            Decode();
             return _resultBitmap;
         }
 
@@ -54,13 +68,20 @@ namespace ScummEditor.Encoders
 
             _resultBitmap = new Bitmap(_width, _height);
 
-            for (int i = 0; i < _zPlane.Strips.Count; i++)
+            for (int i = 0; i < _strips.Count; i++)
             {
-                var strip = _zPlane.Strips[i];
+                var strip = _strips[i];
 
                 _currentLine = 0;
                 _currentColumn = 0;
                 _currentOffset = i * 8;//each strip has 8 pixels width, so with multiply the current strip by 8 to get the proper offset where it should be rendered.
+
+                if (strip.ImageData == null || strip.ImageData.Length == 0)
+                {
+                    // "Stripe full of 0": no mask here, i.e. fully unmasked (white).
+                    for (int line = 0; line < _height; line++) DrawLine(0);
+                    continue;
+                }
 
                 DecodeZPlaneStrip(strip);
             }
@@ -72,39 +93,35 @@ namespace ScummEditor.Encoders
         private void DecodeZPlaneStrip(ZPlaneStripData strip)
         {
             _bitStreamManager = new BitStreamManager(strip.ImageData);
-            bool finishDecode = false;
 
-            while (!finishDecode)
+            // Mirrors ScummVM's decompressMaskImg. The run is a do/while loop there, so a stored
+            // count of 0 means 256 (the byte underflows) - that lets a single control byte fill a
+            // tall strip. The loop stops at the strip height (or if the data runs out).
+            while (!CheckEndOfGraphics() && !_bitStreamManager.EndOfStream)
             {
-                byte count = _bitStreamManager.ReadByte();
-                if (count > 0)
+                byte control = _bitStreamManager.ReadByte();
+                if (BinaryHelper.CheckBitState(control, 7))
                 {
-                    if (BinaryHelper.CheckBitState(count,7))
-                    { // write the same byte count times
-
-                        count = BinaryHelper.GetBitsFromByte(count, 7); // &= 0x7F;
-                        byte b = _bitStreamManager.ReadByte();
-
-                        for (int i = 0; i < count; i++)
-                        {
-                            if (!CheckEndOfGraphics()) DrawLine(b);
-                        }
-                    }
-                    else
-                    {  // write count bytes as is from the input
-
-                        for (int i = 0; i < count; i++)
-                        {
-                            if (!CheckEndOfGraphics()) DrawLine(_bitStreamManager.ReadByte());
-                        }
+                    // Repeat one line `run` times.
+                    int run = BinaryHelper.GetBitsFromByte(control, 7); // &= 0x7F
+                    if (run == 0) run = 256;
+                    if (_bitStreamManager.EndOfStream) break; // truncated: no line byte follows
+                    byte line = _bitStreamManager.ReadByte();
+                    for (int i = 0; i < run && !CheckEndOfGraphics(); i++)
+                    {
+                        DrawLine(line);
                     }
                 }
-                //else
-                //{
-                //    Debugger.Break();
-                //}
-
-                if (CheckEndOfGraphics() || _bitStreamManager.EndOfStream) finishDecode = true;
+                else
+                {
+                    // Copy `run` distinct lines from the stream.
+                    int run = control;
+                    if (run == 0) run = 256;
+                    for (int i = 0; i < run && !CheckEndOfGraphics() && !_bitStreamManager.EndOfStream; i++)
+                    {
+                        DrawLine(_bitStreamManager.ReadByte());
+                    }
+                }
             }
         }
 

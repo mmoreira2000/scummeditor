@@ -154,6 +154,126 @@ namespace ScummEditor.Structures.DataFile
             }
         }
 
+        /// <summary>
+        /// Locates the z-plane (mask) regions embedded after the image strips. v4 has no ZPnn
+        /// sub-blocks: the z-planes follow the strip region (at base+smapLen) and are chained by a
+        /// leading LE16 "size to next z-plane" word, ending at a zero word. Returns each z-plane's
+        /// (start, length) within <see cref="Contents"/>.
+        /// </summary>
+        public List<(int Start, int Length)> GetZPlaneRegions(int numStrips, bool isEga)
+        {
+            var regions = new List<(int, int)>();
+            if (numStrips <= 0)
+            {
+                return regions;
+            }
+
+            int baseIndex = StripTableStart;
+            int smapLen = (int)ReadOriginalSmapLen(baseIndex, fourByte: !isEga);
+            int offsetTableSize = 2 + numStrips * 2;
+            int zp = baseIndex + smapLen;
+
+            while (zp + offsetTableSize <= Contents.Length)
+            {
+                int delta = ReadUInt16At(zp);
+                if (delta < offsetTableSize || zp + delta > Contents.Length)
+                {
+                    break; // a zero word terminates the chain; anything too small/large is not a z-plane
+                }
+                regions.Add((zp, delta));
+                zp += delta;
+            }
+            return regions;
+        }
+
+        /// <summary>
+        /// Parses one z-plane into its mask strips. The strip-offset table sits at zpStart+2 (after the
+        /// chain word), with width/8 LE16 offsets relative to zpStart; an offset of 0 marks an empty
+        /// (fully unmasked) strip.
+        /// </summary>
+        public List<ZPlaneStripData> GetZPlaneStrips(int zpStart, int delta, int numStrips)
+        {
+            var strips = new List<ZPlaneStripData>(numStrips);
+            for (int n = 0; n < numStrips; n++)
+            {
+                int start = ReadUInt16At(zpStart + 2 + n * 2);
+                if (start == 0)
+                {
+                    strips.Add(new ZPlaneStripData { OffSet = 0, ImageData = new byte[0] });
+                    continue;
+                }
+
+                // The mask decoder self-terminates at the strip height, so a strip is given every byte
+                // from its offset to the end of the z-plane. Strips are NOT bounded by the next offset:
+                // ScummVM's decodeMask reads from zplane+offset until "height" rows, and some strips
+                // legitimately read past the following offset (shared / overlapping run data).
+                int length = delta - start;
+                if (length < 0 || zpStart + start + length > Contents.Length) length = 0;
+
+                var data = new byte[length];
+                if (length > 0) Array.Copy(Contents, zpStart + start, data, 0, length);
+                strips.Add(new ZPlaneStripData { OffSet = (ushort)start, ImageData = data });
+            }
+            return strips;
+        }
+
+        /// <summary>
+        /// Replaces the z-plane at [zpStart, zpStart+oldLength) with newly encoded mask strips, keeping
+        /// the image and any other z-planes unchanged. The rebuilt z-plane is
+        ///   [size-to-next:LE16][numStrips x offset:LE16][strip mask data...]
+        /// with offset 0 for empty strips.
+        /// </summary>
+        public void RebuildZPlane(int zpStart, int oldLength, List<ZPlaneStripData> strips)
+        {
+            int offsetTableSize = 2 + strips.Count * 2;
+            var offsets = new int[strips.Count];
+            int running = offsetTableSize;
+            for (int n = 0; n < strips.Count; n++)
+            {
+                byte[] data = strips[n].ImageData;
+                if (data == null || data.Length == 0)
+                {
+                    offsets[n] = 0;
+                }
+                else
+                {
+                    offsets[n] = running;
+                    running += data.Length;
+                }
+            }
+            int newLength = running; // size-to-next == total z-plane size
+
+            byte[] zPlaneBytes;
+            using (var stream = new MemoryStream())
+            {
+                WriteUInt16(stream, (ushort)newLength);
+                for (int n = 0; n < strips.Count; n++)
+                {
+                    WriteUInt16(stream, (ushort)offsets[n]);
+                }
+                foreach (ZPlaneStripData strip in strips)
+                {
+                    if (strip.ImageData != null && strip.ImageData.Length > 0)
+                    {
+                        stream.Write(strip.ImageData, 0, strip.ImageData.Length);
+                    }
+                }
+                zPlaneBytes = stream.ToArray();
+            }
+
+            int tailStart = zpStart + oldLength;
+            var newContents = new byte[zpStart + zPlaneBytes.Length + (Contents.Length - tailStart)];
+            Array.Copy(Contents, 0, newContents, 0, zpStart);
+            Array.Copy(zPlaneBytes, 0, newContents, zpStart, zPlaneBytes.Length);
+            Array.Copy(Contents, tailStart, newContents, zpStart + zPlaneBytes.Length, Contents.Length - tailStart);
+            Contents = newContents;
+        }
+
+        private int ReadUInt16At(int index)
+        {
+            return Contents[index] | (Contents[index + 1] << 8);
+        }
+
         private uint ReadOriginalSmapLen(int baseIndex, bool fourByte)
         {
             if (fourByte)

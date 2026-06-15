@@ -45,6 +45,51 @@ namespace ScummEditor.Encoders
             return Decode(objectImage, objectCode.Width, objectCode.Height, room.IsEga, room.GetPA());
         }
 
+        /// <summary>Number of z-planes (masks) embedded in the room background block.</summary>
+        public int CountBackgroundZPlanes(ScummV4RoomBlock room)
+        {
+            RoomHeader header = room.GetHD();
+            ScummV4ImageBlock background = room.GetBM();
+            if (header == null || background == null || header.Width == 0) return 0;
+            return background.GetZPlaneRegions(header.Width / 8, room.IsEga).Count;
+        }
+
+        /// <summary>Number of z-planes (masks) embedded in an object image block.</summary>
+        public int CountObjectZPlanes(ScummV4RoomBlock room, ScummV4ImageBlock objectImage, ObjectCode objectCode)
+        {
+            if (objectImage == null || objectCode == null || objectCode.Width == 0) return 0;
+            return objectImage.GetZPlaneRegions(objectCode.Width / 8, room.IsEga).Count;
+        }
+
+        /// <summary>Decodes a room-background z-plane mask to a black/white bitmap (black = masked).</summary>
+        public Bitmap DecodeBackgroundZPlane(ScummV4RoomBlock room, int zPlaneIndex)
+        {
+            RoomHeader header = room.GetHD();
+            ScummV4ImageBlock background = room.GetBM();
+            if (header == null || background == null || header.Width == 0 || header.Height == 0) return null;
+            return DecodeZPlane(background, header.Width, header.Height, room.IsEga, zPlaneIndex);
+        }
+
+        /// <summary>Decodes an object z-plane mask to a black/white bitmap (black = masked).</summary>
+        public Bitmap DecodeObjectZPlane(ScummV4RoomBlock room, ScummV4ImageBlock objectImage, ObjectCode objectCode, int zPlaneIndex)
+        {
+            if (objectImage == null || objectCode == null || objectCode.Width == 0 || objectCode.Height == 0) return null;
+            return DecodeZPlane(objectImage, objectCode.Width, objectCode.Height, room.IsEga, zPlaneIndex);
+        }
+
+        private Bitmap DecodeZPlane(ScummV4ImageBlock image, int width, int height, bool isEga, int zPlaneIndex)
+        {
+            int numStrips = width / 8;
+            List<(int Start, int Length)> regions = image.GetZPlaneRegions(numStrips, isEga);
+            if (zPlaneIndex < 0 || zPlaneIndex >= regions.Count)
+            {
+                return null;
+            }
+
+            List<ZPlaneStripData> strips = image.GetZPlaneStrips(regions[zPlaneIndex].Start, regions[zPlaneIndex].Length, numStrips);
+            return new ZPlaneDecoder().Decode(strips, width, height);
+        }
+
         private Bitmap Decode(ScummV4ImageBlock image, int width, int height, bool isEga, PaletteData palette)
         {
             if (width == 0 || height == 0)
