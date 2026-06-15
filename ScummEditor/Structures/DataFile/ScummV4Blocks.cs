@@ -50,6 +50,29 @@ namespace ScummEditor.Structures.DataFile
                     return new ScummV4ImageBlock(parent, "OI");
                 case "OC": // object code/metadata (= v5/v6 OBCD)
                     return new ObjectCode(parent);
+                case "SC": // global script (= v5/v6 SCRP)
+                case "LS": // local script  (= v5/v6 LSCR)
+                case "EX": // exit script   (= v5/v6 EXCD)
+                case "EN": // entry script  (= v5/v6 ENCD)
+                    return new ScriptBlockV4(parent, tag);
+                case "CO": // costume (= v5/v6 COST)
+                    return new CostumeV4(parent);
+                case "CC": // colour cycling (= v5 CYCL; v4 fixed 16x4 format)
+                    return new ColorCyclesV4(parent);
+                case "SP": // EGA/shadow palette (= v5 EPAL)
+                    return new EgaShadowPaletteV4(parent);
+                case "BX": // walk boxes + matrix (= v5 BOXD + BOXM combined)
+                    return new BoxDataV4(parent);
+                case "SA": // actor scale slots (= v5 SCAL)
+                    return new ScaleV4(parent);
+                case "LC": // local-script count (= v5 NLSC)
+                    return new LocalScriptCountV4(parent);
+                case "NL": // local-object/name list
+                    return new LocalObjectListV4(parent);
+                case "SL": // sound list
+                    return new SoundListV4(parent);
+                case "SO": // sound resource (WA/AD sub-blocks; raw AdLib tail stays a RawDataBlock sibling)
+                    return new SoundBlockV4(parent);
                 default:
                     return new NotImplementedDataBlock(parent, tag);
             }

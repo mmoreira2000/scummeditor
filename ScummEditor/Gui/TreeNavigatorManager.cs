@@ -46,6 +46,14 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(Scale).Name, structuredBlockControl);
             _controlViewers.Add(typeof(PaletteOffset).Name, structuredBlockControl);
             _controlViewers.Add(typeof(EgaPalette).Name, structuredBlockControl);
+            // v4 room sub-blocks (M2)
+            _controlViewers.Add(typeof(BoxDataV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(ScaleV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(EgaShadowPaletteV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(ColorCyclesV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(LocalScriptCountV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(LocalObjectListV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(SoundListV4).Name, structuredBlockControl);
 
             _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
 
@@ -53,6 +61,9 @@ namespace ScummEditor.Gui
 
             var scriptControl = new ScriptControl();
             _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);
+            _controlViewers.Add(typeof(ScriptBlockV4).Name, scriptControl); // v4 SC/LS/EX/EN scripts
+            _controlViewers.Add(typeof(CostumeV4).Name, new CostumeV4Control()); // v4 CO costumes
+            _controlViewers.Add(typeof(SoundBlockV4).Name, new SoundBlockV4Control()); // v4 SO sound
 
             _controlViewers.Add(typeof(Charset).Name, new CharsetControl());
 
