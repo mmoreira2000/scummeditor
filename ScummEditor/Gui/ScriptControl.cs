@@ -20,11 +20,11 @@ namespace ScummEditor.Gui
         {
             base.SetAndRefreshData(blockBase);
 
-            var script = (ScriptBlock)blockBase;
+            var script = (IScriptBytecode)blockBase; // ScriptBlock (v5/v6) or ScriptBlockV4
             ScummV6Disassembler.Result result = script.Disassemble();
 
             var sb = new StringBuilder();
-            sb.Append("// ").Append(script.BlockType);
+            sb.Append("// ").Append(blockBase.BlockType);
             if (script.ScriptId >= 0) sb.Append(" #").Append(script.ScriptId);
             sb.Append("  (").Append(script.RawContent.Length).Append(" bytes)");
             sb.AppendLine();

@@ -14,7 +14,7 @@ namespace ScummEditor.Structures.DataFile
     the original bytes are kept and written back verbatim on save, so rebuilding the game file
     is always byte-identical.
     */
-    public class ScriptBlock : BlockBase
+    public class ScriptBlock : BlockBase, IScriptBytecode
     {
         private readonly string _blockType;
 
