@@ -226,7 +226,12 @@ namespace ScummEditor.Encoders
                 byte b = ReadByte();
                 if (b == 0) { terminated = true; break; }
 
-                if (b == 0xFF || b == 0xFE)
+                // SCUMM string escape: ONLY 0xFF (mirrors ScummEngine::resStrLen / convertMessageToString
+                // for every version we handle - v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument,
+                // every other code is followed by a 16-bit word. 0xFE is NOT an escape - it is an ordinary
+                // content byte (the Japanese CJK newline glyph, and a legal SJIS trail byte), so treating
+                // it as one desynced Japanese (SJIS) strings and the rest of the script after them.
+                if (b == 0xFF)
                 {
                     byte code = ReadByte();
                     if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
