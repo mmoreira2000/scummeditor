@@ -115,7 +115,10 @@ namespace ScummEditor.Encoders
                 for (int i = 0; i < 8; i++)
                 {
                     Color pixel = bitmap.GetPixel(x0 + i, y);
-                    if (pixel.R == 0 && pixel.G == 0 && pixel.B == 0)
+                    // Masked = opaque black. Transparent pixels (alpha 0) count as unmasked, so a mask
+                    // with undrawn/erased areas (or an editor's transparency) re-encodes the way the
+                    // game reads it - white and transparent both mean "not masked here".
+                    if (pixel.A != 0 && pixel.R == 0 && pixel.G == 0 && pixel.B == 0)
                     {
                         row |= (byte)(1 << (7 - i));
                     }

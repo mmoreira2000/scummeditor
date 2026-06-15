@@ -51,9 +51,15 @@ namespace ScummEditor.Encoders
             _strips = strips;
             _width = (ushort)width;
             _height = (ushort)height;
+            _fillUnmaskedWhite = true; // v4: pixels a short strip never draws are unmasked (white), not transparent
             Decode();
             return _resultBitmap;
         }
+
+        // v4-only: pre-fill the mask with white so rows a strip does not reach stay unmasked (the game
+        // treats an unfilled mask as 0 = unmasked). Without this they would be left transparent and a
+        // re-encode would read them as masked. The v5/v6 RoomBlock overloads keep the old behaviour.
+        private bool _fillUnmaskedWhite;
 
         private int _currentLine;
         int _currentColumn;
@@ -67,6 +73,10 @@ namespace ScummEditor.Encoders
             }
 
             _resultBitmap = new Bitmap(_width, _height);
+            if (_fillUnmaskedWhite)
+            {
+                using (var g = Graphics.FromImage(_resultBitmap)) g.Clear(Color.White);
+            }
 
             for (int i = 0; i < _strips.Count; i++)
             {

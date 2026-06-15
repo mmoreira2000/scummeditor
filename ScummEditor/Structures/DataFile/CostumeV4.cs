@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ScummEditor.Exceptions;
 
 namespace ScummEditor.Structures.DataFile
 {
@@ -43,6 +44,14 @@ namespace ScummEditor.Structures.DataFile
         /// <summary>The distinct costume frames (CELs), decoded for display.</summary>
         public List<CostumeImageData> Frames { get; private set; }
 
+        // Rebuild bookkeeping (for ReplaceFrameImage), filled by ParseFrames:
+        //   _celBlockOffsets[i]        = block-relative offset of Frames[i]'s CEL header.
+        //   _celOffsetEntryPositions   = RawContent indexes of every frame-table entry that stores a CEL offset.
+        //   CelDataStart               = RawContent index of the first CEL (the start of the CEL region).
+        private List<int> _celBlockOffsets = new List<int>();
+        private List<int> _celOffsetEntryPositions = new List<int>();
+        public int CelDataStart { get; private set; } = -1;
+
         public override void CalculateBlockSize()
         {
             base.CalculateBlockSize();
@@ -78,6 +87,10 @@ namespace ScummEditor.Structures.DataFile
 
         private void ParseFrames()
         {
+            _celBlockOffsets = new List<int>();
+            _celOffsetEntryPositions = new List<int>();
+            CelDataStart = -1;
+
             int headerLength = (int)HeaderLength; // 6 for v4; block-relative offset -> RawContent index = off - headerLength
             if (RawContent.Length < 4) return;
 
@@ -111,12 +124,18 @@ namespace ScummEditor.Structures.DataFile
                     int ri = e - headerLength;
                     if (ri < 0 || ri + 2 > RawContent.Length) continue;
                     int celOffset = ReadUInt16At(ri);
-                    if (celOffset >= boundary && IsSaneCel(celOffset - headerLength)) celOffsets.Add(celOffset);
+                    if (celOffset >= boundary && IsSaneCel(celOffset - headerLength))
+                    {
+                        celOffsets.Add(celOffset);
+                        _celOffsetEntryPositions.Add(ri); // remembered so ReplaceFrameImage can remap it
+                    }
                 }
             }
 
             // Build the frames; each CEL's RLE runs to the next CEL (the decoder self-terminates anyway).
             var sorted = celOffsets.ToList();
+            _celBlockOffsets = sorted;
+            if (sorted.Count > 0) CelDataStart = sorted[0] - headerLength; // first CEL = start of the CEL region
             for (int i = 0; i < sorted.Count; i++)
             {
                 int start = sorted[i] - headerLength;            // RawContent index of the CEL header
@@ -147,6 +166,71 @@ namespace ScummEditor.Structures.DataFile
             int w = ReadUInt16At(rawIndex);
             int h = ReadUInt16At(rawIndex + 2);
             return w > 0 && w <= 1024 && h > 0 && h <= 1024;
+        }
+
+        /// <summary>
+        /// Replaces one frame's RLE pixel bytes with a freshly-encoded version (CostumeImageEncoderV4),
+        /// rebuilding the CEL region and remapping the frame-table CEL offsets so the block stays valid.
+        /// The frame keeps its original size and CEL header; everything before the first CEL (header,
+        /// palette, frame tables, anim/limb data) is preserved, with only the CEL offsets adjusted to
+        /// the CELs' new positions. The new RLE may be a different length than the original (the decoder
+        /// self-terminates), so an unchanged image stays pixel-identical though not byte-identical. The
+        /// caller persists the change via "Save changes" (the v4 fix-up corrects the container offsets).
+        /// </summary>
+        public void ReplaceFrameImage(int frameIndex, byte[] newImageData)
+        {
+            if (Frames == null || frameIndex < 0 || frameIndex >= Frames.Count)
+            {
+                throw new ImageEncodeException("Invalid costume frame index.");
+            }
+            if (CelDataStart < 0 || _celBlockOffsets.Count != Frames.Count)
+            {
+                throw new ImageEncodeException("This costume's frame table could not be parsed, so it cannot be edited.");
+            }
+
+            int headerLength = (int)HeaderLength;
+
+            // Rebuild the CEL region (first CEL to block end): each CEL = its original 12-byte header
+            // (only the replaced frame's pixels change) followed by its RLE bytes. Record where each
+            // CEL lands so its (block-relative) offset can be remapped in the frame tables afterwards.
+            var region = new MemoryStream();
+            var newBlockOffsetByOld = new Dictionary<int, int>();
+            for (int i = 0; i < Frames.Count; i++)
+            {
+                int oldBlockOffset = _celBlockOffsets[i];
+                int celHeaderPos = oldBlockOffset - headerLength;
+
+                int newRawIndex = CelDataStart + (int)region.Length;
+                newBlockOffsetByOld[oldBlockOffset] = newRawIndex + headerLength;
+
+                region.Write(RawContent, celHeaderPos, 12); // CEL header verbatim (size unchanged)
+                byte[] data = (i == frameIndex) ? newImageData : Frames[i].ImageData;
+                region.Write(data, 0, data.Length);
+            }
+
+            byte[] regionBytes = region.ToArray();
+            var rebuilt = new byte[CelDataStart + regionBytes.Length];
+            Array.Copy(RawContent, 0, rebuilt, 0, CelDataStart);     // everything before the first CEL, verbatim
+            Array.Copy(regionBytes, 0, rebuilt, CelDataStart, regionBytes.Length);
+
+            // Point every frame-table CEL offset at the CEL's new position.
+            foreach (int entryPos in _celOffsetEntryPositions)
+            {
+                int oldOffset = rebuilt[entryPos] | (rebuilt[entryPos + 1] << 8);
+                int newOffset;
+                if (newBlockOffsetByOld.TryGetValue(oldOffset, out newOffset))
+                {
+                    rebuilt[entryPos] = (byte)(newOffset & 0xFF);
+                    rebuilt[entryPos + 1] = (byte)((newOffset >> 8) & 0xFF);
+                }
+            }
+
+            RawContent = rebuilt;
+
+            // Re-parse so the frame list + offsets reflect the new bytes (for the viewer and further edits).
+            Palette = new List<byte>();
+            Frames = new List<CostumeImageData>();
+            try { ParseFrames(); } catch { Frames = new List<CostumeImageData>(); }
         }
     }
 }

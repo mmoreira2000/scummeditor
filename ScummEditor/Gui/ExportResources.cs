@@ -45,6 +45,14 @@ namespace ScummEditor.Gui
 
             Application.DoEvents();
 
+            // SCUMM v4 has no LFLF blocks (its rooms span several LE/FO/LF DISKnn.LEC containers), so
+            // it uses a dedicated batch path instead of the v5/v6 walk below.
+            if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 4)
+            {
+                ExportV4(location);
+                return;
+            }
+
             var diskBlocks = _scummFile.DataFile.GetLFLFs();
 
             Progress.Maximum = diskBlocks.Count - 1;
@@ -207,6 +215,40 @@ namespace ScummEditor.Gui
             {
                 MessageBox.Show("All images sucefully exported");
             }
+            Close();
+        }
+
+        /// <summary>Batch-exports every v4 image (backgrounds, objects, z-planes, costume frames).</summary>
+        private void ExportV4(string location)
+        {
+            var options = new ScummV4GraphicsBatch.ExportOptions
+            {
+                Backgrounds = ExportBackgrounds.Checked,
+                Objects = ExportObjects.Checked,
+                Costumes = ExportCostumes.Checked,
+                BackgroundZPlanes = ExportBackgroundZPlanes.Checked,
+                ObjectZPlanes = ExportObjectsZPlanes.Checked,
+                Transparency = ExportWithTransparency.Checked
+            };
+
+            int roomCount = ScummV4GraphicsBatch.EnumerateRooms(_scummFile).Count;
+            Progress.Maximum = Math.Max(1, roomCount);
+            Progress.Value = 0;
+            Progress.Visible = true;
+            FilesExported.Visible = true;
+            FilesExportedLabel.Visible = true;
+
+            int exported = ScummV4GraphicsBatch.Export(_scummFile, location, options, (done, total) =>
+            {
+                Progress.Value = Math.Min(done, Progress.Maximum);
+                Application.DoEvents();
+            });
+
+            FilesExported.Text = exported.ToString();
+            Progress.Visible = false;
+            _exporting = false;
+            Cursor = Cursors.Default;
+            MessageBox.Show(string.Format("{0} images successfully exported.", exported));
             Close();
         }
 
