@@ -23,6 +23,18 @@ namespace ScummEditor.Structures.DataFile
             ScummV4Blocks.WalkChildren(this, binaryReader, BlockOffSet + BlockSize);
         }
 
+        /// <summary>The room (RO) of this disk block; costumes resolve their palette from it.</summary>
+        public ScummV4RoomBlock GetRoom()
+        {
+            return Childrens.OfType<ScummV4RoomBlock>().FirstOrDefault();
+        }
+
+        /// <summary>The costumes (CO) bundled in this disk block.</summary>
+        public List<CostumeV4> GetCostumes()
+        {
+            return Childrens.OfType<CostumeV4>().ToList();
+        }
+
         public override void CalculateBlockSize()
         {
             base.CalculateBlockSize();
