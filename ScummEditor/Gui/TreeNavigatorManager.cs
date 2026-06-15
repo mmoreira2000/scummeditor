@@ -173,19 +173,29 @@ namespace ScummEditor.Gui
             LoadNextBlock(dataFile, dataNode);
         }
 
-        private void LoadNextBlock(BlockBase blockBase, TreeNode parentNode, int nodeIndex = -1)
+        private TreeNode LoadNextBlock(BlockBase blockBase, TreeNode parentNode, int nodeIndex = -1)
         {
             TreeNode blockNode = CreateNode(blockBase, parentNode, nodeIndex);
+
+            // For readability the v4 local scripts (LS) are shown nested under the local-script count
+            // block (LC), which declares how many of them the room has (LC precedes the LS blocks in
+            // the room). This only nests the tree NODES - LC and LS stay siblings in the block model,
+            // so saving is unchanged. v5/v6 use the tags NLSC/LSCR, so this never triggers there.
+            TreeNode localScriptCountNode = null;
 
             IEnumerable<IGrouping<string, BlockBase>> groupedChildrens = blockBase.Childrens.GroupBy(g => g.BlockType);
             foreach (IGrouping<string, BlockBase> groupedChildren in groupedChildrens)
             {
+                TreeNode groupParent = (groupedChildren.Key == "LS" && localScriptCountNode != null)
+                    ? localScriptCountNode
+                    : blockNode;
+
                 if (groupedChildren.Count() > 1)
                 {
                     int counter = 0;
                     foreach (BlockBase child in groupedChildren)
                     {
-                        LoadNextBlock(child, blockNode, counter);
+                        LoadNextBlock(child, groupParent, counter);
                         counter++;
                     }
                 }
@@ -193,10 +203,16 @@ namespace ScummEditor.Gui
                 {
                     foreach (BlockBase child in groupedChildren)
                     {
-                        LoadNextBlock(child, blockNode);
+                        TreeNode childNode = LoadNextBlock(child, groupParent);
+                        if (child.BlockType == "LC")
+                        {
+                            localScriptCountNode = childNode;
+                        }
                     }
                 }
             }
+
+            return blockNode;
         }
 
         private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)

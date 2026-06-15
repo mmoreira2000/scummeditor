@@ -79,8 +79,10 @@ namespace ScummEditor.Structures.DataFile
         {
             if (tag == "AD")
             {
-                int payload = blockStart + 6;
-                if (payload < RawContent.Length) return RawContent[payload] == 0x80 ? "AdLib music" : "AdLib SFX";
+                // The payload begins with a 2-byte priority word; byte [2] is the type marker
+                // (0x80 = music, anything else = a sound effect). Mirrors ScummVM convertADResource.
+                int marker = blockStart + 6 + 2;
+                if (marker < RawContent.Length) return RawContent[marker] == 0x80 ? "AdLib music" : "AdLib SFX";
                 return "AdLib";
             }
             if (tag == "WA") return "Roland/waveform";
