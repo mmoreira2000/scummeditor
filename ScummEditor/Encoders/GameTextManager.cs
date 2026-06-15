@@ -145,6 +145,12 @@ namespace ScummEditor.Encoders
             return BuildEntries(EnumerateSources(dataFile), codec);
         }
 
+        /// <summary>Extracts the translatable-text entries of a SCUMM v4 game (all DISKnn.LEC disks).</summary>
+        public static List<GameTextEntry> ExtractV4(ScummGameData game, GameTextCodec codec)
+        {
+            return BuildEntries(EnumerateSourcesV4(game), codec);
+        }
+
         /// <summary>Builds the translatable-text entries from an already-enumerated source list (v4 or v5/v6).</summary>
         private static List<GameTextEntry> BuildEntries(List<Source> sources, GameTextCodec codec)
         {

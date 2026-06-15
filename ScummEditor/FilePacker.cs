@@ -91,7 +91,7 @@ namespace ScummEditor
         {
             try
             {
-                return GameLanguageDetector.Detect(scummFile.DataFile);
+                return GameLanguageDetector.Detect(scummFile);
             }
             catch (Exception)
             {

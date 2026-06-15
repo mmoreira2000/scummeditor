@@ -30,6 +30,7 @@ namespace ScummEditor
             new KnownGame { IndexFileName = "INDY4.000",    DataFileName = "INDY4.001",    Game = ScummGame.FateOfAtlantis,   ScummVersion = 5 }, // FM Towns release
             new KnownGame { IndexFileName = "MONKEY2.000",  DataFileName = "MONKEY2.001",  Game = ScummGame.MonkeyIsland2,    ScummVersion = 5 },
             new KnownGame { IndexFileName = "MONKEY.000",   DataFileName = "MONKEY.001",   Game = ScummGame.MonkeyIsland1VGA, ScummVersion = 5 },
+            new KnownGame { IndexFileName = "MONKEYK.000",  DataFileName = "MONKEYK.001",  Game = ScummGame.MonkeyIsland1VGA, ScummVersion = 5 }, // Japanese FM Towns release
         };
 
         /// <summary>Detects the game from the path of one of its files (legacy entry point).</summary>
@@ -146,9 +147,11 @@ namespace ScummEditor
 
         /// <summary>
         /// Detects a SCUMM v4 game (Monkey Island 1 floppy, Loom CD). Both share the file names
-        /// 000.LFL + DISK01.LEC, and Loom also exists as a v3 release, so the v4 layout is
-        /// confirmed by content (the index starts with a small-header "RN" block) and the
-        /// specific game is chosen by the EXE next to it.
+        /// 000.LFL + DISK01.LEC, and Loom also exists as a v3 release, so the v4 layout is confirmed
+        /// by content (the index starts with a small-header "RN" block). The specific game is chosen
+        /// from the DATA alone - never the game EXE, which may be missing from the folder: Loom CD
+        /// ships its music as ripped CD audio (CDDA.SOU) and fits on a single data disk, while Monkey
+        /// Island 1 floppy spans several DISKnn.LEC and has no CD audio.
         /// </summary>
         private static GameInfo DetectScummV4(string folder)
         {
@@ -164,19 +167,22 @@ namespace ScummEditor
                 return null;
             }
 
-            ScummGame game = ScummGame.MonkeyIsland1Floppy;
-            if (File.Exists(Path.Combine(folder, "LOOM.EXE")))
-            {
-                game = ScummGame.Loom;
-            }
+            List<string> dataDisks = EnumerateV4DataDisks(folder);
+            bool hasCdAudioFile = File.Exists(Path.Combine(folder, "CDDA.SOU"));
+
+            // Loom CD has ripped CD audio and a single data disk; MI1 floppy has several disks and no
+            // CD audio. Either signal alone identifies Loom, so the EXE is not needed.
+            ScummGame game = (hasCdAudioFile || dataDisks.Count == 1)
+                ? ScummGame.Loom
+                : ScummGame.MonkeyIsland1Floppy;
 
             var result = new GameInfo
             {
                 LoadedGame = game,
                 IndexFile = indexPath,
                 DataFile = dataPath,
-                DataFiles = EnumerateV4DataDisks(folder), // a v4 game is spread over all DISKnn.LEC
-                FontFiles = EnumerateV4Fonts(folder),     // 90x.LFL charset files
+                DataFiles = dataDisks,                // a v4 game is spread over all DISKnn.LEC
+                FontFiles = EnumerateV4Fonts(folder), // 90x.LFL charset files
                 Xored = true,
                 XorKey = 0x69,      // DISKnn.LEC data
                 IndexXorKey = 0x00, // 000.LFL is plaintext

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using ScummEditor.Structures;
 using ScummEditor.Structures.DataFile;
 
 namespace ScummEditor.Encoders
@@ -61,7 +62,40 @@ namespace ScummEditor.Encoders
         // The decision needs at least this many hits, and twice the runner-up's hits.
         private const int MinimumHits = 25;
 
-        /// <summary>Returns the detected language name, or null when it cannot be decided.</summary>
+        // A Japanese (SJIS) game is recognized by structure, not words: the editor's Latin-1 text
+        // codec renders its double-byte text as a dense run of high (non-ASCII) characters. Measured
+        // over the library, every Japanese edition is >= 0.10 and every European one <= 0.02, so 0.06
+        // separates them safely (with a minimum sample so tiny/garbage inputs never trigger it).
+        private const double JapaneseHighByteRatio = 0.06;
+        private const int JapaneseMinimumChars = 2000;
+
+        /// <summary>
+        /// Returns the detected language name, or null when it cannot be decided. Works for every
+        /// supported SCUMM version: a v4 game's texts are extracted from all its DISKnn.LEC disks via
+        /// the v4 pipeline; v5/v6 use the single data file. Reads only the game's own data - no EXE.
+        /// </summary>
+        public static string Detect(ScummGameData game)
+        {
+            if (game == null) return null;
+
+            List<GameTextEntry> entries;
+            try
+            {
+                GameTextCodec codec = GameTextCodec.Default();
+                bool isV4 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 4;
+                entries = isV4
+                    ? GameTextManager.ExtractV4(game, codec)
+                    : GameTextManager.Extract(game.DataFile, codec);
+            }
+            catch (Exception)
+            {
+                return null; // optional feature: never break loading because of it
+            }
+
+            return DetectFromEntries(entries);
+        }
+
+        /// <summary>Legacy overload: detect from a single v5/v6 data file.</summary>
         public static string Detect(ScummV5V6DataFile dataFile)
         {
             List<GameTextEntry> entries;
@@ -71,7 +105,19 @@ namespace ScummEditor.Encoders
             }
             catch (Exception)
             {
-                return null; // optional feature: never break loading because of it
+                return null;
+            }
+
+            return DetectFromEntries(entries);
+        }
+
+        private static string DetectFromEntries(List<GameTextEntry> entries)
+        {
+            // Japanese is recognized by its high-byte (SJIS) density before any word matching - the
+            // European word lists would never match its codec-rendered text anyway.
+            if (IsHighByteDense(entries))
+            {
+                return "Japanese";
             }
 
             // Count word hits per language over a sample of the texts.
@@ -137,6 +183,27 @@ namespace ScummEditor.Encoders
             }
 
             return Profiles[bestIndex].Name;
+        }
+
+        /// <summary>
+        /// True when the texts are mostly high (non-ASCII) characters - the signature of a Japanese
+        /// SJIS game seen through the Latin-1 text codec. European editions stay well below the
+        /// threshold even with their accented characters.
+        /// </summary>
+        private static bool IsHighByteDense(List<GameTextEntry> entries)
+        {
+            int total = 0;
+            int high = 0;
+            foreach (GameTextEntry entry in entries)
+            {
+                foreach (char c in entry.Text)
+                {
+                    if (char.IsWhiteSpace(c)) continue;
+                    total++;
+                    if (c > 127) high++;
+                }
+            }
+            return total >= JapaneseMinimumChars && (double)high / total >= JapaneseHighByteRatio;
         }
 
         /// <summary>Removes {tokens} from a display text, keeping only the spoken words.</summary>
