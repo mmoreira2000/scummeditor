@@ -12,11 +12,15 @@
 
 * New SCUMM v4 script disassembler. v4 shares the v5 parameter-bit language with a handful of its own opcodes; every script and every object verb script of Monkey Island 1 and Loom decodes 100%, rendered in the same readable C#-like listing.
 
-* All remaining v4 block types are decoded with a viewer (colour cycling, EGA shadow palette, walk boxes, scale slots, local-script/object/sound lists), and the sound blocks (AdLib/Roland) are parsed - nothing is left as a raw "not implemented" block.
+* All remaining v4 block types are decoded with a viewer (colour cycling, EGA shadow palette, walk boxes, scale slots, local-script/object/sound lists) - nothing is left as a raw "not implemented" block. For readability the local scripts (LS) are shown nested under the local-script count block (LC) that declares how many of them the room has.
+
+* v4 sound viewer with playback and export. An AdLib music track plays as a melody preview (its embedded MIDI is rendered through the Windows synthesiser; export the raw resource for the real OPL2 sound), and every WA/AD sub-block can be exported, one or all at once.
+
+* Detection from the data files alone (never the game EXE, which may be missing from the folder): Loom CD is told apart from Monkey Island 1 floppy by its CD audio and single data disk, the Japanese FM Towns release of Monkey Island 1 (MONKEYK.000) is recognized, and the displayed language now covers the v4 games as well as the Japanese (SJIS) editions.
 
 * Japanese (SJIS) text now decodes correctly. A string-parsing fix (0xFE is an ordinary character, not an escape code) makes the Japanese editions of Indiana Jones and the Fate of Atlantis and Monkey Island 2 disassemble their scripts and object verb code in full.
 
-* Fixes: object verb code is now disassembled with the correct engine in the object viewer, and object z-plane masks round-trip pixel-perfectly.
+* Fixes: object verb code is now disassembled with the correct engine in the object viewer, object z-plane masks round-trip pixel-perfectly, the v4 sound viewer no longer overlaps the block header, and AdLib music resources are labelled correctly.
 
 1.5.0.0
 -------
