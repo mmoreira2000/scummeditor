@@ -60,6 +60,13 @@ namespace ScummEditor.Structures.DataFile
         /// <summary>First bytecode position within RawContent (after the offset table), or -1.</summary>
         public int VerbCodeOffset { get; private set; }
         public int VerbCodeLength { get; private set; }
+        /// <summary>
+        /// Value to add to a VerbEntry.Offset to get that verb's index within RawContent. The two
+        /// container layouts anchor the verb offsets differently:
+        ///   v5/v6: relative to the VERB tag, so this equals VerbBlockOffset.
+        ///   v4:    block-relative (the block starts HeaderLength bytes before RawContent), so this is -HeaderLength.
+        /// </summary>
+        public int VerbEntryBase { get; private set; }
 
         // OBNA
         public string Name { get; set; }
@@ -109,6 +116,7 @@ namespace ScummEditor.Structures.DataFile
             Name = string.Empty;
             VerbEntries = new List<VerbEntry>();
             VerbBlockOffset = -1;
+            VerbEntryBase = -1;
             VerbCodeOffset = -1;
             ObnaBlockOffset = -1;
             ObnaBodyOffset = -1;
@@ -131,6 +139,7 @@ namespace ScummEditor.Structures.DataFile
                         break;
                     case "VERB":
                         VerbBlockOffset = p;
+                        VerbEntryBase = p; // v5/v6 verb offsets are relative to the VERB tag
                         VerbBlockSize = (int)size;
                         ParseVerbTable(bodyStart, bodyLength);
                         break;
@@ -166,6 +175,7 @@ namespace ScummEditor.Structures.DataFile
             Name = string.Empty;
             VerbEntries = new List<VerbEntry>();
             VerbBlockOffset = -1;
+            VerbEntryBase = 0;
             VerbCodeOffset = -1;
             VerbCodeLength = 0;
             ObnaBlockOffset = -1;
@@ -210,6 +220,9 @@ namespace ScummEditor.Structures.DataFile
             }
 
             int headerLength = (int)HeaderLength;
+
+            // v4 verb offsets are block-relative; the block begins headerLength bytes before RawContent.
+            VerbEntryBase = -headerLength;
 
             // 1-byte name pointer at body+12 (block-relative; 0 means the object has no name).
             NamePointerPos = 12;

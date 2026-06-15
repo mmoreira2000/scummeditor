@@ -48,7 +48,7 @@ namespace ScummEditor.Gui
             var labels = new Dictionary<int, string>();
             foreach (VerbEntry entry in obcd.VerbEntries)
             {
-                int sliceRel = obcd.VerbBlockOffset + entry.Offset - obcd.VerbCodeOffset;
+                int sliceRel = obcd.VerbEntryBase + entry.Offset - obcd.VerbCodeOffset;
                 string name = entry.Id == 0xFF ? "verb_any" : "verb_0x" + entry.Id.ToString("X2");
                 bool inRange = sliceRel >= 0 && sliceRel < obcd.VerbCodeLength;
 
@@ -67,8 +67,16 @@ namespace ScummEditor.Gui
                 var slice = new byte[obcd.VerbCodeLength];
                 Array.Copy(obcd.RawContent, obcd.VerbCodeOffset, slice, 0, obcd.VerbCodeLength);
 
+                // Pick the engine that matches the game's bytecode language (same routing as the
+                // text pipeline in GameTextManager.Disassemble): v4 and v5 are the parameter-bit
+                // language, v6+ is stack-based. v4 has its own opcode deltas (ScummV4Disassembler).
+                int scummVersion = obcd.GameInfo != null ? obcd.GameInfo.ScummVersion : 0;
                 ScummV6Disassembler.Result result;
-                if (obcd.GameInfo != null && obcd.GameInfo.ScummVersion == 5)
+                if (scummVersion == 4)
+                {
+                    result = ScummV4Disassembler.Disassemble(slice, 0, labels);
+                }
+                else if (scummVersion == 5)
                 {
                     result = Scumm5Disassembler.Disassemble(slice, 0, labels);
                 }
