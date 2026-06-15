@@ -36,6 +36,19 @@ namespace ScummEditor.Structures.DataFile
 
         public Charset(BlockBase blockBase) : base(blockBase) { }
 
+        /// <summary>For a standalone charset that has no parent block (the v4 90x.LFL font files).</summary>
+        public Charset(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo) { }
+
+        /// <summary>
+        /// Loads a v4 standalone font file. The whole 90x.LFL file is the charset body (no IFF
+        /// header), so its bytes line up with the same offsets used for the v5/v6 CHAR body.
+        /// </summary>
+        public void LoadFromFileBytes(byte[] fileBytes)
+        {
+            RawContent = fileBytes;
+            Reparse();
+        }
+
         public override string BlockType
         {
             get { return "CHAR"; }
@@ -169,16 +182,5 @@ namespace ScummEditor.Structures.DataFile
         {
             ParseForDisplay();
         }
-    }
-
-    public class Glyph
-    {
-        public int Index { get; set; }
-        public bool Present { get; set; }
-        public int DataOffset { get; set; }
-        public int Width { get; set; }
-        public int Height { get; set; }
-        public int XOffset { get; set; }
-        public int YOffset { get; set; }
     }
 }

@@ -18,9 +18,9 @@ namespace ScummEditor.Gui
     {
         private bool _cancelImport;
         private bool _importing;
-        private ScummV6GameData _scummFile;
+        private ScummGameData _scummFile;
 
-        public void ShowDialog(ScummV6GameData scummFile, Form form)
+        public void ShowDialog(ScummGameData scummFile, Form form)
         {
             _scummFile = scummFile;
             ShowDialog(form);
@@ -63,9 +63,17 @@ namespace ScummEditor.Gui
             }
 
 
-            List<ImageInfo> files = Directory.GetFiles(location, "*.png").Select(f => new ImageInfo(f)).ToList();
-
             Application.DoEvents();
+
+            // SCUMM v4 has no LFLF blocks (its rooms span several LE/FO/LF DISKnn.LEC containers), so
+            // it uses a dedicated batch path instead of the v5/v6 walk below.
+            if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 4)
+            {
+                ImportV4(location);
+                return;
+            }
+
+            List<ImageInfo> files = Directory.GetFiles(location, "*.png").Select(f => new ImageInfo(f)).ToList();
 
             List<DiskBlock> diskBlocks = _scummFile.DataFile.GetLFLFs();
 
@@ -141,6 +149,39 @@ namespace ScummEditor.Gui
             Close();
         }
 
+        /// <summary>Batch-imports every PNG back into a v4 game (backgrounds, objects, z-planes, costume frames).</summary>
+        private void ImportV4(string location)
+        {
+            int pngCount = Directory.GetFiles(location, "*.png").Length;
+            Progress.Maximum = Math.Max(1, pngCount);
+            Progress.Value = 0;
+            Progress.Visible = true;
+            FilesFound.Text = pngCount.ToString();
+
+            ScummV4GraphicsBatch.ImportReport report = ScummV4GraphicsBatch.Import(_scummFile, location, (done, total) =>
+            {
+                Progress.Value = Math.Min(done, Progress.Maximum);
+                FilesImported.Text = done.ToString();
+                Application.DoEvents();
+            });
+
+            string message = string.Format("{0} of {1} images imported.", report.Imported, report.Found);
+            if (report.Errors.Count > 0)
+            {
+                message += Environment.NewLine + Environment.NewLine + "Issues:" + Environment.NewLine
+                    + string.Join(Environment.NewLine, report.Errors.Take(15));
+                if (report.Errors.Count > 15)
+                {
+                    message += Environment.NewLine + string.Format("... and {0} more.", report.Errors.Count - 15);
+                }
+            }
+            MessageBox.Show(message, "Import",
+                MessageBoxButtons.OK, report.Errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+
+            DialogResult = DialogResult.OK;
+            Close();
+        }
+
         private void Cancel_Click(object sender, EventArgs e)
         {
             DialogResult = DialogResult.Cancel;
@@ -149,94 +190,4 @@ namespace ScummEditor.Gui
 
     }
 
-    public class ImageInfo
-    {
-        public string Filename { get; private set; }
-        public ImageType ImageType { get; private set; }
-
-        public int RoomIndex { get; private set; }
-        public int ZPlaneIndex { get; private set; }
-
-        public int ObjectIndex { get; private set; }
-        public int ImageIndex { get; private set; }
-
-        public int CostumeIndex { get; private set; }
-        public int FrameIndex { get; private set; }
-
-        public ImageInfo(string fileName)
-        {
-            Filename = fileName;
-
-            RoomIndex = -1;
-            ZPlaneIndex = -1;
-            ObjectIndex = -1;
-            ImageIndex = -1;
-            CostumeIndex = -1;
-            FrameIndex = -1;
-            ImageType = ImageType.Unknown;
-
-            Parse();
-        }
-
-        private void Parse()
-        {
-            string[] fileParts = Filename.Split(' ');
-            foreach (var filePart in fileParts)
-            {
-                string pName = Path.GetFileNameWithoutExtension(filePart);
-                var pairValues = pName.Split('#');
-                switch (pairValues[0])
-                {
-                    case "Room":
-                        RoomIndex = int.Parse(pairValues[1]);
-                        break;
-                    case "Costume":
-                        CostumeIndex = int.Parse(pairValues[1]);
-                        break;
-                    case "FrameIndex":
-                        FrameIndex = int.Parse(pairValues[1]);
-                        break;
-                    case "Obj":
-                        ObjectIndex = int.Parse(pairValues[1]);
-                        break;
-                    case "Img":
-                        ImageIndex = int.Parse(pairValues[1]);
-                        break;
-                    case "ZP":
-                        ZPlaneIndex = int.Parse(pairValues[1]);
-                        break;
-                }
-            }
-
-            //Determine the ImageType
-            if (RoomIndex < 0) return;
-
-            if (CostumeIndex >= 0)
-            {
-                ImageType = ImageType.Costume;
-            }
-            else if (ObjectIndex >= 0)
-            {
-                if (ZPlaneIndex >= 0)
-                {
-                    ImageType = ImageType.ObjectsZPlane;
-                }
-                else
-                {
-                    ImageType = ImageType.Object;
-                }
-            }
-            else
-            {
-                if (ZPlaneIndex >= 0)
-                {
-                    ImageType = ImageType.ZPlane;
-                }
-                else
-                {
-                    ImageType = ImageType.Background;
-                }
-            }
-        }
-    }
 }

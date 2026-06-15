@@ -202,7 +202,7 @@ namespace ScummEditor.Encoders
         // ---------------------------------------------------------------------
 
         /// <summary>Charsets of the game in tree (file) order - the index defines the file names.</summary>
-        public static List<Charset> CollectCharsets(ScummV6DataFile dataFile)
+        public static List<Charset> CollectCharsets(ScummV5V6DataFile dataFile)
         {
             var result = new List<Charset>();
             Collect(dataFile, result);
@@ -216,10 +216,15 @@ namespace ScummEditor.Encoders
             foreach (BlockBase child in block.Childrens) Collect(child, result);
         }
 
-        /// <summary>Exports every charset as charset_N.png + charset_N.guide.png into a folder.</summary>
-        public static string ExportAll(ScummV6DataFile dataFile, string folder)
+        /// <summary>Exports the charsets embedded in the data file (v5/v6).</summary>
+        public static string ExportAll(ScummV5V6DataFile dataFile, string folder)
         {
-            List<Charset> charsets = CollectCharsets(dataFile);
+            return ExportAll(CollectCharsets(dataFile), folder);
+        }
+
+        /// <summary>Exports every charset as charset_N.png + charset_N.guide.png into a folder.</summary>
+        public static string ExportAll(List<Charset> charsets, string folder)
+        {
             for (int i = 0; i < charsets.Count; i++)
             {
                 ExportPng(charsets[i],
@@ -231,10 +236,15 @@ namespace ScummEditor.Encoders
                 + ".png (+ the .guide.png reference images).";
         }
 
-        /// <summary>Imports every charset_N.png found in the folder back into the game's charsets.</summary>
-        public static string ImportAll(ScummV6DataFile dataFile, string folder)
+        /// <summary>Imports the charsets embedded in the data file (v5/v6).</summary>
+        public static string ImportAll(ScummV5V6DataFile dataFile, string folder)
         {
-            List<Charset> charsets = CollectCharsets(dataFile);
+            return ImportAll(CollectCharsets(dataFile), folder);
+        }
+
+        /// <summary>Imports every charset_N.png found in the folder back into the given charsets (same order as export).</summary>
+        public static string ImportAll(List<Charset> charsets, string folder)
+        {
             var report = new StringBuilder();
             int imported = 0, missing = 0, failed = 0;
 

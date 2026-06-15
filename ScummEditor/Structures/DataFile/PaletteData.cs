@@ -21,6 +21,12 @@ namespace ScummEditor.Structures.DataFile
         public Color[] Colors { get; set; }
         private readonly string _blockType;
 
+        /// <summary>
+        /// The v4 PA block has a 2-byte prefix (a small index/count marker) before the 256 RGB
+        /// triples. v5/v6 CLUT/APAL have no such prefix. Kept verbatim for byte-exact save.
+        /// </summary>
+        public byte[] V4Prefix { get; set; }
+
         public override string BlockType
         {
             get { return _blockType; }
@@ -30,11 +36,20 @@ namespace ScummEditor.Structures.DataFile
         {
             base.CalculateBlockSize();
             BlockSize += 3 * (uint)Colors.Length;
+            if (V4Prefix != null)
+            {
+                BlockSize += (uint)V4Prefix.Length;
+            }
         }
 
         public override void LoadFromBinaryReader(System.IO.Stream binaryReader)
         {
             base.LoadFromBinaryReader(binaryReader);
+
+            if (IsSmallHeader)
+            {
+                V4Prefix = binaryReader.ReadBytes(2);
+            }
 
             Colors = new Color[256];
             for (int i = 0; i < Colors.Length; i++)
@@ -50,6 +65,11 @@ namespace ScummEditor.Structures.DataFile
         public override void SaveToBinaryWriter(System.IO.Stream binaryWriter)
         {
             base.SaveToBinaryWriter(binaryWriter);
+
+            if (V4Prefix != null)
+            {
+                binaryWriter.WriteBytes(V4Prefix);
+            }
 
             foreach (Color color in Colors)
             {

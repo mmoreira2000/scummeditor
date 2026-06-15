@@ -16,6 +16,13 @@ namespace ScummEditor.Structures.DataFile
             _blockType = blockType;
         }
 
+        /// <summary>For top-level blocks that have no parent (e.g. the v4 index blocks).</summary>
+        public NotImplementedDataBlock(BlockBase blockBase, string blockType, GameInfo gameInfo)
+            : base(blockBase, gameInfo)
+        {
+            _blockType = blockType;
+        }
+
         public override string BlockType
         {
             get { return _blockType; }
@@ -32,10 +39,10 @@ namespace ScummEditor.Structures.DataFile
         public override void LoadFromBinaryReader(System.IO.Stream binaryReader)
         {
             base.LoadFromBinaryReader(binaryReader);
-            Contents = binaryReader.ReadBytes((int)(BlockSize - 8));
+            Contents = binaryReader.ReadBytes((int)(BlockSize - HeaderLength));
 
-            //Hack for the Monkey Island 2 talkie edition.
-            if (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "021_")
+            //Hack for the Monkey Island 2 talkie edition (v5/v6 only).
+            if (!IsSmallHeader && BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "021_")
             {
                 var lstBytes = new List<byte>(Contents);
                 lstBytes.AddRange(binaryReader.ReadBytes(8));

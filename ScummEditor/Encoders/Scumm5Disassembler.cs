@@ -25,8 +25,8 @@ namespace ScummEditor.Encoders
         private readonly List<Line> _lines = new List<Line>();
         private readonly HashSet<int> _jumpTargets = new HashSet<int>();
         private readonly List<int> _unknown = new List<int>();
-        private readonly List<Scumm6Disassembler.StringRef> _strings = new List<Scumm6Disassembler.StringRef>();
-        private readonly List<Scumm6Disassembler.JumpRef> _jumps = new List<Scumm6Disassembler.JumpRef>();
+        private readonly List<ScummV6Disassembler.StringRef> _strings = new List<ScummV6Disassembler.StringRef>();
+        private readonly List<ScummV6Disassembler.JumpRef> _jumps = new List<ScummV6Disassembler.JumpRef>();
         private IDictionary<int, string> _namedLabels;
         private bool _stopped;
 
@@ -36,19 +36,24 @@ namespace ScummEditor.Encoders
             public string Text;
         }
 
-        public static Scumm6Disassembler.Result Disassemble(byte[] code, int startOffset)
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset)
         {
             return Disassemble(code, startOffset, null);
         }
 
-        public static Scumm6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
         {
-            var d = new Scumm5Disassembler();
-            d._namedLabels = namedLabels;
-            return d.Run(code, startOffset);
+            return new Scumm5Disassembler().RunDisassembly(code, startOffset, namedLabels);
         }
 
-        private Scumm6Disassembler.Result Run(byte[] code, int startOffset)
+        /// <summary>Runs the disassembly on a fresh instance (entry point for subclasses, e.g. ScummV4Disassembler).</summary>
+        protected ScummV6Disassembler.Result RunDisassembly(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
+        {
+            _namedLabels = namedLabels;
+            return Run(code, startOffset);
+        }
+
+        private ScummV6Disassembler.Result Run(byte[] code, int startOffset)
         {
             _code = code;
             _pos = startOffset;
@@ -69,7 +74,7 @@ namespace ScummEditor.Encoders
                 }
             }
 
-            return new Scumm6Disassembler.Result
+            return new ScummV6Disassembler.Result
             {
                 Listing = Render(),
                 DecodedToEnd = !_stopped && _pos >= _code.Length,
@@ -84,7 +89,7 @@ namespace ScummEditor.Encoders
         // Reading helpers
         // -------------------------------------------------------------------------
 
-        private byte ReadByte() { return _code[_pos++]; }
+        protected byte ReadByte() { return _code[_pos++]; }
 
         private int ReadWord()
         {
@@ -98,13 +103,13 @@ namespace ScummEditor.Encoders
             return (short)ReadWord();
         }
 
-        private void Emit(int offset, string text)
+        protected void Emit(int offset, string text)
         {
             _lines.Add(new Line { Offset = offset, Text = text });
         }
 
         /// <summary>Variable name for a 16-bit variable id (Global / Local / Bit + 0x2000 indexing).</summary>
-        private string ReadVarRef()
+        protected string ReadVarRef()
         {
             int var = ReadWord();
 
@@ -139,24 +144,24 @@ namespace ScummEditor.Encoders
         }
 
         /// <summary>A byte parameter: variable when the given bit is set on the opcode, literal otherwise.</summary>
-        private string GetVarOrDirectByte(int paramBit)
+        protected string GetVarOrDirectByte(int paramBit)
         {
             return GetVarOrDirectByteAux(_op, paramBit);
         }
 
-        private string GetVarOrDirectByteAux(byte opcodeBits, int paramBit)
+        protected string GetVarOrDirectByteAux(byte opcodeBits, int paramBit)
         {
             if ((opcodeBits & paramBit) != 0) return ReadVarRef();
             return ReadByte().ToString();
         }
 
         /// <summary>A (signed) word parameter: variable when the given bit is set on the opcode.</summary>
-        private string GetVarOrDirectWord(int paramBit)
+        protected string GetVarOrDirectWord(int paramBit)
         {
             return GetVarOrDirectWordAux(_op, paramBit);
         }
 
-        private string GetVarOrDirectWordAux(byte opcodeBits, int paramBit)
+        protected string GetVarOrDirectWordAux(byte opcodeBits, int paramBit)
         {
             if ((opcodeBits & paramBit) != 0) return ReadVarRef();
             return ReadSignedWord().ToString();
@@ -182,7 +187,7 @@ namespace ScummEditor.Encoders
             int rel = ReadSignedWord();
             int target = _pos + rel;
             _jumpTargets.Add(target);
-            _jumps.Add(new Scumm6Disassembler.JumpRef { OperandOffset = operandOffset, Target = target });
+            _jumps.Add(new ScummV6Disassembler.JumpRef { OperandOffset = operandOffset, Target = target });
             return "L" + target.ToString("X4");
         }
 
@@ -190,9 +195,9 @@ namespace ScummEditor.Encoders
         /// Conditional: the engine jumps when the condition is FALSE, so the listing shows
         /// "if (negated condition) goto label;".
         /// </summary>
-        private void CondJump(int offset, string conditionWhenBodyRuns)
+        protected void CondJump(int offset, string conditionWhenBodyRuns)
         {
-            string negated = Scumm6Disassembler.NegateCondition(conditionWhenBodyRuns);
+            string negated = ScummV6Disassembler.NegateCondition(conditionWhenBodyRuns);
             Emit(offset, "if (" + negated + ") goto " + Jump(offset) + ";");
         }
 
@@ -206,13 +211,13 @@ namespace ScummEditor.Encoders
                 _nestedResult = expr;
                 return;
             }
-            Emit(offset, target + " = " + Scumm6Disassembler.StripParens(expr) + ";");
+            Emit(offset, target + " = " + ScummV6Disassembler.StripParens(expr) + ";");
         }
 
         // Strings use the same friendly tokens as the v6 listings and the text export.
         private static readonly GameTextCodec ListingCodec = GameTextCodec.Default();
 
-        private string ReadString(string kind)
+        protected string ReadString(string kind)
         {
             int start = _pos;
             bool terminated = false;
@@ -221,7 +226,12 @@ namespace ScummEditor.Encoders
                 byte b = ReadByte();
                 if (b == 0) { terminated = true; break; }
 
-                if (b == 0xFF || b == 0xFE)
+                // SCUMM string escape: ONLY 0xFF (mirrors ScummEngine::resStrLen / convertMessageToString
+                // for every version we handle - v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument,
+                // every other code is followed by a 16-bit word. 0xFE is NOT an escape - it is an ordinary
+                // content byte (the Japanese CJK newline glyph, and a legal SJIS trail byte), so treating
+                // it as one desynced Japanese (SJIS) strings and the rest of the script after them.
+                if (b == 0xFF)
                 {
                     byte code = ReadByte();
                     if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
@@ -229,7 +239,7 @@ namespace ScummEditor.Encoders
             }
 
             int contentLength = _pos - start - (terminated ? 1 : 0);
-            _strings.Add(new Scumm6Disassembler.StringRef
+            _strings.Add(new ScummV6Disassembler.StringRef
             {
                 Offset = start,
                 Length = _pos - start,
@@ -269,7 +279,19 @@ namespace ScummEditor.Encoders
         // Opcode dispatch (table mirrors ScummVM script_v5.cpp)
         // -------------------------------------------------------------------------
 
-        private void Decode(byte op, int offset)
+        /// <summary>
+        /// True for the SCUMM v4 small-header variant. ScummVM's v5 opcode handlers branch on
+        /// GF_SMALL_HEADER for a few operand layouts: the actorOps sub-op numbering and SO_ACTOR_SCALE,
+        /// o5_drawObject (obj + x + y instead of a sub-op), and o5_roomOps SO_ROOM_COLOR/SO_ROOM_PALETTE.
+        /// Defaults false (v5/v6 decode unchanged); ScummV4Disassembler overrides it to true.
+        /// </summary>
+        protected virtual bool SmallHeader { get { return false; } }
+
+        // v4 remaps actorOps sub-opcodes (1-based) to the v5 numbering (ScummVM o5_actorOps convertTable).
+        private static readonly byte[] ActorSubOpConvertV4 =
+            { 1, 0, 0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 20 };
+
+        protected virtual void Decode(byte op, int offset)
         {
             switch (op)
             {
@@ -841,9 +863,17 @@ namespace ScummEditor.Encoders
             Emit(offset, "doSentence(" + verb + ", " + objA + ", " + objB + ");");
         }
 
-        private void DrawObject(int offset)
+        protected void DrawObject(int offset)
         {
             string obj = GetVarOrDirectWord(0x80);
+            if (SmallHeader)
+            {
+                // v4 drawObject is obj + x + y (three words), with no sub-opcode byte.
+                string xpos = GetVarOrDirectWord(0x40);
+                string ypos = GetVarOrDirectWord(0x20);
+                Emit(offset, "drawObject(" + obj + ", at: " + xpos + ", " + ypos + ");");
+                return;
+            }
             byte sub = ReadByte();
             switch (sub & 0x1F)
             {
@@ -948,7 +978,7 @@ namespace ScummEditor.Encoders
             }
 
             string expr = stack.Count > 0 ? stack[stack.Count - 1] : "<empty>";
-            Emit(offset, result + " = " + Scumm6Disassembler.StripParens(expr) + ";");
+            Emit(offset, result + " = " + ScummV6Disassembler.StripParens(expr) + ";");
         }
 
         private static void ExpressionOp(List<string> stack, string op)
@@ -973,6 +1003,12 @@ namespace ScummEditor.Encoders
             {
                 byte sub = ReadByte();
                 if (sub == 0xFF) break;
+                if (SmallHeader) // v4 numbers the sub-opcodes differently; remap to the v5 table
+                {
+                    int low = sub & 0x1F;
+                    if (low >= 1 && low <= ActorSubOpConvertV4.Length)
+                        sub = (byte)((sub & 0xE0) | ActorSubOpConvertV4[low - 1]);
+                }
 
                 switch (sub & 0x1F)
                 {
@@ -992,7 +1028,11 @@ namespace ScummEditor.Encoders
                     case 13: parts.Add("setName(" + ReadString("actorName") + ")"); break;
                     case 14: parts.Add("initAnim(" + GetVarOrDirectByteAux(sub, 0x80) + ")"); break;
                     case 16: parts.Add("width(" + GetVarOrDirectByteAux(sub, 0x80) + ")"); break;
-                    case 17: parts.Add("scale(" + GetVarOrDirectByteAux(sub, 0x80) + ", " + GetVarOrDirectByteAux(sub, 0x40) + ")"); break;
+                    case 17:
+                        // v4 SO_ACTOR_SCALE takes a single byte (used for both axes); v5 takes two.
+                        if (SmallHeader) parts.Add("scale(" + GetVarOrDirectByteAux(sub, 0x80) + ")");
+                        else parts.Add("scale(" + GetVarOrDirectByteAux(sub, 0x80) + ", " + GetVarOrDirectByteAux(sub, 0x40) + ")");
+                        break;
                     case 18: parts.Add("neverZClip()"); break;
                     case 19: parts.Add("setZClip(" + GetVarOrDirectByteAux(sub, 0x80) + ")"); break;
                     case 20: parts.Add("ignoreBoxes()"); break;
@@ -1246,6 +1286,16 @@ namespace ScummEditor.Encoders
                     Emit(offset, "roomOps.roomScroll(" + a + ", " + b + ");");
                     break;
                 }
+                case 2:
+                    // v4 SO_ROOM_COLOR: two words (value, slot). Not a valid v5 sub-op, so v5 falls through.
+                    if (SmallHeader)
+                    {
+                        string a = GetVarOrDirectWordAux(sub, 0x80);
+                        string b = GetVarOrDirectWordAux(sub, 0x40);
+                        Emit(offset, "roomOps.roomColor(" + a + ", " + b + ");");
+                        break;
+                    }
+                    goto default;
                 case 3:
                 {
                     string a = GetVarOrDirectWordAux(sub, 0x80);
@@ -1255,6 +1305,14 @@ namespace ScummEditor.Encoders
                 }
                 case 4:
                 {
+                    if (SmallHeader)
+                    {
+                        // v4 SO_ROOM_PALETTE: two words (value, slot); no per-channel RGB or index byte.
+                        string value = GetVarOrDirectWordAux(sub, 0x80);
+                        string slot = GetVarOrDirectWordAux(sub, 0x40);
+                        Emit(offset, "roomOps.roomPalette(" + value + ", " + slot + ");");
+                        break;
+                    }
                     string r = GetVarOrDirectWordAux(sub, 0x80);
                     string g = GetVarOrDirectWordAux(sub, 0x40);
                     string b = GetVarOrDirectWordAux(sub, 0x20);

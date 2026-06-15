@@ -15,9 +15,10 @@
         public ushort Height { get; set; }
         public ushort NumObjects { get; set; }
 
+        // v4 calls this block "HD"; v5/v6 call it "RMHD". The body (width/height/numObjects) is the same.
         public override string BlockType
         {
-            get { return "RMHD"; }
+            get { return IsSmallHeader ? "HD" : "RMHD"; }
         }
 
         public override void CalculateBlockSize()

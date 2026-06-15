@@ -35,9 +35,9 @@ namespace ScummEditor.Gui
             {
                 ShowDirectoryOfArrays((DirectoryOfArrays)blockBase);
             }
-            else if (blockBase is RoomNamesV6)
+            else if (blockBase is RoomNamesV5V6)
             {
-                ShowRoomNames((RoomNamesV6)blockBase);
+                ShowRoomNames((RoomNamesV5V6)blockBase);
             }
             else
             {
@@ -105,7 +105,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void ShowRoomNames(RoomNamesV6 block)
+        private void ShowRoomNames(RoomNamesV5V6 block)
         {
             if (block.Rooms.Count == 0)
             {

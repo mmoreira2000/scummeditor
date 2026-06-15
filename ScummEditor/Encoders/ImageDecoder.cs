@@ -10,7 +10,7 @@ namespace ScummEditor.Encoders
         private ushort _width;
         private ushort _height;
         private byte _transparency;
-        private PaletteData _pallete;
+        private Color[] _paletteColors;
         private List<StripData> _strips;
 
         private Bitmap _resultBitmap;
@@ -41,12 +41,12 @@ namespace ScummEditor.Encoders
 
             if (PaletteIndex == 0)
             {
-                _pallete = roomBlock.GetDefaultPalette();
+                _paletteColors = roomBlock.GetDefaultPalette().Colors;
 
             }
             else
             {
-                _pallete = roomBlock.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
+                _paletteColors = roomBlock.GetPALS().GetWRAP().GetAPALs()[PaletteIndex].Colors;
             }
 
             Decode();
@@ -65,12 +65,41 @@ namespace ScummEditor.Encoders
 
             if (PaletteIndex == 0)
             {
-                _pallete = roomBlock.GetDefaultPalette();
+                _paletteColors = roomBlock.GetDefaultPalette().Colors;
 
             }
             else
             {
-                _pallete = roomBlock.GetPALS().GetWRAP().GetAPALs()[PaletteIndex];
+                _paletteColors = roomBlock.GetPALS().GetWRAP().GetAPALs()[PaletteIndex].Colors;
+            }
+
+            Decode();
+
+            return _resultBitmap;
+        }
+
+        /// <summary>
+        /// Decodes a list of strips directly, without the v5/v6 room-block navigation
+        /// (RMHD/TRNS/PALS/RMIM). This is the shared core used by the SCUMM v4 decoder, whose
+        /// rooms have no such sub-blocks: the caller supplies the dimensions, the palette colors
+        /// and the strips (each carrying its own codec id and bitstream).
+        /// </summary>
+        /// <param name="transparentIndex">Palette entry to treat as transparent, or -1 for none.</param>
+        public Bitmap Decode(List<StripData> strips, int width, int height, Color[] paletteColors, int transparentIndex)
+        {
+            _width = (ushort)width;
+            _height = (ushort)height;
+            _strips = strips;
+            _paletteColors = paletteColors;
+
+            if (transparentIndex >= 0)
+            {
+                _transparency = (byte)transparentIndex;
+                UseTransparentColor = true;
+            }
+            else
+            {
+                UseTransparentColor = false;
             }
 
             Decode();
@@ -114,7 +143,7 @@ namespace ScummEditor.Encoders
                 }
             }
 
-            _resultBitmap = IndexedImageHelper.FromIndexMatrix(_indexMatrix, _pallete.Colors,
+            _resultBitmap = IndexedImageHelper.FromIndexMatrix(_indexMatrix, _paletteColors,
                 UseTransparentColor ? _transparency : -1);
         }
 
@@ -186,7 +215,7 @@ namespace ScummEditor.Encoders
         {
             if (!UsedIndexes.Contains(_paletteIndex)) UsedIndexes.Add(_paletteIndex);
 
-            _currentColor = _pallete.Colors[_paletteIndex];
+            _currentColor = _paletteColors[_paletteIndex];
             if ((_paletteIndex == _transparency) && UseTransparentColor)
             {
                 _currentColor = Color.FromArgb(0, _currentColor.R, _currentColor.G, _currentColor.B);

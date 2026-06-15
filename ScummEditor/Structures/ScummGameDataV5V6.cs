@@ -1,95 +1,29 @@
-﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using ScummEditor.Exceptions;
 using ScummEditor.Structures.DataFile;
 using ScummEditor.Structures.IndexFile;
-using System.Diagnostics;
 
 namespace ScummEditor.Structures
 {
-    public enum ScummGame
+    /// <summary>
+    /// Game data for the SCUMM v5/v6 engines (IFF "big header" container, a single data file with a
+    /// directory-based index). The index entries are linked to their data blocks by offset on load
+    /// and the directory/LOFF offsets are recomputed from the block positions on save.
+    /// </summary>
+    public class ScummGameDataV5V6 : ScummGameData
     {
-        None = 0,
-        SamAndMax = 1,
-        DayOfTheTentacle = 2,
-        FateOfAtlantis = 3,
-        MonkeyIsland1VGA= 4,
-        MonkeyIsland2 = 5,
-        MonkeyIsland1VGASpeech = 6
-    }
-
-    public class GameInfo
-    {
-        public int ScummVersion { get; set; }
-        public ScummGame LoadedGame { get; set; }
-        public bool Xored { get; set; }
-        public int XorKey { get; set; }
-
-        /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
-        public bool IsTalkie { get; set; }
-
-        /// <summary>
-        /// True when the release ships ripped CD audio (CDDA.SOU) instead of a speech file -
-        /// e.g. the Monkey Island 1 CD edition, whose music lives on CD audio tracks.
-        /// </summary>
-        public bool HasCdAudio { get; set; }
-
-        /// <summary>
-        /// Path of the speech/effects container (MONSTER.SOU or the FM Towns-style
-        /// "game".SOU) when the release ships one, regardless of its size; null otherwise.
-        /// </summary>
-        public string SpeechFilePath { get; set; }
-
-        /// <summary>Path of the ripped CD audio container (CDDA.SOU) when present; null otherwise.</summary>
-        public string CdAudioFilePath { get; set; }
-
-        public string IndexFile { get; set; }
-        public string DataFile { get; set; }
-    }
-
-    public class ScummV6GameData
-    {
-        public GameInfo LoadedGameInfo { get; set; }
-
-        public ScummV6IndexFile IndexFile { get; set; }
-        public ScummV6DataFile DataFile { get; set; }
-
-        public void LoadDataFromDisc(string filePath)
+        protected override ScummV5V6DataFile CreateDataFile()
         {
-            LoadedGameInfo = Functions.FindScummGame(filePath);
-            LoadDetectedGame();
+            return new ScummV5V6DataFile(null, LoadedGameInfo);
         }
 
-        /// <summary>Loads a game already detected by Functions.FindScummGamesInFolder.</summary>
-        public void LoadFromGameInfo(GameInfo gameInfo)
+        protected override ScummV5V6IndexFile CreateIndexFile()
         {
-            LoadedGameInfo = gameInfo;
-            LoadDetectedGame();
+            return new ScummV5V6IndexFile(LoadedGameInfo);
         }
 
-        private void LoadDetectedGame()
-        {
-            if (LoadedGameInfo == null || LoadedGameInfo.LoadedGame == ScummGame.None)
-            {
-                return;
-            }
-
-            var fileStream = new XoredFileStream(LoadedGameInfo.XorKey, LoadedGameInfo.IndexFile, FileMode.Open, FileAccess.Read);
-
-            LoadIndexFromBinaryReader(fileStream);
-            fileStream.Close();
-
-            fileStream = new XoredFileStream(LoadedGameInfo.XorKey, LoadedGameInfo.DataFile, FileMode.Open, FileAccess.Read);
-
-            LoadDataFromBinaryReader(fileStream);
-            fileStream.Close();
-
-            LinkDataAndIndexFile();
-        }
-
-        private void LinkDataAndIndexFile()
+        protected override void LinkDataAndIndexFile()
         {
             var diskBlocks = DataFile.GetLFLFs();
             foreach (DiskBlock diskBlock in diskBlocks)
@@ -129,51 +63,8 @@ namespace ScummEditor.Structures
             }
         }
 
-        public void SaveDataToDisk()
+        protected override void FixUpIndexOffsets()
         {
-            PostProcessChanges();
-
-            var fileIndex = Path.Combine(LoadedGameInfo.IndexFile);
-            var fileData = Path.Combine(LoadedGameInfo.DataFile);
-
-            var x2 = new XoredFileStream(LoadedGameInfo.XorKey, fileIndex, FileMode.Create, FileAccess.Write);
-            SaveIndexToBinaryWriter(x2);
-            x2.Flush();
-            x2.Close();
-
-            x2 = new XoredFileStream(LoadedGameInfo.XorKey, fileData, FileMode.Create, FileAccess.Write);
-            SaveDataToBinaryWriter(x2);
-            x2.Flush();
-            x2.Close();
-        }
-
-        public void LoadDataFromBinaryReader(Stream binaryReader)
-        {
-            DataFile = new ScummV6DataFile(null, LoadedGameInfo);
-            DataFile.LoadFromBinaryReader(binaryReader);
-        }
-
-        public void SaveDataToBinaryWriter(Stream binaryWriter)
-        {
-            DataFile.SaveToBinaryWriter(binaryWriter);
-        }
-
-        public void LoadIndexFromBinaryReader(Stream binaryReader)
-        {
-            IndexFile = new ScummV6IndexFile(LoadedGameInfo);
-            IndexFile.LoadFromBinaryReader(binaryReader);
-        }
-
-        public void SaveIndexToBinaryWriter(Stream binaryWriter)
-        {
-            IndexFile.SaveToBinaryWriter(binaryWriter);
-        }
-
-        public void PostProcessChanges()
-        {
-            DataFile.CalculateBlockSize();
-            DataFile.CalculateOffsets();
-
             RoomOffsetTable LOFF = DataFile.GetLOFF();
             List<DiskBlock> diskBlocks = DataFile.GetLFLFs();
 
@@ -218,7 +109,6 @@ namespace ScummEditor.Structures
                     matchChars.ForEach(r => r.Offset = (uint)(character.BlockOffSet - roomOffset));
                 }
             }
-
         }
 
         private DiskBlock[] OrderDiskBlocks()

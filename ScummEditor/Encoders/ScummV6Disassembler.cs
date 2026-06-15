@@ -14,7 +14,7 @@ namespace ScummEditor.Encoders
     /// labels (not reconstructed if/while), and a few rare opcodes may be incomplete. Decoding
     /// stops cleanly at the first unknown opcode so the output never desynchronises into garbage.
     /// </summary>
-    public class Scumm6Disassembler
+    public class ScummV6Disassembler
     {
         public class Result
         {
@@ -66,7 +66,7 @@ namespace ScummEditor.Encoders
         /// <summary>Disassembles with extra named labels rendered at the given offsets (e.g. verb entry points).</summary>
         public static Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
         {
-            var d = new Scumm6Disassembler();
+            var d = new ScummV6Disassembler();
             d._namedLabels = namedLabels;
             return d.Run(code, startOffset);
         }
@@ -277,7 +277,13 @@ namespace ScummEditor.Encoders
                 byte b = ReadByte();
                 if (b == 0) { terminated = true; break; }
 
-                if (b == 0xFF || b == 0xFE)
+                // SCUMM string escape: ONLY 0xFF (mirrors ScummEngine::resStrLen / convertMessageToString
+                // for every version we handle - v4-v7, heversion <= 71). The following code byte selects
+                // the special; codes 1/2/3/8 take no argument, every other code is followed by a 16-bit
+                // word. 0xFE is NOT an escape - it is an ordinary content byte (the Japanese CJK newline
+                // glyph, and a legal SJIS trail byte), so treating it as one desynced Japanese (SJIS)
+                // strings and the rest of the script after them.
+                if (b == 0xFF)
                 {
                     byte code = ReadByte();
                     if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
