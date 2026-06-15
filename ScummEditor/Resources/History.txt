@@ -1,3 +1,23 @@
+2.0.0.0
+-------
+* Full SCUMM v4 support. The Secret of Monkey Island (Floppy EGA and VGA, in English, French, German, Italian and Spanish) and Loom (CD) can now be opened, viewed and edited with the same feature set as the v5/v6 games. v4 games spread their data over several DISKnn.LEC disks with a plaintext 000.LFL index and standalone 90x.LFL fonts; all of it loads and every container round-trips byte-for-byte.
+
+* v4 room and object images. Backgrounds and object images are decoded for both the 256-colour VGA and the 16-colour EGA editions and can be exported as lossless indexed PNGs and imported back. Their z-plane (walk-behind) masks can also be exported and imported as black/white PNGs.
+
+* v4 costumes. Costume frames are decoded and displayed with the correct room palette (VGA or EGA), and can now be exported and imported individually as PNGs from the costume viewer.
+
+* Batch "Export/Import Game Graphics" now works on v4 games (it previously only handled v5/v6 and crashed on a v4 game): a single action exports every background, object, z-plane and costume frame across all disks, and imports them back.
+
+* v4 game text translation. Export/import of object names, verb scripts and inline dialogue, with the verb tables and jump offsets remapped automatically when a translation changes length - the same workflow already available for v5/v6.
+
+* New SCUMM v4 script disassembler. v4 shares the v5 parameter-bit language with a handful of its own opcodes; every script and every object verb script of Monkey Island 1 and Loom decodes 100%, rendered in the same readable C#-like listing.
+
+* All remaining v4 block types are decoded with a viewer (colour cycling, EGA shadow palette, walk boxes, scale slots, local-script/object/sound lists), and the sound blocks (AdLib/Roland) are parsed - nothing is left as a raw "not implemented" block.
+
+* Japanese (SJIS) text now decodes correctly. A string-parsing fix (0xFE is an ordinary character, not an escape code) makes the Japanese editions of Indiana Jones and the Fate of Atlantis and Monkey Island 2 disassemble their scripts and object verb code in full.
+
+* Fixes: object verb code is now disassembled with the correct engine in the object viewer, and object z-plane masks round-trip pixel-perfectly.
+
 1.5.0.0
 -------
 * Speech file viewer. The standalone speech/effects container of the talkie editions (MONSTER.SOU, or the FM Towns-style "game".SOU) now appears as a node in the tree and lists every voice/effect line with its lip-sync timestamp count, sample rate and duration. Each line can be played in the editor and exported to WAV (one entry or all at once). The file is parsed lazily and the audio is read on demand, so the hundreds-of-MB speech files open instantly.
