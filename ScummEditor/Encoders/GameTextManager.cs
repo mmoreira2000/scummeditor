@@ -31,9 +31,15 @@ namespace ScummEditor.Encoders
         private class Source
         {
             public string Id;
-            public ScriptBlock Script;   // script-block source
+            public BlockBase Script;     // script-block source: a ScriptBlock or ScriptBlockV4 (both IScriptBytecode)
             public ObjectCode Obcd;      // OBCD source (verb bytecode, or name when IsName)
             public bool IsName;
+        }
+
+        /// <summary>The script body/code-offset accessor for a script Source (works for v5/v6 and v4).</summary>
+        private static IScriptBytecode Code(Source source)
+        {
+            return (IScriptBytecode)source.Script;
         }
 
         private static List<Source> EnumerateSources(ScummV5V6DataFile dataFile)
@@ -104,6 +110,11 @@ namespace ScummEditor.Encoders
         /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
         private static ScummV6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
         {
+            if (context.GameInfo != null && context.GameInfo.ScummVersion == 4)
+            {
+                // v4 = the v5 parameter-bit language with a few opcode deltas (ScummV4Disassembler).
+                return ScummV4Disassembler.Disassemble(code, start);
+            }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 5)
             {
                 return Scumm5Disassembler.Disassemble(code, start);
@@ -131,8 +142,14 @@ namespace ScummEditor.Encoders
 
         public static List<GameTextEntry> Extract(ScummV5V6DataFile dataFile, GameTextCodec codec)
         {
+            return BuildEntries(EnumerateSources(dataFile), codec);
+        }
+
+        /// <summary>Builds the translatable-text entries from an already-enumerated source list (v4 or v5/v6).</summary>
+        private static List<GameTextEntry> BuildEntries(List<Source> sources, GameTextCodec codec)
+        {
             var entries = new List<GameTextEntry>();
-            foreach (Source source in EnumerateSources(dataFile))
+            foreach (Source source in sources)
             {
                 if (source.IsName)
                 {
@@ -142,9 +159,9 @@ namespace ScummEditor.Encoders
                     continue;
                 }
 
-                byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
-                int start = source.Script != null ? source.Script.CodeOffset : 0;
-                BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
+                byte[] buf = source.Script != null ? Code(source).RawContent : VerbCodeSlice(source.Obcd);
+                int start = source.Script != null ? Code(source).CodeOffset : 0;
+                BlockBase contextBlock = source.Script != null ? source.Script : source.Obcd;
                 ScummV6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 for (int k = 0; k < scan.Strings.Count; k++)
@@ -205,7 +222,12 @@ namespace ScummEditor.Encoders
         public static int ExportToFile(ScummV5V6DataFile dataFile, string path, GameTextCodec codec, string gameLabel)
         {
             List<GameTextEntry> entries = Extract(dataFile, codec);
+            WriteEntriesFile(entries, path, codec, gameLabel);
+            return entries.Count;
+        }
 
+        private static void WriteEntriesFile(List<GameTextEntry> entries, string path, GameTextCodec codec, string gameLabel)
+        {
             var sb = new StringBuilder();
             sb.AppendLine("; ScummEditor game text export v1");
             sb.AppendLine("; game: " + gameLabel);
@@ -233,7 +255,98 @@ namespace ScummEditor.Encoders
             }
 
             File.WriteAllText(path, sb.ToString(), new UTF8Encoding(true));
+        }
+
+        // ---------------------------------------------------------------------
+        // SCUMM v4 entry points (text spans all DISKnn.LEC, so they take the whole game)
+        // ---------------------------------------------------------------------
+
+        public static int ExportToFileV4(ScummGameData game, string path, GameTextCodec codec, string gameLabel)
+        {
+            List<GameTextEntry> entries = BuildEntries(EnumerateSourcesV4(game), codec);
+            WriteEntriesFile(entries, path, codec, gameLabel);
             return entries.Count;
+        }
+
+        public static GameTextImportReport ImportFromFileV4(ScummGameData game, string path)
+        {
+            var report = new GameTextImportReport();
+            GameTextCodec codec;
+            Dictionary<string, string> fileTexts = ParseTextFile(path, report, out codec);
+            if (fileTexts == null) return report;
+
+            List<byte[]> changedBytes = ApplyImport(EnumerateSourcesV4(game), fileTexts, codec, report, true);
+
+            // v4 fonts are standalone 90x.LFL files (not in the data tree), so validate against those.
+            var charsets = new List<Charset>();
+            foreach (FontResource font in game.Fonts)
+                if (font.Charset != null) charsets.Add(font.Charset);
+            ValidateGlyphs(charsets, changedBytes, codec, report);
+            return report;
+        }
+
+        /// <summary>
+        /// Enumerates v4 translatable sources across every DISKnn.LEC. Ids are keyed by room number
+        /// (stable across reloads): SC global scripts at the LF level; LS/EX/EN scripts and OC object
+        /// names + verb code at the RO level.
+        /// </summary>
+        private static List<Source> EnumerateSourcesV4(ScummGameData game)
+        {
+            var list = new List<Source>();
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                foreach (BlockBase lfBlock in disk.Tree.Childrens)
+                {
+                    var lf = lfBlock as ScummV4DiskBlock;
+                    if (lf == null) continue;
+
+                    string lfId = "LF" + lf.RoomNumber.ToString("D3");
+                    int sc = 0, en = 0, ex = 0;
+
+                    foreach (BlockBase child in lf.Childrens)
+                    {
+                        var globalScript = child as ScriptBlockV4;
+                        if (globalScript != null && globalScript.BlockType == "SC")
+                        {
+                            list.Add(new Source { Id = lfId + ".SC" + (sc++).ToString("D3"), Script = globalScript });
+                            continue;
+                        }
+
+                        var room = child as ScummV4RoomBlock;
+                        if (room == null) continue;
+
+                        var usedLabels = new HashSet<string>(); // a room can repeat an object id
+                        foreach (BlockBase roomChild in room.Childrens)
+                        {
+                            var script = roomChild as ScriptBlockV4;
+                            if (script != null)
+                            {
+                                if (script.BlockType == "EN")
+                                    list.Add(new Source { Id = lfId + ".EN" + (en++).ToString("D3"), Script = script });
+                                else if (script.BlockType == "EX")
+                                    list.Add(new Source { Id = lfId + ".EX" + (ex++).ToString("D3"), Script = script });
+                                else if (script.BlockType == "LS")
+                                    list.Add(new Source { Id = lfId + ".LS" + Math.Max(script.ScriptId, 0).ToString("D3"), Script = script });
+                                continue;
+                            }
+
+                            var obcd = roomChild as ObjectCode;
+                            if (obcd != null && obcd.HasCodeHeader)
+                            {
+                                string obj = "OBJ" + obcd.ObjectId.ToString("D5");
+                                string baseObj = obj;
+                                for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
+
+                                if (obcd.VerbCodeOffset >= 0 && obcd.VerbCodeLength > 0)
+                                    list.Add(new Source { Id = lfId + "." + obj, Obcd = obcd });
+                                if (obcd.ObnaBodyOffset >= 0)
+                                    list.Add(new Source { Id = lfId + "." + obj + ".name", Obcd = obcd, IsName = true });
+                            }
+                        }
+                    }
+                }
+            }
+            return list;
         }
 
         // ---------------------------------------------------------------------
@@ -243,10 +356,23 @@ namespace ScummEditor.Encoders
         public static GameTextImportReport ImportFromFile(ScummV5V6DataFile dataFile, string path)
         {
             var report = new GameTextImportReport();
+            GameTextCodec codec;
+            Dictionary<string, string> fileTexts = ParseTextFile(path, report, out codec);
+            if (fileTexts == null) return report;
 
-            // --- parse the file -------------------------------------------------
+            List<byte[]> changedBytes = ApplyImport(EnumerateSources(dataFile), fileTexts, codec, report, false);
+            ValidateGlyphs(dataFile, changedBytes, codec, report);
+            return report;
+        }
+
+        /// <summary>
+        /// Parses an exported text file into id->text pairs and the charmap codec from its header.
+        /// Returns null (and records the error) when the file has no valid '; charmap:' line.
+        /// </summary>
+        private static Dictionary<string, string> ParseTextFile(string path, GameTextImportReport report, out GameTextCodec codec)
+        {
+            codec = null;
             string[] lines = File.ReadAllLines(path, Encoding.UTF8);
-            GameTextCodec codec = null;
             var fileTexts = new Dictionary<string, string>();
 
             for (int n = 0; n < lines.Length; n++)
@@ -286,14 +412,24 @@ namespace ScummEditor.Encoders
             if (codec == null)
             {
                 report.Errors.Add("the file has no valid '; charmap: ...' header line - the import depends on it to rebuild the character mapping");
-                return report;
+                return null;
             }
+            return fileTexts;
+        }
 
-            // --- walk the game, compare and rebuild -----------------------------
+        /// <summary>
+        /// Walks the enumerated sources, replaces every string whose id is present in the file, rebuilds
+        /// the affected bytecode / object names, and fills the report. Returns the new string byte arrays
+        /// (for glyph validation). <paramref name="isV4"/> selects the v4 OC splicer (flat body, block-
+        /// relative offsets) instead of the v5/v6 sub-block rebuild.
+        /// </summary>
+        private static List<byte[]> ApplyImport(List<Source> sources, Dictionary<string, string> fileTexts,
+                                                GameTextCodec codec, GameTextImportReport report, bool isV4)
+        {
             var matchedIds = new HashSet<string>();
             var changedBytes = new List<byte[]>(); // new string contents, for glyph validation
 
-            foreach (Source source in EnumerateSources(dataFile))
+            foreach (Source source in sources)
             {
                 if (source.IsName)
                 {
@@ -309,7 +445,19 @@ namespace ScummEditor.Encoders
                     int nameLen = ObnaNameLength(obcd);
                     if (SliceEquals(obcd.RawContent, obcd.ObnaBodyOffset, nameLen, newName)) continue;
 
-                    RebuildObjectName(obcd, newName);
+                    if (isV4)
+                    {
+                        string nameError;
+                        if (!ObjectCodeV4TextSplicer.RebuildObjectName(obcd, newName, out nameError))
+                        {
+                            report.Errors.Add(source.Id + ": " + nameError + "; block left unchanged");
+                            continue;
+                        }
+                    }
+                    else
+                    {
+                        RebuildObjectName(obcd, newName);
+                    }
                     report.StringsChanged++;
                     report.BlocksRebuilt++;
                     changedBytes.Add(newName);
@@ -317,9 +465,9 @@ namespace ScummEditor.Encoders
                 }
 
                 // script or VERB bytecode source
-                byte[] buf = source.Script != null ? source.Script.RawContent : VerbCodeSlice(source.Obcd);
-                int start = source.Script != null ? source.Script.CodeOffset : 0;
-                BlockBase contextBlock = source.Script != null ? (BlockBase)source.Script : source.Obcd;
+                byte[] buf = source.Script != null ? Code(source).RawContent : VerbCodeSlice(source.Obcd);
+                int start = source.Script != null ? Code(source).CodeOffset : 0;
+                BlockBase contextBlock = source.Script != null ? source.Script : source.Obcd;
                 ScummV6Disassembler.Result scan = Disassemble(contextBlock, buf, start);
 
                 var replacements = new Dictionary<int, byte[]>();
@@ -360,7 +508,16 @@ namespace ScummEditor.Encoders
 
                 if (source.Script != null)
                 {
-                    source.Script.RawContent = rebuilt;
+                    Code(source).RawContent = rebuilt;
+                }
+                else if (isV4)
+                {
+                    string verbError;
+                    if (!ObjectCodeV4TextSplicer.ReplaceVerbCode(source.Obcd, rebuilt, scan, replacements, out verbError))
+                    {
+                        report.Errors.Add(source.Id + ": " + verbError + "; block left unchanged");
+                        continue;
+                    }
                 }
                 else
                 {
@@ -381,8 +538,7 @@ namespace ScummEditor.Encoders
                 if (!matchedIds.Contains(kv.Key) && report.Warnings.Count < 50)
                     report.Warnings.Add("ID not found in the game: " + kv.Key);
 
-            ValidateGlyphs(dataFile, changedBytes, codec, report);
-            return report;
+            return changedBytes;
         }
 
         private static bool SliceEquals(byte[] buf, int offset, int length, byte[] other)
@@ -619,6 +775,14 @@ namespace ScummEditor.Encoders
         private static void ValidateGlyphs(ScummV5V6DataFile dataFile, List<byte[]> changedContents,
                                            GameTextCodec codec, GameTextImportReport report)
         {
+            var charsets = new List<Charset>();
+            CollectCharsets(dataFile, charsets);
+            ValidateGlyphs(charsets, changedContents, codec, report);
+        }
+
+        private static void ValidateGlyphs(List<Charset> charsets, List<byte[]> changedContents,
+                                           GameTextCodec codec, GameTextImportReport report)
+        {
             var used = new HashSet<byte>();
             foreach (byte[] content in changedContents)
             {
@@ -639,9 +803,6 @@ namespace ScummEditor.Encoders
                 }
             }
             if (used.Count == 0) return;
-
-            var charsets = new List<Charset>();
-            CollectCharsets(dataFile, charsets);
             if (charsets.Count == 0) return;
 
             var sorted = new List<byte>(used);

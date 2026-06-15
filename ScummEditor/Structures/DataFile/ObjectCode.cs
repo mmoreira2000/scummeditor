@@ -69,6 +69,14 @@ namespace ScummEditor.Structures.DataFile
         public int ObnaBodyOffset { get; private set; }
         public int ObnaBodyLength { get; private set; }
 
+        // v4-specific OC layout positions within RawContent (used by the v4 text splicer).
+        /// <summary>RawContent index of the v4 1-byte name pointer (a block-relative offset to the name); -1 if absent.</summary>
+        public int NamePointerPos { get; private set; }
+        /// <summary>RawContent index where the v4 verb table begins; -1 if absent.</summary>
+        public int VerbTablePos { get; private set; }
+        /// <summary>RawContent index just past the v4 verb table's 0x00 terminator; -1 if absent.</summary>
+        public int VerbTableEnd { get; private set; }
+
         public override void CalculateBlockSize()
         {
             base.CalculateBlockSize();
@@ -159,8 +167,14 @@ namespace ScummEditor.Structures.DataFile
             VerbEntries = new List<VerbEntry>();
             VerbBlockOffset = -1;
             VerbCodeOffset = -1;
+            VerbCodeLength = 0;
             ObnaBlockOffset = -1;
             ObnaBodyOffset = -1;
+            ObnaBodyLength = 0;
+            NamePointerPos = -1;
+            VerbTablePos = -1;
+            VerbTableEnd = -1;
+            NumVerbs = 0;
 
             if (RawContent.Length < 12)
             {
@@ -176,6 +190,77 @@ namespace ScummEditor.Structures.DataFile
             // +7 .. +10 : walk_x:16le, walk_y:16le
             ActorDirection = (byte)(RawContent[11] & 0x07);
             Height = (ushort)(RawContent[11] & 0xF8); // already a multiple of 8 (pixels)
+
+            ParseV4NameAndVerbs();
+        }
+
+        /// <summary>
+        /// Parses the v4 object name and verb table that follow the 12-byte header. Both the 1-byte
+        /// name pointer (at body+12) and the verb-table offsets (at body+13: [verbId:8][offset:16le]
+        /// entries, ended by verbId 0x00) are relative to the OC BLOCK start - 6 bytes before
+        /// RawContent (per ScummVM getObjOrActorName / getVerbEntrypoint, GF_SMALL_HEADER) - so a
+        /// RawContent index is the stored offset minus HeaderLength. The name precedes the verb
+        /// bytecode; the verb code is one contiguous stream from the lowest verb offset onward.
+        /// </summary>
+        private void ParseV4NameAndVerbs()
+        {
+            if (RawContent.Length < 13)
+            {
+                return;
+            }
+
+            int headerLength = (int)HeaderLength;
+
+            // 1-byte name pointer at body+12 (block-relative; 0 means the object has no name).
+            NamePointerPos = 12;
+            byte namePointer = RawContent[12];
+            int nameIndex = namePointer - headerLength;
+
+            // Verb table at body+13.
+            VerbTablePos = 13;
+            int p = 13;
+            int minVerbIndex = int.MaxValue;
+            while (p < RawContent.Length)
+            {
+                byte verbId = RawContent[p];
+                if (verbId == 0x00) { p++; break; } // end of table
+                if (p + 3 > RawContent.Length) { p = RawContent.Length; break; }
+
+                int blockOffset = ReadUInt16(p + 1); // block-relative offset to this verb's bytecode
+                VerbEntries.Add(new VerbEntry { Id = verbId, Offset = (ushort)blockOffset });
+
+                int rawIndex = blockOffset - headerLength;
+                if (rawIndex >= 0 && rawIndex < RawContent.Length && rawIndex < minVerbIndex)
+                {
+                    minVerbIndex = rawIndex;
+                }
+                p += 3;
+            }
+            VerbTableEnd = p;
+            NumVerbs = VerbEntries.Count;
+
+            // Object name (null-terminated) at nameIndex.
+            if (namePointer != 0 && nameIndex >= 0 && nameIndex < RawContent.Length)
+            {
+                int term = nameIndex;
+                while (term < RawContent.Length && RawContent[term] != 0x00) term++;
+                ObnaBodyOffset = nameIndex;
+                ObnaBodyLength = term - nameIndex; // name bytes, excluding the 0x00 terminator
+                Name = ReadCString(nameIndex, ObnaBodyLength);
+            }
+
+            // Verb bytecode: one contiguous stream from the lowest verb offset to the block end,
+            // but stopping before the name if the name happens to sit after the verb code.
+            if (minVerbIndex != int.MaxValue)
+            {
+                int verbCodeEnd = RawContent.Length;
+                if (ObnaBodyOffset >= 0 && ObnaBodyOffset >= minVerbIndex)
+                {
+                    verbCodeEnd = ObnaBodyOffset;
+                }
+                VerbCodeOffset = minVerbIndex;
+                VerbCodeLength = verbCodeEnd - minVerbIndex;
+            }
         }
 
         private void ParseCodeHeader(int p, int length)
@@ -256,7 +341,14 @@ namespace ScummEditor.Structures.DataFile
         /// <summary>Re-parses the structural info after RawContent is replaced (text import).</summary>
         public void Reparse()
         {
-            ParseForDisplay();
+            if (IsSmallHeader)
+            {
+                ParseV4CodeHeader();
+            }
+            else
+            {
+                ParseForDisplay();
+            }
         }
     }
 }

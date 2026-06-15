@@ -285,8 +285,10 @@ namespace ScummEditor
 
             try
             {
-                int count = GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec,
-                    Path.GetFileName(scummFile.LoadedGameInfo.DataFile));
+                string gameLabel = Path.GetFileName(scummFile.LoadedGameInfo.DataFile);
+                int count = scummFile.LoadedGameInfo.ScummVersion == 4
+                    ? GameTextManager.ExportToFileV4(scummFile, dlg.FileName, codec, gameLabel)
+                    : GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec, gameLabel);
                 MessageBox.Show(this, count + " texts exported to:\n" + dlg.FileName,
                     "Export game texts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -366,7 +368,9 @@ namespace ScummEditor
 
             try
             {
-                GameTextImportReport report = GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
+                GameTextImportReport report = scummFile.LoadedGameInfo.ScummVersion == 4
+                    ? GameTextManager.ImportFromFileV4(scummFile, dlg.FileName)
+                    : GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
 
                 string message = report.Summary();
                 if (report.HasChanges)
