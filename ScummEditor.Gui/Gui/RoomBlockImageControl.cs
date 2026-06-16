@@ -139,98 +139,21 @@ namespace ScummEditor.Gui
             DecodeImage();
         }
 
+        // Decoding/encoding lives in the engine (ImageResourceCodec); this control only chooses the
+        // resource + compression and shows/saves the Bitmap.
         private Bitmap GenericDecodeImage()
         {
-            if (_imageType == ImageType.Background)
-            {
-                var decoder = new ImageDecoder();
-                decoder.PaletteIndex = PaletteIndex;
-                decoder.UseTransparentColor = DecodeTransparent;
-                return decoder.Decode(_roomBlock);
-            }
-            if (_imageType == ImageType.ZPlane)
-            {
-                var decoder = new ZPlaneDecoder();
-                return decoder.Decode(_roomBlock, _zPlaneIndex);
-            }
-            if (_imageType == ImageType.Object)
-            {
-                if (_roomBlock.GetOBIMs()[_objectIndex].GetIMxx()[_imageIndex].GetSMAP() == null)
-                {
-                    var decoder = new BompImageDecoder();
-                    decoder.PaletteIndex = PaletteIndex;
-                    decoder.UseTransparentColor = DecodeTransparent;
-                    return decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
-                }
-                else
-                {
-                    var decoder = new ImageDecoder();
-                    decoder.PaletteIndex = PaletteIndex;
-                    decoder.UseTransparentColor = DecodeTransparent;
-                    return decoder.Decode(_roomBlock, _objectIndex, _imageIndex);
-                }
-            }
-            if (_imageType == ImageType.ObjectsZPlane)
-            {
-                var decoder = new ZPlaneDecoder();
-                return decoder.Decode(_roomBlock, _objectIndex, _imageIndex, _zPlaneIndex);
-            }
-            if (_imageType == ImageType.Costume)
-            {
-                var decoder = new CostumeImageDecoder();
-                decoder.PaletteIndex = PaletteIndex;
-                decoder.UseTransparentColor = DecodeTransparent;
-                return decoder.Decode(_roomBlock, _costume, _imageIndex);
-            }
-            return null;
+            return ImageResourceCodec.Decode(_roomBlock, _costume, _imageType,
+                _objectIndex, _imageIndex, _zPlaneIndex, PaletteIndex, DecodeTransparent);
         }
 
         private void GenericEncodeImage(Bitmap bitmapToEncode)
         {
             try
             {
-                switch (_imageType)
-                {
-                    case ImageType.Background:
-                        {
-                            var encoder = new ImageEncoder();
-                            encoder.EncodeSettings = (ImageEncoder.EncodeTypeSettings)CompressionMethod.SelectedIndex;
-                            encoder.Encode(_roomBlock, bitmapToEncode);
-                        }
-                        break;
-                    case ImageType.ZPlane:
-                        {
-                            var encoder = new ZPlaneEncoder();
-                            encoder.Encode(_roomBlock, bitmapToEncode, _zPlaneIndex);
-                        }
-                        break;
-                    case ImageType.Object:
-                        if (_roomBlock.GetOBIMs()[_objectIndex].GetIMxx()[_imageIndex].GetSMAP() == null)
-                        {
-                            var encoder = new BompImageEncoder();
-                            encoder.Encode(_roomBlock, _objectIndex, _imageIndex, bitmapToEncode);
-                        }
-                        else
-                        {
-                            var encoder = new ImageEncoder();
-                            encoder.EncodeSettings = (ImageEncoder.EncodeTypeSettings)CompressionMethod.SelectedIndex;
-                            encoder.Encode(_roomBlock, _objectIndex, _imageIndex, bitmapToEncode);
-                        }
-                        break;
-                    case ImageType.ObjectsZPlane:
-                        {
-                            var encoder = new ZPlaneEncoder();
-                            encoder.Encode(_roomBlock, _objectIndex, _imageIndex, bitmapToEncode, _zPlaneIndex);
-                        }
-                        break;
-                    case ImageType.Costume:
-                        {
-                            var encoder = new CostumeImageEncoder();
-                            encoder.Encode(_roomBlock, _costume, _imageIndex, bitmapToEncode);
-                        }
-                        break;
-                }
-
+                ImageResourceCodec.Encode(_roomBlock, _costume, _imageType,
+                    _objectIndex, _imageIndex, _zPlaneIndex, bitmapToEncode,
+                    (ImageEncoder.EncodeTypeSettings)CompressionMethod.SelectedIndex);
             }
             catch (ImageEncodeException ex)
             {

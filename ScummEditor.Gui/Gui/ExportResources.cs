@@ -1,12 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Drawing;
+using System;
 using System.IO;
-using System.Linq;
 using System.Windows.Forms;
 using ScummEditor.Encoders;
 using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
 
 namespace ScummEditor.Gui
 {
@@ -28,7 +24,6 @@ namespace ScummEditor.Gui
             if (!Directory.Exists(ExportLocation.Text)) return;
 
             string location = ExportLocation.Text;
-            int fileCount = 0;
 
             Cursor = Cursors.WaitCursor;
             Cancel.Cursor = Cursors.Default;
@@ -45,183 +40,43 @@ namespace ScummEditor.Gui
 
             Application.DoEvents();
 
-            // SCUMM v4 has no LFLF blocks (its rooms span several LE/FO/LF DISKnn.LEC containers), so
-            // it uses a dedicated batch path instead of the v5/v6 walk below.
+            // The actual export loops live in the engine (ScummV4GraphicsBatch / ScummV5V6GraphicsBatch).
+            // This dialog only collects the options + folder and drives the progress bar. v4 spreads its
+            // rooms over several DISKnn.LEC disks; v5/v6 keep everything in one LFLF data file.
             if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 4)
             {
                 ExportV4(location);
-                return;
-            }
-
-            var diskBlocks = _scummFile.DataFile.GetLFLFs();
-
-            Progress.Maximum = diskBlocks.Count - 1;
-            Progress.Value = 0;
-            Progress.Visible = true;
-
-            FilesExported.Visible = true;
-            FilesExportedLabel.Visible = true;
-
-            // Backgrounds, objects and costumes are always exported as true 8bpp indexed images
-            // whose pixel bytes ARE the original palette indexes. This is the only supported format
-            // because it round-trips losslessly: the index is preserved even when several palette
-            // entries share the same color, so the image still renders correctly under any
-            // alternate palette. (Editing must keep the image indexed; do not convert it to RGB.)
-            var decoder = new ImageDecoder();
-            decoder.UseTransparentColor = ExportWithTransparency.Checked;
-
-            var bompDecoder = new BompImageDecoder();
-            bompDecoder.UseTransparentColor = ExportWithTransparency.Checked;
-
-            var costumeDecoder = new CostumeImageDecoder();
-            costumeDecoder.UseTransparentColor = ExportWithTransparency.Checked;
-
-            var zplaneDecoder = new ZPlaneDecoder();
-
-            // Z-planes are binary masks (no palette), exported as 1bpp black/white images.
-            var convert = new ImageDepthConversor();
-
-
-            for (int i = 0; i < diskBlocks.Count; i++)
-            {
-                if (_cancelExport) break;
-
-                var currentRoom = (RoomBlock)diskBlocks[i].Childrens.Single(r => r.GetType() == typeof(RoomBlock));
-
-                if (ExportBackgrounds.Checked)
-                {
-                    Bitmap background = decoder.Decode(currentRoom);
-                    if (background != null)
-                    {
-                        string backgroundName = Path.Combine(location, string.Format("Room#{0}.png", i));
-                        background.Save(backgroundName, System.Drawing.Imaging.ImageFormat.Png);
-                    }
-                    FilesExported.Text = (++fileCount).ToString();
-                }
-
-                if (ExportBackgroundZPlanes.Checked)
-                {
-                    List<ZPlane> zPlanes = currentRoom.GetRMIM().GetIM00().GetZPlanes();
-
-                    for (int j = 0; j < zPlanes.Count; j++)
-                    {
-                        if (_cancelExport) break;
-
-                        Bitmap zplane = zplaneDecoder.Decode(currentRoom, j);
-                        if (zplane != null)
-                        {
-                            zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
-                            zplane.Save(Path.Combine(location, string.Format("Room#{0} ZP#{1}.png", i, j)), System.Drawing.Imaging.ImageFormat.Png);
-                            FilesExported.Text = (++fileCount).ToString();
-                        }
-                    }
-                }
-
-
-                if (ExportObjects.Checked)
-                {
-                    var OBIMs = currentRoom.GetOBIMs();
-                    for (int j = 0; j < OBIMs.Count; j++)
-                    {
-                        ObjectImage objectImage = OBIMs[j];
-                        List<ImageData> IMxx = objectImage.GetIMxx();
-
-                        for (int k = 0; k < IMxx.Count; k++)
-                        {
-                            if (_cancelExport) break;
-
-                            Bitmap image;
-
-                            if (IMxx[k].GetSMAP() == null)
-                            {
-                                image = bompDecoder.Decode(currentRoom, j, k);
-                            }
-                            else
-                            {
-                                image = decoder.Decode(currentRoom, j, k);
-                            }
-
-                            string objectFilename = Path.Combine(location, string.Format("Room#{0} Obj#{1} Img#{2}.png", i, j, k));
-                            image.Save(objectFilename, System.Drawing.Imaging.ImageFormat.Png);
-
-                            FilesExported.Text = (++fileCount).ToString();
-                        }
-                    }
-                }
-
-                if (ExportObjectsZPlanes.Checked)
-                {
-                    var OBIMs = currentRoom.GetOBIMs();
-                    for (int j = 0; j < OBIMs.Count; j++)
-                    {
-                        ObjectImage objectImage = OBIMs[j];
-                        List<ImageData> IMxx = objectImage.GetIMxx();
-
-                        for (int k = 0; k < IMxx.Count; k++)
-                        {
-                            List<ZPlane> zplanes = IMxx[k].GetZPlanes();
-                            for (int l = 0; l < zplanes.Count; l++)
-                            {
-                                if (_cancelExport) break;
-
-                                Bitmap zplane = zplaneDecoder.Decode(currentRoom, j, k, l);
-
-                                zplane = convert.CopyToBpp(zplane, 1, new Color[2] { Color.Black, Color.White });
-                                zplane.Save(Path.Combine(location, string.Format("Room#{0} Obj#{1} Img#{2} ZP#{3}.png", i, j, k, l)), System.Drawing.Imaging.ImageFormat.Png);
-
-                                FilesExported.Text = (++fileCount).ToString();
-                            }
-                        }
-                    }
-                }
-
-                if (ExportCostumes.Checked)
-                {
-                    DiskBlock currentDisk = diskBlocks[i];
-
-                    List<Costume> costumesList = currentDisk.Childrens.OfType<Costume>().ToList();
-                    for (int j = 0; j < costumesList.Count; j++)
-                    {
-                        Costume costume = costumesList[j];
-                        for (int k = 0; k < costume.Pictures.Count; k++)
-                        {
-                            if (_cancelExport) break;
-
-                            if (costume.Pictures[k].ImageData.Length == 0
-                                || costume.Pictures[k].ImageData.Length == 1 && costume.Pictures[k].ImageData[0] == 0) continue;
-
-                            Bitmap image = costumeDecoder.Decode(currentRoom, costume, k);
-
-                            image.Save(Path.Combine(location, string.Format("Room#{0} Costume#{1} FrameIndex#{2}.png", i, j, k)), System.Drawing.Imaging.ImageFormat.Png);
-                            FilesExported.Text = (++fileCount).ToString();
-                        }
-                    }
-                }
-
-                Progress.Value = i;
-                Application.DoEvents();
-            }
-
-            Progress.Visible = false;
-            _exporting = false;
-            Cursor = Cursors.Default;
-
-            if (_cancelExport)
-            {
-                MessageBox.Show("Export cancelled.");
-
             }
             else
             {
-                MessageBox.Show("All images sucefully exported");
+                ExportV5V6(location);
             }
-            Close();
         }
 
         /// <summary>Batch-exports every v4 image (backgrounds, objects, z-planes, costume frames).</summary>
         private void ExportV4(string location)
         {
-            var options = new ScummV4GraphicsBatch.ExportOptions
+            int roomCount = ScummV4GraphicsBatch.EnumerateRooms(_scummFile).Count;
+            Progress.Maximum = Math.Max(1, roomCount);
+            ShowProgress();
+
+            int exported = ScummV4GraphicsBatch.Export(_scummFile, location, BuildV4Options(), OnExportProgress);
+            FinishExport(exported);
+        }
+
+        /// <summary>Batch-exports every v5/v6 image (backgrounds, objects, z-planes, costume frames).</summary>
+        private void ExportV5V6(string location)
+        {
+            Progress.Maximum = Math.Max(1, _scummFile.DataFile.GetLFLFs().Count);
+            ShowProgress();
+
+            int exported = ScummV5V6GraphicsBatch.Export(_scummFile.DataFile, location, BuildV5V6Options(), OnExportProgress);
+            FinishExport(exported);
+        }
+
+        private ScummV4GraphicsBatch.ExportOptions BuildV4Options()
+        {
+            return new ScummV4GraphicsBatch.ExportOptions
             {
                 Backgrounds = ExportBackgrounds.Checked,
                 Objects = ExportObjects.Checked,
@@ -230,20 +85,37 @@ namespace ScummEditor.Gui
                 ObjectZPlanes = ExportObjectsZPlanes.Checked,
                 Transparency = ExportWithTransparency.Checked
             };
+        }
 
-            int roomCount = ScummV4GraphicsBatch.EnumerateRooms(_scummFile).Count;
-            Progress.Maximum = Math.Max(1, roomCount);
+        private ScummV5V6GraphicsBatch.ExportOptions BuildV5V6Options()
+        {
+            return new ScummV5V6GraphicsBatch.ExportOptions
+            {
+                Backgrounds = ExportBackgrounds.Checked,
+                Objects = ExportObjects.Checked,
+                Costumes = ExportCostumes.Checked,
+                BackgroundZPlanes = ExportBackgroundZPlanes.Checked,
+                ObjectZPlanes = ExportObjectsZPlanes.Checked,
+                Transparency = ExportWithTransparency.Checked
+            };
+        }
+
+        private void ShowProgress()
+        {
             Progress.Value = 0;
             Progress.Visible = true;
             FilesExported.Visible = true;
             FilesExportedLabel.Visible = true;
+        }
 
-            int exported = ScummV4GraphicsBatch.Export(_scummFile, location, options, (done, total) =>
-            {
-                Progress.Value = Math.Min(done, Progress.Maximum);
-                Application.DoEvents();
-            });
+        private void OnExportProgress(int done, int total)
+        {
+            Progress.Value = Math.Min(done, Progress.Maximum);
+            Application.DoEvents();
+        }
 
+        private void FinishExport(int exported)
+        {
             FilesExported.Text = exported.ToString();
             Progress.Visible = false;
             _exporting = false;
