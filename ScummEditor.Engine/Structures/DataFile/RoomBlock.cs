@@ -1,0 +1,346 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+
+namespace ScummEditor.Engine.Structures.DataFile
+{
+    //ROOM - Room Block
+    //  RMHD - Room Header
+    //  CYCL - Color Cycle (vlc stop on 0x00) (vlc = Variable Length Code)
+    //  TRNS - Transparent Color
+    //  PALS - Palette Data
+    //  RMIM - Room Image
+    //  OBIM - *Object Images
+    //  OBCD - *Object Scripts
+    //  EXCD - Exit Script (script run when leaving the room)
+    //  ENCD - Entry Script (script run when entering the room)
+    //  NLSC - Number of Local Scripts
+    //  LSCR - Local Script * NLSC
+    //  BOXD - Box Data (box 0 seems to be crap with all the points set to -32000,-32000)
+    //  BOXM - Box Matrix
+    //  SCAL - Box Scale
+    public class RoomBlock : BlockBase
+    {
+        public RoomBlock(BlockBase blockBase) : base(blockBase) { }
+
+        public override string BlockType
+        {
+            get { return "ROOM"; }
+        }
+
+        public override void LoadFromBinaryReader(Stream binaryReader)
+        {
+            base.LoadFromBinaryReader(binaryReader);
+
+            switch (_gameInfo.ScummVersion)
+            {
+                case 5:
+                    LoadScummV5(binaryReader);
+                    break;
+                case 6:
+                    LoadScummV6(binaryReader);
+                    break;
+            }
+        }
+
+        private void LoadScummV5(Stream binaryReader)
+        {
+            // Generic walk: the room children end where the ROOM block ends. Block types we
+            // know get typed objects; anything else (e.g. the stray "021_" block the Ultimate
+            // Talkie packer leaves behind, or loose CDHD/VERB/OBNA in the MI2 Talkie) is kept
+            // as a byte-preserved generic block, so unusual files still load and round-trip.
+            long endPosition = binaryReader.Position - 8 + BlockSize;
+
+            while (binaryReader.Position < endPosition)
+            {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
+                switch (typeRead)
+                {
+                    case "RMHD":
+                        var RMHD = new RoomHeader(this);
+                        RMHD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMHD);
+                        break;
+
+                    case "CYCL":
+                        var CYCL = new ColorCycles(this);
+                        CYCL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(CYCL);
+                        break;
+
+                    case "TRNS":
+                        var TRNS = new ValuePaddingBlock(this, "TRNS");
+                        TRNS.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(TRNS);
+                        break;
+
+                    case "CLUT":
+                        var CLUT = new PaletteData(this, "CLUT");
+                        CLUT.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(CLUT);
+                        break;
+
+                    case "EPAL":
+                        var EPAL = new EgaPalette(this);
+                        EPAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(EPAL);
+                        break;
+
+                    case "RMIM":
+                        var RMIM = new RoomImage(this, this);
+                        RMIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMIM);
+                        break;
+
+                    case "OBIM":
+                        var OBIM = new ObjectImage(this);
+                        OBIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBIM);
+                        break;
+
+                    case "OBCD":
+                        var OBCD = new ObjectCode(this);
+                        OBCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBCD);
+                        break;
+
+                    case "EXCD":
+                        var EXCD = new ScriptBlock(this, "EXCD");
+                        EXCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(EXCD);
+                        break;
+
+                    case "ENCD":
+                        var ENCD = new ScriptBlock(this, "ENCD");
+                        ENCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(ENCD);
+                        break;
+
+                    case "LSCR":
+                        var LSCR = new ScriptBlock(this, "LSCR");
+                        LSCR.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(LSCR);
+                        break;
+
+                    case "BOXD":
+                        var BOXD = new BoxData(this);
+                        BOXD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXD);
+                        break;
+
+                    case "BOXM":
+                        var BOXM = new BoxMatrix(this);
+                        BOXM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXM);
+                        break;
+
+                    case "SCAL":
+                        var SCAL = new Scale(this);
+                        SCAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(SCAL);
+                        break;
+
+                    case "NLSC":
+                        var NLSC = new ValuePaddingBlock(this, "NLSC");
+                        NLSC.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(NLSC);
+                        break;
+
+                    default:
+                        var Default = new NotImplementedDataBlock(this, typeRead);
+                        Default.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(Default);
+                        break;
+                }
+            }
+
+
+            /*
+            var RMHD = new RoomHeader(this);
+            RMHD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(RMHD);
+
+            var CYCL = new ColorCycles(this);
+            CYCL.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(CYCL);
+
+            var TRNS = new ValuePaddingBlock(this, "TRNS");
+            TRNS.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(TRNS);
+
+            var EPAL = new NotImplementedDataBlock(this, "EPAL");
+            EPAL.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(EPAL);
+
+            var BOXD = new NotImplementedDataBlock(this, "BOXD");
+            BOXD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(BOXD);
+
+            var BOXM = new NotImplementedDataBlock(this, "BOXM");
+            BOXM.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(BOXM);
+
+            var CLUT = new PaletteData(this, "CLUT");
+            CLUT.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(CLUT);
+
+            var SCAL = new NotImplementedDataBlock(this, "SCAL");
+            SCAL.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(SCAL);
+
+            var RMIM = new RoomImage(this, this);
+            RMIM.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(RMIM);
+
+            while (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "OBIM")
+            {
+                var OBIM = new ObjectImage(this);
+                OBIM.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(OBIM);
+            }
+
+            while (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "OBCD")
+            {
+                var OBCD = new NotImplementedDataBlock(this, "OBCD");
+                OBCD.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(OBCD);
+            }
+
+            var EXCD = new NotImplementedDataBlock(this, "EXCD");
+            EXCD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(EXCD);
+
+            var ENCD = new NotImplementedDataBlock(this, "ENCD");
+            ENCD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(ENCD);
+
+            var NLSC = new ValuePaddingBlock(this, "NLSC");
+            NLSC.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(NLSC);
+
+            for (int i = 0; i < NLSC.Value; i++)
+            {
+                var LSCR = new NotImplementedDataBlock(this, "LSCR");
+                LSCR.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(LSCR);
+            }
+             
+             */
+        }
+
+        private void LoadScummV6(Stream binaryReader)
+        {
+            var RMHD = new RoomHeader(this);
+            RMHD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(RMHD);
+
+            var CYCL = new ColorCycles(this);
+            CYCL.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(CYCL);
+
+            var TRNS = new ValuePaddingBlock(this, "TRNS");
+            TRNS.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(TRNS);
+
+            var PALS = new PalettesData(this);
+            PALS.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(PALS);
+
+            var RMIM = new RoomImage(this, this);
+            RMIM.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(RMIM);
+
+            while (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "OBIM")
+            {
+                var OBIM = new ObjectImage(this);
+                OBIM.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(OBIM);
+            }
+
+            while (BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "OBCD")
+            {
+                var OBCD = new ObjectCode(this);
+                OBCD.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(OBCD);
+            }
+
+            var EXCD = new ScriptBlock(this, "EXCD");
+            EXCD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(EXCD);
+
+            var ENCD = new ScriptBlock(this, "ENCD");
+            ENCD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(ENCD);
+
+            var NLSC = new ValuePaddingBlock(this, "NLSC");
+            NLSC.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(NLSC);
+
+            for (int i = 0; i < NLSC.Value; i++)
+            {
+                var LSCR = new ScriptBlock(this, "LSCR");
+                LSCR.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(LSCR);
+            }
+
+            var BOXD = new BoxData(this);
+            BOXD.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(BOXD);
+
+            var BOXM = new BoxMatrix(this);
+            BOXM.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(BOXM);
+
+            var SCAL = new Scale(this);
+            SCAL.LoadFromBinaryReader(binaryReader);
+            Childrens.Add(SCAL);
+        }
+
+        public override void SaveToBinaryWriter(Stream binaryWriter)
+        {
+            base.SaveToBinaryWriter(binaryWriter);
+
+            foreach (BlockBase blockBase in Childrens)
+            {
+                blockBase.SaveToBinaryWriter(binaryWriter);
+            }
+        }
+
+        public PaletteData GetDefaultPalette()
+        {
+            if (_gameInfo.ScummVersion == 5)
+            {
+                return (PaletteData)Childrens.Single(p => p.BlockType == "CLUT");
+            }
+            else
+            {
+                return GetPALS().GetWRAP().GetAPALs()[0];
+            }
+        }
+        public PalettesData GetPALS()
+        {
+            return (PalettesData)Childrens.SingleOrDefault(x => x.GetType() == typeof(PalettesData));
+        }
+
+        public List<ObjectImage> GetOBIMs()
+        {
+            return Childrens.OfType<ObjectImage>().ToList();
+        }
+
+        public RoomHeader GetRMHD()
+        {
+            return (RoomHeader)Childrens.Single(x => x.GetType() == typeof(RoomHeader));
+        }
+
+        public RoomImage GetRMIM()
+        {
+            return (RoomImage)Childrens.Single(x => x.GetType() == typeof(RoomImage));
+        }
+
+        public ValuePaddingBlock GetTRNS()
+        {
+            return (ValuePaddingBlock)Childrens.Single(x => x.BlockType == "TRNS");
+        }
+    }
+}

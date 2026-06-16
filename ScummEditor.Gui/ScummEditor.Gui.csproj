@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <!-- RootNamespace matches the GUI namespace. WinForms .resx resolve by the dependent-source
+         convention (manifest name follows each control's namespace, e.g. ScummEditor.Gui.FilePacker),
+         so it stays correct regardless of folder. -->
+    <RootNamespace>ScummEditor.Gui</RootNamespace>
+    <AssemblyName>ScummEditor.Gui</AssemblyName>
+    <ApplicationIcon>Resources\sbr_ico_01.ico</ApplicationIcon>
+
+    <!-- Keep the legacy C# behaviour so the existing source compiles unchanged. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+
+    <!-- Assembly metadata still comes from Properties\AssemblyInfo.cs. -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- Quiet expected diagnostics:
+         CS0108/CS0105  - WinForms designer "hides inherited member" / duplicate using.
+         CA1416         - platform-compat analyzer (we target net*-windows, so it's spurious).
+         WFO1000        - WinForms wants designer-serialization config on public control
+                          properties that are runtime-only here. -->
+    <NoWarn>$(NoWarn);CS0108;CS0105;CA1416;WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- All parsing/codec/export/import/detection logic lives in the engine; the GUI is purely visual. -->
+    <ProjectReference Include="..\ScummEditor.Engine\ScummEditor.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Be.Windows.Forms.HexBox">
+      <HintPath>..\Libraries\Be.Windows.Forms.HexBox.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>

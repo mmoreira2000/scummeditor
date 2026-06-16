@@ -1,32 +1,33 @@
-using NUnit.Framework;
+using ScummEditor.Engine;
+using Xunit;
+
 namespace ScummEditor.UnitTests
 {
-    [TestFixture]
     public class BitStreamTests
     {
-        [Test]
-        public void TestArrayRebuild()
+        [Fact]
+        public void RebuildsTheSourceBytes()
         {
             var sourceBytes = new byte[2];
-            sourceBytes[0] = 100; //0110 0100
-            sourceBytes[1] = 54;  //0011 0110
+            sourceBytes[0] = 100; // 0110 0100
+            sourceBytes[1] = 54;  // 0011 0110
 
             var bitStreamManager = new BitStreamManager(sourceBytes);
 
-            Assert.AreEqual(16, bitStreamManager.Lenght);
+            Assert.Equal(16, bitStreamManager.Lenght);
 
             byte[] rebuildBytes = bitStreamManager.ToByteArray();
 
-            Assert.AreEqual(sourceBytes[0], rebuildBytes[0]);
-            Assert.AreEqual(sourceBytes[1], rebuildBytes[1]);
+            Assert.Equal(sourceBytes[0], rebuildBytes[0]);
+            Assert.Equal(sourceBytes[1], rebuildBytes[1]);
         }
 
-        [Test]
-        public void TestArrayBuildFromBitPopulated()
+        [Fact]
+        public void BuildsBytesFromIndividuallyAddedBits()
         {
             var bitStreamManager = new BitStreamManager();
 
-            //100 = 0110 0100
+            // 100 = 0110 0100
             bitStreamManager.AddBit(false);
             bitStreamManager.AddBit(false);
             bitStreamManager.AddBit(true);
@@ -37,7 +38,7 @@ namespace ScummEditor.UnitTests
             bitStreamManager.AddBit(true);
             bitStreamManager.AddBit(false);
 
-            //54 = 0011 0110
+            // 54 = 0011 0110
             bitStreamManager.AddBit(false);
             bitStreamManager.AddBit(true);
             bitStreamManager.AddBit(true);
@@ -45,106 +46,84 @@ namespace ScummEditor.UnitTests
 
             bitStreamManager.AddBit(true);
             bitStreamManager.AddBit(true);
-            //Deixa esses dois em branco, e o bitStream tem que preencher com 0s...
-            //bitStreamManager.AddBit(false);
-            //bitStreamManager.AddBit(false);
+            // The last two bits are left out; the stream pads the final byte with zeros.
 
             var sourceBytes = new byte[2];
-            sourceBytes[0] = 100; //0110 0100
-            sourceBytes[1] = 54;  //
+            sourceBytes[0] = 100; // 0110 0100
+            sourceBytes[1] = 54;  // 0011 0110
 
-
-            Assert.AreEqual(14, bitStreamManager.Lenght);
+            Assert.Equal(14, bitStreamManager.Lenght);
 
             byte[] rebuildBytes = bitStreamManager.ToByteArray();
 
-            Assert.AreEqual(sourceBytes[0], rebuildBytes[0]);
-            Assert.AreEqual(sourceBytes[1], rebuildBytes[1]);
+            Assert.Equal(sourceBytes[0], rebuildBytes[0]);
+            Assert.Equal(sourceBytes[1], rebuildBytes[1]);
         }
 
-        [Test]
-        public void TestReadBitAndAdvanceStream()
+        [Fact]
+        public void ReadBitAdvancesThePosition()
         {
             var sourceBytes = new byte[1];
-            sourceBytes[0] = 130; //1000 0010
+            sourceBytes[0] = 130; // 1000 0010
 
             var bitStreamManager = new BitStreamManager(sourceBytes);
 
-            Assert.AreEqual(0, bitStreamManager.Position);
+            Assert.Equal(0, bitStreamManager.Position);
 
-            //Le um bit e verifica se ele é off;
-            //o Stream resultante ficou assim: 1000 001
-            Assert.IsFalse(bitStreamManager.ReadBit());
+            // Read one bit and confirm it is off; the remaining stream is 1000 001.
+            Assert.False(bitStreamManager.ReadBit());
 
+            Assert.Equal(1, bitStreamManager.Position);
 
-            Assert.AreEqual(1, bitStreamManager.Position);
+            // The stream has not ended yet.
+            Assert.False(bitStreamManager.EndOfStream);
 
-            //Verifica que o stream não terminou
-            Assert.IsFalse(bitStreamManager.EndOfStream);
-
-            //Le mais 7 bits
+            // Read the next 7 bits.
             byte result = bitStreamManager.ReadValue(7);
 
-            //65 = 0100 0001 porque o bit mais significante foi completado em branco.
-            Assert.AreEqual(65, result);
+            // 65 = 0100 0001 because the most significant bit was padded with zero.
+            Assert.Equal(65, result);
         }
 
-        [Test]
-        public void TestB()
+        [Fact]
+        public void ReadsBytesThenBitsThenAValue()
         {
-            //0x11 (17)  - 0000 1011
-            //0x05 (5)   - 0000 0101
-            //0x80 (128) - 1000 0000
-            //0xFC (252) - 1111 1100
+            // 0x11 (17)  - 0001 0001
+            // 0x05 (5)   - 0000 0101
+            // 0x80 (128) - 1000 0000
+            // 0xFC (252) - 1111 1100
 
             var bs = new BitStreamManager(new byte[] { 0x11, 0x05, 0x80, 0xFC });
-            //int pSize = 7;
 
-            var compression = bs.ReadByte();
-            Assert.AreEqual(0x11, compression);
+            byte compression = bs.ReadByte();
+            Assert.Equal(0x11, compression);
 
-            Assert.AreEqual(0x05, bs.ReadByte()); //le o numero da palheta;
+            Assert.Equal(0x05, bs.ReadByte()); // palette number
 
-            //0x80
+            // 0x80: draw everything in the same palette (seven zero bits, then a control bit).
+            Assert.False(bs.ReadBit()); // 0
+            Assert.False(bs.ReadBit()); // 0
+            Assert.False(bs.ReadBit()); // 0
+            Assert.False(bs.ReadBit()); // 0
 
-            //Desenha tudo na mesma paletta.
-            Assert.AreEqual(false, bs.ReadBit()); //0
-            Assert.AreEqual(false, bs.ReadBit()); //0
-            Assert.AreEqual(false, bs.ReadBit()); //0
-            Assert.AreEqual(false, bs.ReadBit()); //0
+            Assert.False(bs.ReadBit()); // 0
+            Assert.False(bs.ReadBit()); // 0
+            Assert.False(bs.ReadBit()); // 0
 
-            Assert.AreEqual(false, bs.ReadBit()); //0
-            Assert.AreEqual(false, bs.ReadBit()); //0
-            Assert.AreEqual(false, bs.ReadBit()); //0
+            // Control bit found.
+            Assert.True(bs.ReadBit()); // 1
 
-            //Encontrou bit de controle.
-            Assert.AreEqual(true, bs.ReadBit());  //1
+            // 0xFC: bit 0 means read the next palette index (7 bits).
+            Assert.False(bs.ReadBit()); // 0
 
-            //0xFC
-
-            //Bit 0 - le o próximo indice da palheta (7 bits)
-            Assert.AreEqual(false, bs.ReadBit()); //0
-
-            Assert.AreEqual(0x7E, bs.ReadValue(7));
-            //Assert.AreEqual(false, bs.ReadBit()); //0
-            //Assert.AreEqual(true, bs.ReadBit());  //1
-            //Assert.AreEqual(true, bs.ReadBit());  //1
-
-            //Assert.AreEqual(true, bs.ReadBit());  //1
-            //Assert.AreEqual(true, bs.ReadBit());  //1
-            //Assert.AreEqual(true, bs.ReadBit());  //1
-            //Assert.AreEqual(true, bs.ReadBit());  //1
+            Assert.Equal(0x7E, bs.ReadValue(7));
         }
 
-
-        [Test]
-        public void TestC()
+        [Fact]
+        public void RoundTripsAFiveBitValueThroughAByteArray()
         {
-            //            else if (highestPaletteIndex >= 16 && highestPaletteIndex <= 31)
-            //{
-            //     paletteBitSize = 5;//max 31 values;
-
-            BitStreamManager bs = new BitStreamManager();
+            // 5-bit palette indexes are used when the highest palette index is in 16..31.
+            var bs = new BitStreamManager();
 
             bs.AddBit(true);
             bs.AddBit(false);
@@ -153,10 +132,9 @@ namespace ScummEditor.UnitTests
             byte[] values = bs.ToByteArray();
             bs = new BitStreamManager(values);
 
-            Assert.IsTrue(bs.ReadBit());
-            Assert.IsFalse(bs.ReadBit());
-            Assert.AreEqual(28,bs.ReadValue(6));
-            //Assert.IsFalse(bs.ReadBit());
+            Assert.True(bs.ReadBit());
+            Assert.False(bs.ReadBit());
+            Assert.Equal(28, bs.ReadValue(6));
         }
     }
 }

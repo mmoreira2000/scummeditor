@@ -1,0 +1,295 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows.Forms;
+using ScummEditor.Gui;
+using ScummEditor.Gui.IndexFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
+
+namespace ScummEditor.Gui
+{
+    public class TreeNavigatorManager
+    {
+        private BlockBaseControl _blockBaseControl { get; set; }
+        private Dictionary<string, BlockBaseControl> _controlViewers;
+        private readonly SpeechSouControl _speechSouControl = new SpeechSouControl();
+        private readonly CdAudioSouControl _cdAudioSouControl = new CdAudioSouControl();
+        private readonly TreeView _treeView;
+        private readonly Panel _displayPanel;
+
+        public TreeNavigatorManager(TreeView treeView, Panel displayPanel)
+        {
+            _blockBaseControl = new BlockBaseControl();
+
+            _controlViewers = new Dictionary<string, BlockBaseControl>();
+            _controlViewers.Add(typeof(BlockBase).Name, _blockBaseControl);
+            _controlViewers.Add(typeof(PaletteData).Name, new PaletteDataControl());
+            _controlViewers.Add(typeof(ColorCycles).Name, new ColorCycleControl());
+            _controlViewers.Add(typeof(ImageStripTable).Name, new ImageStripTableControl());
+            _controlViewers.Add(typeof(ValuePaddingBlock).Name, new ValuePaddingBlockControl());
+            _controlViewers.Add(typeof(RoomImageHeader).Name, new RoomImageHeaderControl());
+            _controlViewers.Add(typeof(RoomHeader).Name, new RoomHeaderControl());
+            _controlViewers.Add(typeof(DiskBlock).Name, new DiskBlockControl());
+            _controlViewers.Add(typeof(ScummV4RoomBlock).Name, new ScummV4RoomImageControl());
+            _controlViewers.Add(typeof(NotImplementedDataBlock).Name, new NotImplementedDataBlockControl());
+            _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
+            _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
+            _controlViewers.Add(typeof(ObjectImageHeader).Name, new ObjectImageHeaderControl());
+            _controlViewers.Add(typeof(Costume).Name, new CostumeControl());
+            _controlViewers.Add(typeof(ImageBomp).Name, new ImageBompControl());
+
+            var structuredBlockControl = new StructuredBlockControl();
+            _controlViewers.Add(typeof(BoxData).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(BoxMatrix).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(Scale).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(PaletteOffset).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(EgaPalette).Name, structuredBlockControl);
+            // v4 room sub-blocks (M2)
+            _controlViewers.Add(typeof(BoxDataV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(ScaleV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(EgaShadowPaletteV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(ColorCyclesV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(LocalScriptCountV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(LocalObjectListV4).Name, structuredBlockControl);
+            _controlViewers.Add(typeof(SoundListV4).Name, structuredBlockControl);
+
+            _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
+
+            _controlViewers.Add(typeof(SoundBlock).Name, new SoundBlockControl());
+
+            var scriptControl = new ScriptControl();
+            _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);
+            _controlViewers.Add(typeof(ScriptBlockV4).Name, scriptControl); // v4 SC/LS/EX/EN scripts
+            _controlViewers.Add(typeof(CostumeV4).Name, new CostumeV4Control()); // v4 CO costumes
+            _controlViewers.Add(typeof(SoundBlockV4).Name, new SoundBlockV4Control()); // v4 SO sound
+
+            _controlViewers.Add(typeof(Charset).Name, new CharsetControl());
+
+            var directoryOfItemsControlGeneric = new DirectoryOfItemsControl();
+            _controlViewers.Add(typeof(DirectoryOfItems).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfRooms).Name, new DirectoryOfRoomsControl());
+            _controlViewers.Add(typeof(DirectoryOfCharsets).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfCostumes).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfScripts).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfSounds).Name, directoryOfItemsControlGeneric);
+
+            var indexDetailsControl = new IndexDetailsControl();
+            _controlViewers.Add(typeof(MaximumValues).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(DirectoryOfObjects).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(DirectoryOfArrays).Name, indexDetailsControl);
+            _controlViewers.Add(typeof(RoomNamesV5V6).Name, indexDetailsControl);
+
+            _treeView = treeView;
+            _displayPanel = displayPanel;
+            _treeView.AfterSelect += AfterNodeSelectedEvent;
+        }
+
+        public ScummGameData GameData { get; set; }
+
+        public void LoadTree()
+        {
+            _treeView.Nodes.Clear();
+
+            var v4Index = GameData.IndexFile as ScummV4IndexFile;
+            if (v4Index != null)
+            {
+                CreateScummV4IndexFileTree(v4Index);
+            }
+            else if (GameData.IndexFile != null)
+            {
+                CreateScummIndexFileTree(GameData.IndexFile);
+            }
+
+            // One data node per container (v4 games are spread over several DISKnn.LEC disks).
+            if (GameData.DataDisks != null && GameData.DataDisks.Count > 0)
+            {
+                foreach (DataDisk disk in GameData.DataDisks)
+                {
+                    CreateScummDataFileTree(disk.Tree, System.IO.Path.GetFileName(disk.FilePath));
+                }
+            }
+            else if (GameData.DataFile != null)
+            {
+                CreateScummDataFileTree(GameData.DataFile, "Data File");
+            }
+
+            CreateFontFileNodes();
+            CreateSouFileNodes(GameData.LoadedGameInfo);
+        }
+
+        /// <summary>Root nodes for the standalone font files (v4 90x.LFL); the Charset viewer handles them.</summary>
+        private void CreateFontFileNodes()
+        {
+            if (GameData.Fonts == null) return;
+
+            foreach (FontResource font in GameData.Fonts)
+            {
+                var node = _treeView.Nodes.Add("Font",
+                    "Font (" + System.IO.Path.GetFileName(font.FilePath) + ")");
+                node.Tag = font.Charset;
+            }
+        }
+
+        /// <summary>Index tree for SCUMM v4: a flat list of the index blocks (RN, 0R, 0S, ...).</summary>
+        private void CreateScummV4IndexFileTree(ScummV4IndexFile indexFile)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+            foreach (BlockBase block in indexFile.Blocks)
+            {
+                CreateNode(block, node);
+            }
+        }
+
+        /// <summary>
+        /// Root nodes for the standalone audio containers next to the game files: the speech
+        /// file (MONSTER.SOU / "game".SOU) and the ripped CD audio (CDDA.SOU). The files are
+        /// parsed lazily, when their node is first selected.
+        /// </summary>
+        private void CreateSouFileNodes(GameInfo gameInfo)
+        {
+            if (gameInfo == null) return;
+
+            if (gameInfo.SpeechFilePath != null)
+            {
+                var node = _treeView.Nodes.Add("SpeechFile",
+                    "Speech File (" + System.IO.Path.GetFileName(gameInfo.SpeechFilePath) + ")");
+                node.Tag = new SpeechSouFile(gameInfo.SpeechFilePath);
+            }
+
+            if (gameInfo.CdAudioFilePath != null)
+            {
+                var node = _treeView.Nodes.Add("CdAudioFile",
+                    "CD Audio (" + System.IO.Path.GetFileName(gameInfo.CdAudioFilePath) + ")");
+                node.Tag = new CdAudioSouFile(gameInfo.CdAudioFilePath);
+            }
+        }
+
+        private void CreateScummDataFileTree(ScummV5V6DataFile dataFile, string label)
+        {
+            TreeNode dataNode = _treeView.Nodes.Add(label, label);
+
+            LoadNextBlock(dataFile, dataNode);
+        }
+
+        private TreeNode LoadNextBlock(BlockBase blockBase, TreeNode parentNode, int nodeIndex = -1)
+        {
+            TreeNode blockNode = CreateNode(blockBase, parentNode, nodeIndex);
+
+            // For readability the v4 local scripts (LS) are shown nested under the local-script count
+            // block (LC), which declares how many of them the room has (LC precedes the LS blocks in
+            // the room). This only nests the tree NODES - LC and LS stay siblings in the block model,
+            // so saving is unchanged. v5/v6 use the tags NLSC/LSCR, so this never triggers there.
+            TreeNode localScriptCountNode = null;
+
+            IEnumerable<IGrouping<string, BlockBase>> groupedChildrens = blockBase.Childrens.GroupBy(g => g.BlockType);
+            foreach (IGrouping<string, BlockBase> groupedChildren in groupedChildrens)
+            {
+                TreeNode groupParent = (groupedChildren.Key == "LS" && localScriptCountNode != null)
+                    ? localScriptCountNode
+                    : blockNode;
+
+                if (groupedChildren.Count() > 1)
+                {
+                    int counter = 0;
+                    foreach (BlockBase child in groupedChildren)
+                    {
+                        LoadNextBlock(child, groupParent, counter);
+                        counter++;
+                    }
+                }
+                else
+                {
+                    foreach (BlockBase child in groupedChildren)
+                    {
+                        TreeNode childNode = LoadNextBlock(child, groupParent);
+                        if (child.BlockType == "LC")
+                        {
+                            localScriptCountNode = childNode;
+                        }
+                    }
+                }
+            }
+
+            return blockNode;
+        }
+
+        private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+
+            CreateNode(scummV6IndexFile.RNAM, node);
+            CreateNode(scummV6IndexFile.MAXS, node);
+            CreateNode(scummV6IndexFile.DROO, node);
+            CreateNode(scummV6IndexFile.DSCR, node);
+            CreateNode(scummV6IndexFile.DSOU, node);
+            CreateNode(scummV6IndexFile.DCOS, node);
+            CreateNode(scummV6IndexFile.DCHR, node);
+            CreateNode(scummV6IndexFile.DOBJ, node);
+            if (scummV6IndexFile.AARY != null) CreateNode(scummV6IndexFile.AARY, node);
+        }
+
+        private static TreeNode CreateNode(BlockBase blockBase, TreeNode parentNode, int index = -1)
+        {
+            string nodeText = blockBase.BlockType;
+            if (index >= 0)
+            {
+                nodeText += " " + index.ToString().PadLeft(3, '0');
+            }
+
+            var node = new TreeNode(nodeText)
+                           {
+                               Tag = blockBase
+                           };
+            parentNode.Nodes.Add(node);
+            return node;
+        }
+
+
+        private void AfterNodeSelectedEvent(object sender, TreeViewEventArgs e)
+        {
+            _displayPanel.Controls.Clear();
+            if (e.Node.Tag == null) return;
+
+            // The audio container nodes carry their own (non-block) objects and viewers.
+            var speechFile = e.Node.Tag as SpeechSouFile;
+            if (speechFile != null)
+            {
+                _speechSouControl.SetData(speechFile);
+                _displayPanel.Controls.Add(_speechSouControl);
+                _speechSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            var cdAudioFile = e.Node.Tag as CdAudioSouFile;
+            if (cdAudioFile != null)
+            {
+                _cdAudioSouControl.SetData(cdAudioFile);
+                _displayPanel.Controls.Add(_cdAudioSouControl);
+                _cdAudioSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            var item = (BlockBase)e.Node.Tag;
+
+            string name = item.GetType().Name;
+
+
+
+            if (_controlViewers.ContainsKey(name))
+            {
+                _controlViewers[name].SetAndRefreshData(item);
+                _displayPanel.Controls.Add(_controlViewers[name]);
+                _controlViewers[name].Dock = DockStyle.Fill;
+            }
+            else
+            {
+                _blockBaseControl.SetAndRefreshData(item);
+                _displayPanel.Controls.Add(_blockBaseControl);
+                _blockBaseControl.Dock = DockStyle.Fill;
+            }
+        }
+
+    }
+}

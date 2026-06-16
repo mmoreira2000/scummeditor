@@ -1,0 +1,103 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using ScummEditor.Engine;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
+
+namespace ScummEditor.UnitTests
+{
+    /// <summary>
+    /// Locates the (git-ignored) GameData test library and loads games from it for the real-data
+    /// tests. The library lives at the repo root; tests walk up from the test assembly to find it.
+    /// When it is absent (a clean checkout / CI without the games) the real-data tests skip rather
+    /// than fail, so the synthetic unit tests still run everywhere.
+    /// </summary>
+    public static class GameLibrary
+    {
+        // SCUMM v4 (multi-disk floppy / Loom CD)
+        public const string MonkeyIsland1FloppyVga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy VGA";
+        public const string MonkeyIsland1FloppyEga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy EGA";
+        public const string Loom = "ScummV4/Loom (1990)/DOS CD VGA v42";
+
+        // SCUMM v5 (single LFLF data file)
+        public const string MonkeyIsland2Floppy = "ScummV5/Monkey Island 2 - LeChucks Revenge (1991)/Floppy";
+        public const string MonkeyIsland1CdVga = "ScummV5/Secret of Monkey Island, The (1990)/CD VGA";
+        public const string FateOfAtlantisFloppy = "ScummV5/Indiana Jones and the Fate of Atlantis (1992)/Floppy v1.0";
+        public const string FateOfAtlantisCd = "ScummV5/Indiana Jones and the Fate of Atlantis (1992)/CD Talkie";
+
+        // SCUMM v6
+        public const string DayOfTheTentacleFloppy = "ScummV6/Day of the Tentacle (1993)/Floppy v1.6";
+        public const string DayOfTheTentacleCd = "ScummV6/Day of the Tentacle (1993)/CD Talkie";
+        public const string SamAndMaxFloppy = "ScummV6/Sam and Max Hit the Road (1993)/Floppy v1.0";
+        public const string SamAndMaxCd = "ScummV6/Sam and Max Hit the Road (1993)/DOS CD Talkie";
+
+        private static readonly string _root = FindRoot();
+
+        /// <summary>True when the GameData library was found next to the repo.</summary>
+        public static bool Available { get { return _root != null; } }
+
+        /// <summary>Absolute path of a game's data folder under GameData, or null if the folder is missing.</summary>
+        public static string Folder(string relativePath)
+        {
+            if (_root == null) return null;
+            string full = Path.Combine(_root, relativePath.Replace('/', Path.DirectorySeparatorChar));
+            return Directory.Exists(full) ? full : null;
+        }
+
+        /// <summary>Detects the game in a library folder; returns null if the folder or game is missing.</summary>
+        public static GameInfo Detect(string relativePath)
+        {
+            string folder = Folder(relativePath);
+            if (folder == null) return null;
+            GameInfo info = Functions.FindScummGameInFolder(folder);
+            return (info == null || info.LoadedGame == ScummGame.None) ? null : info;
+        }
+
+        /// <summary>Loads the game in a library folder; returns null if the folder or game is missing.</summary>
+        public static ScummGameData Load(string relativePath)
+        {
+            GameInfo info = Detect(relativePath);
+            return info == null ? null : ScummGameData.LoadFromGameInfo(info);
+        }
+
+        /// <summary>Every parsed block of a loaded game (all disks for v4, the single data file for v5/v6).</summary>
+        public static List<BlockBase> AllBlocks(ScummGameData game)
+        {
+            var blocks = new List<BlockBase>();
+            if (game.DataDisks != null && game.DataDisks.Count > 0)
+            {
+                foreach (DataDisk disk in game.DataDisks) Collect(disk.Tree, blocks);
+            }
+            else if (game.DataFile != null)
+            {
+                Collect(game.DataFile, blocks);
+            }
+            return blocks;
+        }
+
+        private static void Collect(BlockBase node, List<BlockBase> acc)
+        {
+            if (node == null) return;
+            acc.Add(node);
+            if (node.Childrens != null)
+            {
+                foreach (BlockBase child in node.Childrens) Collect(child, acc);
+            }
+        }
+
+        private static string FindRoot()
+        {
+            var dir = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dir != null)
+            {
+                if (Directory.Exists(Path.Combine(dir.FullName, "GameData")))
+                {
+                    return Path.Combine(dir.FullName, "GameData");
+                }
+                dir = dir.Parent;
+            }
+            return null;
+        }
+    }
+}
