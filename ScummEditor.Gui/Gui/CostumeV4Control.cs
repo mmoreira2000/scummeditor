@@ -158,14 +158,7 @@ namespace ScummEditor.Gui
                     using (var imported = (Bitmap)Image.FromFile(dialog.FileName))
                     {
                         CostumeImageData frame = _costume.Frames[_currentFrameIndex];
-                        if (imported.Width != frame.Width || imported.Height != frame.Height)
-                        {
-                            throw new ImageEncodeException(string.Format(
-                                "The frame must be {0}x{1} (the original size), but it is {2}x{3}.",
-                                frame.Width, frame.Height, imported.Width, imported.Height));
-                        }
-
-                        byte[] rle = _encoder.Encode(imported, _costume.PaletteSize);
+                        byte[] rle = _encoder.Encode(imported, _costume.PaletteSize, frame.Width, frame.Height);
                         _costume.ReplaceFrameImage(_currentFrameIndex, rle);
                     }
                 }

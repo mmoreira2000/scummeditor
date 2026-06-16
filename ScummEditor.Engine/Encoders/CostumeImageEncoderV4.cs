@@ -26,6 +26,23 @@ namespace ScummEditor.Encoders
             return Encode(indexMatrix, bitmap.Width, bitmap.Height, paletteSize);
         }
 
+        /// <summary>
+        /// Encodes an indexed bitmap that must match the original frame's size (the v4 costume RLE
+        /// re-encode keeps the frame dimensions), throwing if it does not. This mirrors the size
+        /// rule the v5/v6 ImageEncoder enforces, so the dimension check lives in the engine.
+        /// </summary>
+        public byte[] Encode(Bitmap bitmap, int paletteSize, int expectedWidth, int expectedHeight)
+        {
+            if (bitmap.Width != expectedWidth || bitmap.Height != expectedHeight)
+            {
+                throw new ImageEncodeException(string.Format(
+                    "The frame must be {0}x{1} (the original size), but it is {2}x{3}.",
+                    expectedWidth, expectedHeight, bitmap.Width, bitmap.Height));
+            }
+
+            return Encode(bitmap, paletteSize);
+        }
+
         public byte[] Encode(byte[,] indexMatrix, int width, int height, int paletteSize)
         {
             int colorSize = paletteSize == 16 ? 4 : 5;
