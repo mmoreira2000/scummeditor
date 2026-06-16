@@ -1,3 +1,4 @@
+using ScummEditor.Encoders;
 using ScummEditor.Structures.DataFile;
 
 namespace ScummEditor.Gui

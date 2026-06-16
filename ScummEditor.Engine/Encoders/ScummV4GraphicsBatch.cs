@@ -9,7 +9,7 @@ using ScummEditor.Exceptions;
 using ScummEditor.Structures;
 using ScummEditor.Structures.DataFile;
 
-namespace ScummEditor.Gui
+namespace ScummEditor.Encoders
 {
     /// <summary>
     /// Batch PNG export/import of every SCUMM v4 image - room backgrounds, object images, their

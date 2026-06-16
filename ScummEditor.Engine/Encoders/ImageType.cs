@@ -1,4 +1,4 @@
-﻿namespace ScummEditor.Gui
+﻿namespace ScummEditor.Encoders
 {
     public enum ImageType
     {

@@ -4,8 +4,11 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <!-- RootNamespace stays "ScummEditor" so the existing namespaces and the WinForms resx resource
+         names (e.g. ScummEditor.FilePacker.resources) are unchanged; only the output assembly/exe
+         is renamed to ScummEditor.Gui. -->
     <RootNamespace>ScummEditor</RootNamespace>
-    <AssemblyName>ScummEditor</AssemblyName>
+    <AssemblyName>ScummEditor.Gui</AssemblyName>
     <ApplicationIcon>Resources\sbr_ico_01.ico</ApplicationIcon>
 
     <!-- Keep the legacy C# behaviour so the existing source compiles unchanged. -->
@@ -22,6 +25,11 @@
                           properties that are runtime-only here. -->
     <NoWarn>$(NoWarn);CS0108;CS0105;CA1416;WFO1000</NoWarn>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- All parsing/codec/export/import/detection logic lives in the engine; the GUI is purely visual. -->
+    <ProjectReference Include="..\ScummEditor.Engine\ScummEditor.Engine.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <Reference Include="Be.Windows.Forms.HexBox">

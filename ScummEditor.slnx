@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="ScummEditor.Engine/ScummEditor.Engine.csproj" />
+  <Project Path="ScummEditor.Gui/ScummEditor.Gui.csproj" />
+  <Project Path="ScummEditor.UnitTests/ScummEditor.UnitTests.csproj" />
+</Solution>

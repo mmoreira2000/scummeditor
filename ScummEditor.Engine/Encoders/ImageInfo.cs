@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Gui
+namespace ScummEditor.Encoders
 {
     public class ImageInfo
     {

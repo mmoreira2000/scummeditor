@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>ScummEditor</RootNamespace>
+    <AssemblyName>ScummEditor.Engine</AssemblyName>
+
+    <!-- Pure engine: parsing, codecs, export/import, detection. NO WinForms - this layer must stay
+         usable by any future GUI. It returns System.Drawing.Bitmap (via System.Drawing.Common). -->
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+
+    <!-- CA1416: platform-compat analyzer (we target net*-windows on purpose, so it is spurious). -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.Drawing.Common" Version="9.0.0" />
+  </ItemGroup>
+
+</Project>
