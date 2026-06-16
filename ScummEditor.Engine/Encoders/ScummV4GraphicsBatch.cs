@@ -60,7 +60,7 @@ namespace ScummEditor.Encoders
             foreach (BlockBase child in block.Childrens) CollectDiskBlocks(child, acc);
         }
 
-        public static int Export(ScummGameData game, string folder, ExportOptions options, Action<int, int> onProgress)
+        public static int Export(ScummGameData game, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
         {
             var decoder = new ScummV4ImageDecoder();
             var costumeDecoder = new CostumeImageDecoderV4();
@@ -69,6 +69,8 @@ namespace ScummEditor.Encoders
 
             for (int i = 0; i < rooms.Count; i++)
             {
+                if (shouldCancel != null && shouldCancel()) break;
+
                 ScummV4RoomBlock room = rooms[i].GetRoom();
                 if (room != null && room.GetBM() != null)
                 {

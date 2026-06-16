@@ -10,7 +10,6 @@ namespace ScummEditor.Gui
 {
     public partial class ImportResources : Form
     {
-        private bool _importing;
         private ScummGameData _scummFile;
 
         public void ShowDialog(ScummGameData scummFile, Form form)
@@ -45,7 +44,6 @@ namespace ScummEditor.Gui
             Cursor = Cursors.WaitCursor;
             Cancel.Cursor = Cursors.Default;
 
-            _importing = true;
             foreach (Control control in Controls)
             {
                 if (control.Name != "Cancel" && control.GetType() != typeof(Label) && control.GetType() != typeof(ProgressBar))
@@ -115,7 +113,6 @@ namespace ScummEditor.Gui
             MessageBox.Show(message, "Import",
                 MessageBoxButtons.OK, errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
 
-            _importing = false;
             DialogResult = DialogResult.OK;
             Close();
         }

@@ -60,7 +60,7 @@ namespace ScummEditor.Gui
             Progress.Maximum = Math.Max(1, roomCount);
             ShowProgress();
 
-            int exported = ScummV4GraphicsBatch.Export(_scummFile, location, BuildV4Options(), OnExportProgress);
+            int exported = ScummV4GraphicsBatch.Export(_scummFile, location, BuildV4Options(), OnExportProgress, () => _cancelExport);
             FinishExport(exported);
         }
 
@@ -70,7 +70,7 @@ namespace ScummEditor.Gui
             Progress.Maximum = Math.Max(1, _scummFile.DataFile.GetLFLFs().Count);
             ShowProgress();
 
-            int exported = ScummV5V6GraphicsBatch.Export(_scummFile.DataFile, location, BuildV5V6Options(), OnExportProgress);
+            int exported = ScummV5V6GraphicsBatch.Export(_scummFile.DataFile, location, BuildV5V6Options(), OnExportProgress, () => _cancelExport);
             FinishExport(exported);
         }
 
@@ -120,7 +120,14 @@ namespace ScummEditor.Gui
             Progress.Visible = false;
             _exporting = false;
             Cursor = Cursors.Default;
-            MessageBox.Show(string.Format("{0} images successfully exported.", exported));
+            if (_cancelExport)
+            {
+                MessageBox.Show("Export cancelled.");
+            }
+            else
+            {
+                MessageBox.Show(string.Format("{0} images successfully exported.", exported));
+            }
             Close();
         }
 

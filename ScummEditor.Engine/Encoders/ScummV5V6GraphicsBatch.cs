@@ -36,7 +36,7 @@ namespace ScummEditor.Encoders
             public List<string> Errors = new List<string>();
         }
 
-        public static int Export(ScummV5V6DataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress)
+        public static int Export(ScummV5V6DataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
         {
             List<DiskBlock> diskBlocks = dataFile.GetLFLFs();
             var convert = new ImageDepthConversor();
@@ -44,6 +44,8 @@ namespace ScummEditor.Encoders
 
             for (int i = 0; i < diskBlocks.Count; i++)
             {
+                if (shouldCancel != null && shouldCancel()) break;
+
                 RoomBlock room = diskBlocks[i].GetROOM();
 
                 if (options.Backgrounds)
