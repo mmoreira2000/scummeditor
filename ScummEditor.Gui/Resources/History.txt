@@ -1,5 +1,5 @@
-2.0.0.0
--------
+2.0.0
+-----
 * Full SCUMM v4 support. The Secret of Monkey Island (Floppy EGA and VGA, in English, French, German, Italian and Spanish) and Loom (CD) can now be opened, viewed and edited with the same feature set as the v5/v6 games. v4 games spread their data over several DISKnn.LEC disks with a plaintext 000.LFL index and standalone 90x.LFL fonts; all of it loads and every container round-trips byte-for-byte.
 
 * v4 room and object images. Backgrounds and object images are decoded for both the 256-colour VGA and the 16-colour EGA editions and can be exported as lossless indexed PNGs and imported back. Their z-plane (walk-behind) masks can also be exported and imported as black/white PNGs.
@@ -21,6 +21,10 @@
 * Japanese (SJIS) text now decodes correctly. A string-parsing fix (0xFE is an ordinary character, not an escape code) makes the Japanese editions of Indiana Jones and the Fate of Atlantis and Monkey Island 2 disassemble their scripts and object verb code in full.
 
 * Fixes: object verb code is now disassembled with the correct engine in the object viewer, object z-plane masks round-trip pixel-perfectly, the v4 sound viewer no longer overlaps the block header, and AdLib music resources are labelled correctly.
+
+* Internal architecture: the editor was split into two assemblies. ScummEditor.Engine holds all of the logic (parsing, codecs, image/sound/text export and import, and game detection) and has no user-interface dependency, so the same engine can back a future non-WinForms front-end; ScummEditor.Gui (now ScummEditor.Gui.exe) is the WinForms interface and only displays the data and triggers engine operations. Each namespace matches its assembly (ScummEditor.Engine.* and ScummEditor.Gui.*). The behaviour is unchanged - every game still loads, edits and round-trips byte-for-byte exactly as before.
+
+* Automated test suite: a comprehensive xUnit project now exercises the engine end to end - game detection, byte-identical save round-trips, the v4/v5/v6 script disassembler, sound and charset extraction, text export/import and the image codecs - run against the real library of games.
 
 1.5.0.0
 -------
