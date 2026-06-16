@@ -1,20 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Matches the main project's TFM so the ProjectReference resolves. -->
+    <!-- Matches the engine's TFM so the ProjectReference resolves and System.Drawing works. -->
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>ScummEditor.UnitTests</RootNamespace>
     <AssemblyName>ScummEditor.UnitTests</AssemblyName>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>disable</Nullable>
     <IsPackable>false</IsPackable>
+    <!-- The engine is Windows-only (System.Drawing); silence the platform analyzer here too. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- NUnit 3.x keeps the classic Assert.AreEqual API the existing tests use. -->
-    <PackageReference Include="NUnit" Version="3.14.0" />
-    <PackageReference Include="NUnit3TestAdapter" Version="4.6.0" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <!-- Dynamic [SkippableFact]/Skip.If, so real-data tests skip when the GameData library is absent. -->
+    <PackageReference Include="Xunit.SkippableFact" Version="1.4.13" />
   </ItemGroup>
 
   <ItemGroup>
