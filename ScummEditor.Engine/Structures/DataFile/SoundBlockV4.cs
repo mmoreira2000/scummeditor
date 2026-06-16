@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     SCUMM v4 "SO" sound block (a child of the LF disk block, after the scripts/costumes). The body is

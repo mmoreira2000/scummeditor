@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>A v4 room container (LF). Begins with a 2-byte room number, then the room blocks.</summary>
     public class ScummV4DiskBlock : BlockBase

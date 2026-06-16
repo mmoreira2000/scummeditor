@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>Shared walk for the v4 containers: read child blocks until the parent block ends.</summary>
     public static class ScummV4Blocks

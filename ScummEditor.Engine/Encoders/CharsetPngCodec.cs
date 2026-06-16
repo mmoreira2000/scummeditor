@@ -4,10 +4,10 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Text;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /*
     Exports a CHAR (charset/font) block to an editable PNG atlas and imports it back,

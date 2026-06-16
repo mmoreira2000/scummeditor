@@ -1,5 +1,5 @@
 using System.IO;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Structures;
 using Xunit;
 
 namespace ScummEditor.UnitTests

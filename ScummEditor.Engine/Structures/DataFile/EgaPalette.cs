@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     EPAL - EGA palette (SCUMM v5 rooms only).

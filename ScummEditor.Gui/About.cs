@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Windows.Forms;
-using ScummEditor.Properties;
+using ScummEditor.Gui.Properties;
 
-namespace ScummEditor
+namespace ScummEditor.Gui
 {
     public partial class About : Form
     {

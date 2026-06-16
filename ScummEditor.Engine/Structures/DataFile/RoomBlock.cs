@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //ROOM - Room Block
     //  RMHD - Room Header

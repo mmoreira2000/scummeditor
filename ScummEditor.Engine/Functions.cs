@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Structures;
 
-namespace ScummEditor
+namespace ScummEditor.Engine
 {
     public static class Functions
     {

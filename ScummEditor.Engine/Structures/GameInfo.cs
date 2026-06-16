@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     public class GameInfo
     {

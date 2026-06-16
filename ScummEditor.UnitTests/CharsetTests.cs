@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using ScummEditor.Encoders;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 using Xunit;
 
 namespace ScummEditor.UnitTests

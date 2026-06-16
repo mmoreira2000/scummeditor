@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "BX" block: walk boxes (= v5 "BOXD") plus the box matrix appended in the same block

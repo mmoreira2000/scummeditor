@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>A v4 room (RO): a sequence of room sub-blocks (HD, CC, BX, PA, BM, OI, OC, EX, EN, LS, ...).</summary>
     public class ScummV4RoomBlock : BlockBase

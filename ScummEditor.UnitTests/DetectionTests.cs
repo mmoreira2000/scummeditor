@@ -1,6 +1,7 @@
-using ScummEditor.Structures;
+using ScummEditor.Engine.Structures;
 using Xunit;
 
+using ScummEditor.Engine;
 namespace ScummEditor.UnitTests
 {
     /// <summary>

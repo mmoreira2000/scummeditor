@@ -1,4 +1,4 @@
-using ScummEditor;
+using ScummEditor.Engine;
 using Xunit;
 
 namespace ScummEditor.UnitTests

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /*
     Converts SCUMM message bytes to/from a translator-friendly display form.

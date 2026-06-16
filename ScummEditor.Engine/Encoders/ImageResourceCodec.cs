@@ -1,7 +1,7 @@
 using System.Drawing;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Decodes/encodes one v5/v6 room image resource, picking the right codec for its type: room

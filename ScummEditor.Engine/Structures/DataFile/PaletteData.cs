@@ -1,6 +1,6 @@
 ﻿using System.Drawing;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     colors : 256 times

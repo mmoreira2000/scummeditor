@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     /*
     A SCUMM v4 resource directory block in 000.LFL: 0S (scripts), 0N (sounds) or 0C (costumes).

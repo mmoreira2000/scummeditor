@@ -3,9 +3,9 @@ using System.Collections;
 using System.IO;
 using System.Linq;
 using System.Text;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor
+namespace ScummEditor.Engine
 {
     public static class BinaryHelper
     {

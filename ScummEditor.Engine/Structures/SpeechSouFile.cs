@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /*
     MONSTER.SOU / "game".SOU (FM Towns) - the speech and sound-effects container of the

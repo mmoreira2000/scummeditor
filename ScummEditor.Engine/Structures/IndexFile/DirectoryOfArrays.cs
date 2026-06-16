@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     public class DirectoryOfArrays : BlockBase
     {

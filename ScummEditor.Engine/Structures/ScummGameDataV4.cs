@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ScummEditor.Structures.DataFile;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /// <summary>
     /// Game data for the SCUMM v4 engine (small-header container spread over several DISKnn.LEC

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "CC" block: palette colour cycling (= v5 "CYCL", but a different, fixed format). v4 is

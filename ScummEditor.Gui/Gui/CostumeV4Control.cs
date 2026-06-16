@@ -2,10 +2,10 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Gui
 {

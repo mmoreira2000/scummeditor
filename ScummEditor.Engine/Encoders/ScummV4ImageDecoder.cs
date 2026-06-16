@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Decodes SCUMM v4 room backgrounds and object images. A v4 image is a single flat block

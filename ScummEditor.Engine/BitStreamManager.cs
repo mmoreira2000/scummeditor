@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor
+namespace ScummEditor.Engine
 {
     public class BitStreamManager
     {

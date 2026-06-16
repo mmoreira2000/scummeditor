@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
      /*
      The encoding is very similar to the SMAP. Again we have an offset table followed by the encoded data. 

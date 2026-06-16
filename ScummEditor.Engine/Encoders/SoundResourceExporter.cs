@@ -1,4 +1,4 @@
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Chooses the most useful exported representation of a v5/v6 sound resource and produces its

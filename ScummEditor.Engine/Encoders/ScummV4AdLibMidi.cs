@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Extracts a playable Standard MIDI File from a SCUMM v4 "AD" (AdLib) MUSIC payload, so the

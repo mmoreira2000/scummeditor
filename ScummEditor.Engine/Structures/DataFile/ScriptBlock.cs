@@ -1,7 +1,7 @@
 using System.IO;
-using ScummEditor.Encoders;
+using ScummEditor.Engine.Encoders;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     Script blocks holding SCUMM v6 bytecode:

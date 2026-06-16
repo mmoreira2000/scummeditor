@@ -1,4 +1,4 @@
-namespace ScummEditor.Exceptions
+namespace ScummEditor.Engine.Exceptions
 {
     public class ImageDecodeException:System.Exception
     {

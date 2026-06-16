@@ -6,8 +6,9 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Structures.IndexFile;
 
+using ScummEditor.Engine.Structures;
 namespace ScummEditor.Gui.IndexFile
 {
     public partial class DirectoryOfItemsControl : BlockBaseControl
@@ -19,7 +20,7 @@ namespace ScummEditor.Gui.IndexFile
             InitializeComponent();
         }
 
-        public override void SetAndRefreshData(Structures.BlockBase blockBase)
+        public override void SetAndRefreshData(BlockBase blockBase)
         {
             base.SetAndRefreshData(blockBase);
 

@@ -1,9 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     public class ZPlaneDecoder
     {

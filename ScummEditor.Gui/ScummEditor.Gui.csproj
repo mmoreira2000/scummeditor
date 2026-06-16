@@ -4,10 +4,10 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
-    <!-- RootNamespace stays "ScummEditor" so the existing namespaces and the WinForms resx resource
-         names (e.g. ScummEditor.FilePacker.resources) are unchanged; only the output assembly/exe
-         is renamed to ScummEditor.Gui. -->
-    <RootNamespace>ScummEditor</RootNamespace>
+    <!-- RootNamespace matches the GUI namespace. WinForms .resx resolve by the dependent-source
+         convention (manifest name follows each control's namespace, e.g. ScummEditor.Gui.FilePacker),
+         so it stays correct regardless of folder. -->
+    <RootNamespace>ScummEditor.Gui</RootNamespace>
     <AssemblyName>ScummEditor.Gui</AssemblyName>
     <ApplicationIcon>Resources\sbr_ico_01.ico</ApplicationIcon>
 

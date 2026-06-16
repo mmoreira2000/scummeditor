@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// A descriptor of one sub-block inside a v4 "SO" sound block (WA, AD, or a nested SO), for the

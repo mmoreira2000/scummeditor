@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// The fixed 16-color EGA hardware palette used by SCUMM v4 EGA rooms (which store no palette

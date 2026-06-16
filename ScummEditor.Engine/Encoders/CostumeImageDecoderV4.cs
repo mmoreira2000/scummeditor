@@ -1,7 +1,7 @@
 using System.Drawing;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Decodes a SCUMM v4 costume frame (CEL) to a bitmap. The RLE is the same column-major scheme the

@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //WRAP - Dummy wrapper
     //  OFFS    - Palette Index (size is blockheader + 2 bytes per palette) ??

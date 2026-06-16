@@ -4,9 +4,9 @@ using System.Linq;
 using System.Windows.Forms;
 using ScummEditor.Gui;
 using ScummEditor.Gui.IndexFile;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
 
 namespace ScummEditor.Gui
 {

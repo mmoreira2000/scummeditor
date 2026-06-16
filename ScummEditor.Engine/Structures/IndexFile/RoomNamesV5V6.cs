@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     public class RoomNamesV5V6 : BlockBase
     {

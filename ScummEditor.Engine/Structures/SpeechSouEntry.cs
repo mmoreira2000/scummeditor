@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /// <summary>One speech/effect line inside a .SOU container.</summary>
     public class SpeechSouEntry

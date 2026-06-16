@@ -6,9 +6,10 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Gui;
 
+using ScummEditor.Engine.Structures;
 namespace ScummEditor.Gui
 {
     public partial class PaletteDataControl : BlockBaseControl
@@ -31,7 +32,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        public override void SetAndRefreshData(Structures.BlockBase blockBase)
+        public override void SetAndRefreshData(BlockBase blockBase)
         {
             base.SetAndRefreshData(blockBase);
             _paletteData = (PaletteData)blockBase;

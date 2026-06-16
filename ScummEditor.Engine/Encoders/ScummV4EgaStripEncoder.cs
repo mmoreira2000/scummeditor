@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Encodes SCUMM v4 EGA image strips - the inverse of ScummV4ImageDecoder.DecodeEgaStrip.

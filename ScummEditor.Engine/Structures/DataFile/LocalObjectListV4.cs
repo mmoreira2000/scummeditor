@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "NL" block: the room's local-object/name list (an original LucasArts table that

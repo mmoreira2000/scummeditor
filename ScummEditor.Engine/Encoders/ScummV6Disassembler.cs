@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Disassembles SCUMM v6 bytecode (DOTT / Sam &amp; Max scripts) into a readable, C#-like

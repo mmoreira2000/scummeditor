@@ -4,9 +4,9 @@ using System.Media;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Gui
 {

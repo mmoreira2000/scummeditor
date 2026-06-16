@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "SL" block: the room's sound list (an original LucasArts table that ScummVM does not

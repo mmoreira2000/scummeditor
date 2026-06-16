@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Media;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
 
 namespace ScummEditor.Gui
 {

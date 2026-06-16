@@ -2,7 +2,7 @@
 using System.IO;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //LFLF - Disk Block
     //  ROOM - Room Block

@@ -1,7 +1,7 @@
 using System.Drawing;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Encodes a SCUMM v4 costume frame (CEL) from an indexed bitmap's pixel indexes back to the

@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.IO;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     /*
     SCUMM v4 index file (000.LFL; plaintext - the block headers are not XOR-encrypted, although

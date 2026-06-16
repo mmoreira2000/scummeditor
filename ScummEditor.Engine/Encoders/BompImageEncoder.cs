@@ -1,10 +1,10 @@
 ﻿using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     public class BompImageEncoder
     {

@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "LC" block: the number of local scripts in the room (= v5 "NLSC"). The body is a

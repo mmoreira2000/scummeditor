@@ -1,7 +1,7 @@
 using System.Collections.Generic;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Disassembles an object's verb scripts (OBCD/OC) for display: builds the verb-entry labels,

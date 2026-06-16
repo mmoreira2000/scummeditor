@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /*
     CDDA.SOU - ripped CD audio container shipped by digital releases of the CD games

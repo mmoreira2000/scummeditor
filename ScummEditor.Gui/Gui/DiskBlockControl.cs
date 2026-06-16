@@ -6,9 +6,10 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures.DataFile;
 
+using ScummEditor.Engine.Structures;
 namespace ScummEditor.Gui
 {
     public partial class DiskBlockControl : BlockBaseControl
@@ -90,7 +91,7 @@ namespace ScummEditor.Gui
 
             splitContainer1.Panel2.Controls.Add(_roomImages[id]);
         }
-        public override void SetAndRefreshData(Structures.BlockBase blockBase)
+        public override void SetAndRefreshData(BlockBase blockBase)
         {
             base.SetAndRefreshData(blockBase);
 

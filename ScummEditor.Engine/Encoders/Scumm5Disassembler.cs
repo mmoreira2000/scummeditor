@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Disassembles SCUMM v5 bytecode (Monkey Island 1 CD / Monkey Island 2 / Indy 4) into the

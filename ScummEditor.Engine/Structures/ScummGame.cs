@@ -1,4 +1,4 @@
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     public enum ScummGame
     {

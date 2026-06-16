@@ -1,6 +1,6 @@
 using System.Drawing;
-using ScummEditor.Encoders;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Exceptions;
 using Xunit;
 
 namespace ScummEditor.UnitTests

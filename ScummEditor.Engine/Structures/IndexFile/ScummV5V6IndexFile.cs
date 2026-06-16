@@ -1,8 +1,8 @@
 using System;
 using System.IO;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     public class ScummV5V6IndexFile
     {

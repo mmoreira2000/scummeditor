@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Windows.Forms;
 using ScummEditor.Gui;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Gui
 {

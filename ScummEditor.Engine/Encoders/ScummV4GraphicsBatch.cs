@@ -4,12 +4,12 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
-using ScummEditor.Encoders;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Batch PNG export/import of every SCUMM v4 image - room backgrounds, object images, their

@@ -2,7 +2,7 @@
 using System;
 using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //IMnn  -   Image Data
     //  SMAP - Strip Table + Plane 0

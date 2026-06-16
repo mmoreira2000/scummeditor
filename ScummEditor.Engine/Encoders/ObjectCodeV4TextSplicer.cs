@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Rewrites the object name or verb bytecode inside a SCUMM v4 "OC" block when a translated string

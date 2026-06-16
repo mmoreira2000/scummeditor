@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using Microsoft.Win32.SafeHandles;
 
-namespace ScummEditor
+namespace ScummEditor.Engine
 {
     public class XoredFileStream : FileStream
     {

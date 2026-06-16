@@ -1,4 +1,4 @@
-﻿namespace ScummEditor
+﻿namespace ScummEditor.Gui
 {
     partial class FilePacker
     {
@@ -112,7 +112,7 @@
             // 
             // saveChangesToolStripMenuItem
             // 
-            this.saveChangesToolStripMenuItem.Image = global::ScummEditor.Properties.Resources.Disk_blue;
+            this.saveChangesToolStripMenuItem.Image = global::ScummEditor.Gui.Properties.Resources.Disk_blue;
             this.saveChangesToolStripMenuItem.Name = "saveChangesToolStripMenuItem";
             this.saveChangesToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
             this.saveChangesToolStripMenuItem.Text = "Save Changes";
@@ -194,7 +194,7 @@
             // 
             // HelpAbout
             // 
-            this.HelpAbout.Image = global::ScummEditor.Properties.Resources.sbr_ico_16x16;
+            this.HelpAbout.Image = global::ScummEditor.Gui.Properties.Resources.sbr_ico_16x16;
             this.HelpAbout.Name = "HelpAbout";
             this.HelpAbout.Size = new System.Drawing.Size(107, 22);
             this.HelpAbout.Text = "&About";

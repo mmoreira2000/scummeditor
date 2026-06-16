@@ -1,7 +1,7 @@
 using System;
 using System.IO;
-using ScummEditor.Encoders;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
 using Xunit;
 
 namespace ScummEditor.UnitTests

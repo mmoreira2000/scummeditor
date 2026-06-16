@@ -1,6 +1,6 @@
-using ScummEditor.Encoders;
+using ScummEditor.Engine.Encoders;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// A block whose body is SCUMM script bytecode that the text pipeline and the script viewer can

@@ -1,4 +1,4 @@
-﻿namespace ScummEditor.Structures.DataFile
+﻿namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     val     : 1 byte

@@ -7,10 +7,10 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Encoders;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
 using Encoder = System.Text.Encoder;
 
 namespace ScummEditor.Gui

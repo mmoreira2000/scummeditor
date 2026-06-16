@@ -1,4 +1,4 @@
-﻿namespace ScummEditor
+﻿namespace ScummEditor.Gui
 {
     partial class About
     {

@@ -1,6 +1,6 @@
 ﻿using System.Linq;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //RMIM      -   Room Image
     //  RMIH    -   Room Image Header

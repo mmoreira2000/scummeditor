@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace ScummEditor
+namespace ScummEditor.Gui
 {
     static class Program
     {

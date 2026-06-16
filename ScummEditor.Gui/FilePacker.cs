@@ -8,13 +8,13 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
-using ScummEditor;
-using ScummEditor.Encoders;
+using ScummEditor.Engine;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Gui;
-using ScummEditor.Structures;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor
+namespace ScummEditor.Gui
 {
     public partial class FilePacker : Form
     {

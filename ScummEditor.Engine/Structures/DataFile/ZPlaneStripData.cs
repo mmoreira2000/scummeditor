@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     public class ZPlaneStripData
     {

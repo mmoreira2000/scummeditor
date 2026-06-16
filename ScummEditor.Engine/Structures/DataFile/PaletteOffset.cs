@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     offset table : block size imply the number of palette. One offset per palette. ?? 

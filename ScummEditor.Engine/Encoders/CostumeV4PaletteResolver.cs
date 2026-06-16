@@ -1,7 +1,7 @@
 using System.Drawing;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Resolves the real (room) colours for a SCUMM v4 costume's local palette: a VGA room uses its

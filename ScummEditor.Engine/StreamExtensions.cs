@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace ScummEditor
+namespace ScummEditor.Engine
 {
     public static class StreamExtensions
     {

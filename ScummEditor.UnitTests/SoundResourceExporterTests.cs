@@ -1,5 +1,5 @@
 using System.Text;
-using ScummEditor.Encoders;
+using ScummEditor.Engine.Encoders;
 using Xunit;
 
 namespace ScummEditor.UnitTests

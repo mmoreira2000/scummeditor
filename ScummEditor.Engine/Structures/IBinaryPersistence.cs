@@ -1,6 +1,6 @@
 ﻿using System.IO;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     public interface IBinaryPersistence
     {

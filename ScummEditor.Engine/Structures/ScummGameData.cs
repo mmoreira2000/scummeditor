@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.IO;
-using ScummEditor.Encoders;
-using ScummEditor.Structures.DataFile;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /// <summary>
     /// Loads, holds and saves a SCUMM game's data and index files. This is the engine-agnostic

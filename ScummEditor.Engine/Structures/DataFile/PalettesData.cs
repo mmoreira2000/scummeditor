@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     //PALS - Pallete data
     //  WRAP - Dummy wrapper

@@ -1,5 +1,6 @@
-﻿using ScummEditor.Structures.DataFile;
+﻿using ScummEditor.Engine.Structures.DataFile;
 
+using ScummEditor.Engine.Structures;
 namespace ScummEditor.Gui
 {
     public partial class RoomImageHeaderControl : BlockBaseControl
@@ -9,7 +10,7 @@ namespace ScummEditor.Gui
         {
             InitializeComponent();
         }
-        public override void SetAndRefreshData(Structures.BlockBase blockBase)
+        public override void SetAndRefreshData(BlockBase blockBase)
         {
             base.SetAndRefreshData(blockBase);
 

@@ -1,4 +1,4 @@
-﻿namespace ScummEditor.Structures.DataFile
+﻿namespace ScummEditor.Engine.Structures.DataFile
 {
     //RMIH  -   Room Image Header
     //  num z buf: 2 bytes (number of ZPnn in the IM00 block)

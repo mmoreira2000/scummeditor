@@ -1,6 +1,6 @@
 using System.Windows.Forms;
-using ScummEditor.Structures;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.IndexFile;
 
 namespace ScummEditor.Gui
 {

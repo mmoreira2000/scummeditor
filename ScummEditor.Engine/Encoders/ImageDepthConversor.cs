@@ -4,7 +4,7 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     public class ImageDepthConversor
     {

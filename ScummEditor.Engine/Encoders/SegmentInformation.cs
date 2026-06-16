@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     public class SegmentInformation
     {

@@ -1,4 +1,4 @@
-﻿namespace ScummEditor.Structures.DataFile
+﻿namespace ScummEditor.Engine.Structures.DataFile
 {
     /*
     RMHD - Room Header

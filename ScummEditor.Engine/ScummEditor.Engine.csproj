@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <RootNamespace>ScummEditor</RootNamespace>
+    <RootNamespace>ScummEditor.Engine</RootNamespace>
     <AssemblyName>ScummEditor.Engine</AssemblyName>
 
     <!-- Pure engine: parsing, codecs, export/import, detection. NO WinForms - this layer must stay

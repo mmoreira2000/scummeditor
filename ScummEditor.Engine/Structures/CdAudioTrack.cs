@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /// <summary>One CD audio track inside a CDDA.SOU container.</summary>
     public class CdAudioTrack

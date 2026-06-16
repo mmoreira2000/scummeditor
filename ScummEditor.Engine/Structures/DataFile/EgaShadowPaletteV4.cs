@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace ScummEditor.Structures.DataFile
+namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>
     /// SCUMM v4 "SP" block: the EGA / shadow palette (= v5 "EPAL"). Always 256 bytes, each a pair of

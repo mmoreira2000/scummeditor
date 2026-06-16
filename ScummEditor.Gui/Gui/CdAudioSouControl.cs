@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Media;
 using System.Windows.Forms;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Structures;
 
 namespace ScummEditor.Gui
 {

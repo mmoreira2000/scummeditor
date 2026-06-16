@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
 using System.Linq;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     public class ZPlaneEncoder
     {

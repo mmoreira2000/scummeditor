@@ -1,10 +1,10 @@
 using System.Collections.Generic;
 using System.Linq;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures.DataFile;
-using ScummEditor.Structures.IndexFile;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /// <summary>
     /// Game data for the SCUMM v5/v6 engines (IFF "big header" container, a single data file with a

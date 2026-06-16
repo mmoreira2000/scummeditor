@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     /// <summary>
     /// One entry of a v4 resource directory. Besides the stored room/offset, it carries a link to

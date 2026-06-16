@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Disassembles SCUMM v4 bytecode (Monkey Island 1 floppy, Loom CD). v4 shares the v5

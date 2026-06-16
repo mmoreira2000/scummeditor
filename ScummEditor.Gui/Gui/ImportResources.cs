@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using ScummEditor.Encoders;
-using ScummEditor.Structures;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
 
 namespace ScummEditor.Gui
 {

@@ -2,9 +2,9 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using ScummEditor.Exceptions;
+using ScummEditor.Engine.Exceptions;
 
-namespace ScummEditor.Structures
+namespace ScummEditor.Engine.Structures
 {
     /*
     The block header has two layouts depending on the SCUMM version:

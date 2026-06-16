@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 
-namespace ScummEditor.Structures.IndexFile
+namespace ScummEditor.Engine.Structures.IndexFile
 {
     public class MaximumValues : BlockBase
     {

@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using ScummEditor.Exceptions;
-using ScummEditor.Structures.DataFile;
+using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
 
-namespace ScummEditor.Encoders
+namespace ScummEditor.Engine.Encoders
 {
     /// <summary>
     /// Re-encodes an edited bitmap back into a SCUMM v4 image block (BM room background or OI object
