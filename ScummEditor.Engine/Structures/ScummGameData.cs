@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using ScummEditor.Encoders;
 using ScummEditor.Structures.DataFile;
 using ScummEditor.Structures.IndexFile;
 
@@ -27,6 +28,21 @@ namespace ScummEditor.Structures
 
         /// <summary>Standalone font files loaded for the game (v4 90x.LFL); empty for v5/v6.</summary>
         public List<FontResource> Fonts { get; private set; } = new List<FontResource>();
+
+        /// <summary>
+        /// Every editable charset of the game, in a stable order: the ones embedded in the data
+        /// file (v5/v6) followed by the standalone font files (v4 90x.LFL). Batch font
+        /// export/import name files charset_N.png by this order.
+        /// </summary>
+        public List<Charset> GetAllEditableCharsets()
+        {
+            List<Charset> charsets = CharsetPngCodec.CollectCharsets(DataFile);
+            foreach (FontResource font in Fonts)
+            {
+                charsets.Add(font.Charset);
+            }
+            return charsets;
+        }
 
         /// <summary>Creates the right per-engine instance for the detected game (not yet loaded).</summary>
         public static ScummGameData Create(GameInfo gameInfo)

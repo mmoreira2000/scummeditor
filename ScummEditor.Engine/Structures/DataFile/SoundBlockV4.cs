@@ -52,6 +52,21 @@ namespace ScummEditor.Structures.DataFile
             binaryWriter.WriteBytes(RawContent); // verbatim - read-only view, round-trips byte-for-byte
         }
 
+        /// <summary>
+        /// The sub-block's payload bytes: everything after its 6-byte small header. Returns an empty
+        /// array if the sub-block's offset/size fall outside RawContent (malformed body).
+        /// </summary>
+        public byte[] GetPayload(SoundSubBlockV4 sub)
+        {
+            int start = sub.Offset + 6;
+            int length = sub.Size - 6;
+            if (start < 0 || length <= 0 || start + length > RawContent.Length) return new byte[0];
+
+            var payload = new byte[length];
+            System.Array.Copy(RawContent, start, payload, 0, length);
+            return payload;
+        }
+
         private List<SoundSubBlockV4> ParseSubBlocks(int start, int end, int depth)
         {
             var list = new List<SoundSubBlockV4>();

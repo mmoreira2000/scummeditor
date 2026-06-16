@@ -386,21 +386,6 @@ namespace ScummEditor
             }
         }
 
-        /// <summary>
-        /// Every editable charset of the game, in a stable order: the ones embedded in the data
-        /// file (v5/v6) followed by the standalone font files (v4 90x.LFL). The batch font
-        /// export/import name files charset_N.png by this order.
-        /// </summary>
-        private List<Charset> CollectAllCharsets()
-        {
-            List<Charset> charsets = CharsetPngCodec.CollectCharsets(scummFile.DataFile);
-            foreach (FontResource font in scummFile.Fonts)
-            {
-                charsets.Add(font.Charset);
-            }
-            return charsets;
-        }
-
         private void exportGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (scummFile == null || scummFile.DataFile == null)
@@ -417,7 +402,7 @@ namespace ScummEditor
 
             try
             {
-                string report = CharsetPngCodec.ExportAll(CollectAllCharsets(), dlg.SelectedPath);
+                string report = CharsetPngCodec.ExportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this, report, "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -443,7 +428,7 @@ namespace ScummEditor
 
             try
             {
-                string report = CharsetPngCodec.ImportAll(CollectAllCharsets(), dlg.SelectedPath);
+                string report = CharsetPngCodec.ImportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this,
                     report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);

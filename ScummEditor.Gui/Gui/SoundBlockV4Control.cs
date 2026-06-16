@@ -114,17 +114,6 @@ namespace ScummEditor.Gui
             return (index >= 0 && index < _rowSubs.Count) ? _rowSubs[index] : null;
         }
 
-        /// <summary>The sub-block's payload bytes (everything after its 6-byte small header).</summary>
-        private byte[] Payload(SoundSubBlockV4 sub)
-        {
-            int start = sub.Offset + 6;
-            int length = sub.Size - 6;
-            if (start < 0 || length <= 0 || start + length > _sound.RawContent.Length) return new byte[0];
-            var payload = new byte[length];
-            Array.Copy(_sound.RawContent, start, payload, 0, length);
-            return payload;
-        }
-
         private void PlayClick(object sender, EventArgs e)
         {
             SoundSubBlockV4 sub = SelectedSub();
@@ -132,7 +121,7 @@ namespace ScummEditor.Gui
 
             if (sub.Tag == "AD")
             {
-                byte[] midi = ScummV4AdLibMidi.ToStandardMidi(Payload(sub));
+                byte[] midi = ScummV4AdLibMidi.ToStandardMidi(_sound.GetPayload(sub));
                 if (midi != null)
                 {
                     string error;
@@ -168,7 +157,7 @@ namespace ScummEditor.Gui
                 dialog.FileName = sub.Tag + "_0x" + sub.Offset.ToString("X4") + ExtensionFor(sub);
                 dialog.Filter = "Sound data|*" + ExtensionFor(sub) + "|All files|*.*";
                 if (dialog.ShowDialog() != DialogResult.OK) return;
-                File.WriteAllBytes(dialog.FileName, Payload(sub));
+                File.WriteAllBytes(dialog.FileName, _sound.GetPayload(sub));
             }
             _status.Text = "Exported " + sub.Tag + " at 0x" + sub.Offset.ToString("X4") + ".";
         }
@@ -187,7 +176,7 @@ namespace ScummEditor.Gui
                     SoundSubBlockV4 sub = _rowSubs[i];
                     if (sub.Tag == "SO") continue; // containers have no payload of their own
                     string name = string.Format("{0:D3}_{1}_0x{2:X4}{3}", i, sub.Tag, sub.Offset, ExtensionFor(sub));
-                    File.WriteAllBytes(Path.Combine(dialog.SelectedPath, name), Payload(sub));
+                    File.WriteAllBytes(Path.Combine(dialog.SelectedPath, name), _sound.GetPayload(sub));
                     count++;
                 }
                 _status.Text = string.Format("Exported {0} sound resource(s).", count);

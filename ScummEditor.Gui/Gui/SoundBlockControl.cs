@@ -223,7 +223,7 @@ namespace ScummEditor.Gui
 
             byte[] outBytes;
             string ext;
-            GetExportBytes(resource.Data, out outBytes, out ext);
+            SoundResourceExporter.GetExportBytes(resource.Data, out outBytes, out ext);
 
             using (var dlg = new SaveFileDialog())
             {
@@ -249,37 +249,13 @@ namespace ScummEditor.Gui
                     SoundResource resource = _block.Resources[i];
                     byte[] outBytes;
                     string ext;
-                    GetExportBytes(resource.Data, out outBytes, out ext);
+                    SoundResourceExporter.GetExportBytes(resource.Data, out outBytes, out ext);
 
                     string name = string.Format("{0}_{1}{2}", i, SanitizeFileName(resource.Path), ext);
                     File.WriteAllBytes(Path.Combine(dlg.SelectedPath, name), outBytes);
                     count++;
                 }
                 lblStatus.Text = string.Format("Exported {0} file(s).", count);
-            }
-        }
-
-        // Picks the most useful representation: extracted .mid for MIDI, decoded .wav for VOC
-        // (raw .voc if the codec is unsupported), raw .bin otherwise.
-        private void GetExportBytes(byte[] data, out byte[] outBytes, out string ext)
-        {
-            switch (SoundConverter.Classify(data))
-            {
-                case SoundConverter.SoundKind.StandardMidi:
-                    outBytes = SoundConverter.ExtractMidi(data) ?? data;
-                    ext = ".mid";
-                    return;
-
-                case SoundConverter.SoundKind.Voc:
-                    byte[] wav = SoundConverter.VocToWav(data);
-                    if (wav != null) { outBytes = wav; ext = ".wav"; }
-                    else { outBytes = data; ext = ".voc"; }
-                    return;
-
-                default:
-                    outBytes = data;
-                    ext = ".bin";
-                    return;
             }
         }
 
