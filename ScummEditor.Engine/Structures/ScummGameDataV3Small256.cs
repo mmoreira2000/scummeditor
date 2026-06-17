@@ -134,14 +134,16 @@ namespace ScummEditor.Engine.Structures
 
         private static void FindContainingBlock(BlockBase block, long absolutePosition, ref BlockBase best)
         {
-            bool contains = block.BlockOffSet <= absolutePosition
+            // NOTE: this runs at load time, when only the leaf blocks have a BlockSize (read from their
+            // on-disk header) - the root container's size is still 0 (it is computed at save time). So we
+            // must NOT prune the walk when a block fails the containment test: the size-0 root never
+            // "contains" anything, yet its children are exactly the resource blocks we need to link. We
+            // therefore always recurse and only record a block as a candidate when it genuinely contains
+            // the position (size > 0). The deepest/highest-offset match wins, which is the resource block.
+            bool contains = block.BlockSize > 0
+                            && block.BlockOffSet <= absolutePosition
                             && absolutePosition < block.BlockOffSet + block.BlockSize;
-            if (!contains)
-            {
-                return;
-            }
-
-            if (best == null || block.BlockOffSet > best.BlockOffSet)
+            if (contains && (best == null || block.BlockOffSet > best.BlockOffSet))
             {
                 best = block;
             }

@@ -1,9 +1,12 @@
+using System;
 using System.Drawing;
 using System.IO;
+using System.Linq;
 using ScummEditor.Engine;
 using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
+using ScummEditor.Engine.Structures.IndexFile;
 using Xunit;
 
 namespace ScummEditor.UnitTests
@@ -125,6 +128,63 @@ namespace ScummEditor.UnitTests
             }
 
             Assert.True(rooms > 0, "no decodable backgrounds were found");
+        }
+
+        /// <summary>
+        /// Regression: when a v3small (GF_OLD256) background is re-encoded larger, the room's NN.LFL
+        /// file grows and the global scripts/sounds/costumes stored after it shift, so their FILE-ABSOLUTE
+        /// offsets in the 00.LFL index MUST be rewritten. The editor decodes images by re-parsing the
+        /// room tree, so it never noticed a stale index - but ScummVM seeks resources by those offsets,
+        /// so a stale index renders the game black. The bug was that the index-link pass pruned its walk
+        /// at the size-0 root container (sizes are only known at save time), leaving every entry unlinked
+        /// and never relocated. A no-op recompute must still leave the offsets byte-identical.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Vga)]
+        [InlineData(GameLibrary.ZakFmTowns)]
+        [InlineData(GameLibrary.LoomFmTowns)]
+        public void V3SmallGrowingBackgroundsRelocatesIndexOffsets(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV4IndexFile;
+            Assert.NotNull(index);
+
+            uint[] before = index.ResourceDirectories.SelectMany(d => d.Entries).Select(e => e.Offset).ToArray();
+
+            // A no-op recompute must not move anything (keeps the container byte-identical on disk).
+            game.PostProcessChanges();
+            uint[] afterNoop = index.ResourceDirectories.SelectMany(d => d.Entries).Select(e => e.Offset).ToArray();
+            Assert.Equal(before, afterNoop);
+
+            // Grow every room background (band of changed pixels -> every strip becomes uncompressed
+            // raw256, so the image block expands and the resources after it shift down the file).
+            var decoder = new ScummV4ImageDecoder();
+            var encoder = new ScummV3ImageEncoder();
+            int grew = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                ScummV4RoomBlock room = (disk.Tree as ScummV3Small256DataFile)?.GetRoom();
+                if (room?.GetBM() == null) continue;
+                using (Bitmap bg = decoder.DecodeBackground(room))
+                {
+                    if (bg == null) continue;
+                    byte[,] m = IndexedImageHelper.GetIndexMatrix(bg);
+                    int band = Math.Max(4, bg.Height / 8);
+                    for (int x = 0; x < bg.Width; x++)
+                        for (int y = 0; y < band; y++)
+                            m[x, y] = (byte)((m[x, y] + 1) & 0xFF);
+                    using (Bitmap edited = IndexedImageHelper.FromIndexMatrix(m, bg.Palette.Entries, -1))
+                        encoder.EncodeBackground(room, edited);
+                    grew++;
+                }
+            }
+            Assert.True(grew > 0, "no decodable backgrounds were found to grow");
+
+            game.PostProcessChanges();
+            uint[] afterGrow = index.ResourceDirectories.SelectMany(d => d.Entries).Select(e => e.Offset).ToArray();
+
+            int moved = before.Where((offset, i) => offset != afterGrow[i]).Count();
+            Assert.True(moved > 0, "growing every room background left all index offsets unchanged (stale index)");
         }
 
         [SkippableTheory]
