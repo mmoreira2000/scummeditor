@@ -202,6 +202,59 @@ namespace ScummEditor.UnitTests
             Assert.True(sawExpectedName, "expected to find the object name '" + expectedName + "'");
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldNameImportIsByteSafe(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var codec = GameTextCodec.Default();
+
+            var baseEntries = ScummV3OldTextManager.Extract(game, codec);
+            var baseline = new System.Collections.Generic.Dictionary<string, string>();
+            var baseKind = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (GameTextEntry e in baseEntries) { baseline[e.Id] = e.Text; baseKind[e.Id] = e.Kind; }
+
+            // Edit a spread of object names (grow + shrink, ASCII only).
+            var edits = new System.Collections.Generic.Dictionary<string, string>();
+            int pick = 0;
+            foreach (GameTextEntry e in baseEntries)
+            {
+                if (e.Kind != "objectName" || e.Text.Length < 3) continue;
+                if (!System.Text.RegularExpressions.Regex.IsMatch(e.Text, "^[A-Za-z ]+$")) continue;
+                edits[e.Id] = (pick % 2 == 0) ? e.Text + " EDITED" : e.Text.Substring(0, 2);
+                if (++pick >= 40) break;
+            }
+            Skip.If(edits.Count == 0, "no editable object names found");
+
+            var editedBaseTexts = new System.Collections.Generic.HashSet<string>();
+            foreach (var kv in edits) editedBaseTexts.Add(baseline[kv.Key]);
+
+            ScummV3OldTextManager.ImportNames(game, edits, codec);
+
+            var after = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (GameTextEntry e in ScummV3OldTextManager.Extract(game, codec)) after[e.Id] = e.Text;
+
+            // The key safety property: editing object names corrupts NO precisely-bounded resource
+            // (other object names, or chunk-bounded global/local scripts). Object verb-code strings are
+            // extracted with a loose end bound so their over-read tails shift harmlessly - excluded.
+            foreach (var kv in baseline)
+            {
+                if (edits.ContainsKey(kv.Key)) continue;
+                if (System.Text.RegularExpressions.Regex.IsMatch(kv.Key, @"\.v\d+\.t\d+$")) continue;
+                string got; after.TryGetValue(kv.Key, out got);
+                if (got == kv.Value) continue;
+                bool isName = baseKind.TryGetValue(kv.Key, out var k) && k == "objectName";
+                if (isName && editedBaseTexts.Contains(kv.Value)) continue; // shared-name sibling - expected
+                Assert.True(false, "name edit corrupted " + kv.Key + ": was '" + kv.Value + "' now '" + (got ?? "<gone>") + "'");
+            }
+
+            // At least the non-shared edits must have taken.
+            int applied = 0;
+            foreach (var kv in edits) if (after.TryGetValue(kv.Key, out var g) && g == kv.Value) applied++;
+            Assert.True(applied > 0, "no name edit took effect");
+        }
+
         /// <summary>True when the decoded text is dominated by control-code escape tokens (an over-read).</summary>
         private static bool IsControlGarbage(string text)
         {

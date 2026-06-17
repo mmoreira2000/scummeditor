@@ -23,8 +23,8 @@ namespace ScummEditor.Engine.Structures.DataFile
     {
         public ScummV3OldBundleDataFile(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo) { }
 
-        /// <summary>The whole (decrypted) room file. Written back verbatim on an unedited save.</summary>
-        public byte[] RawContent { get; private set; }
+        /// <summary>The whole (decrypted) room file. Written back verbatim on save; replaced in place by edits.</summary>
+        public byte[] RawContent { get; set; }
 
         /// <summary>The chunk boundaries (offset+size into RawContent); chunk 0 is the room.</summary>
         public List<V3OldChunk> Chunks { get; private set; }
@@ -50,6 +50,12 @@ namespace ScummEditor.Engine.Structures.DataFile
         public override void CalculateOffsets()
         {
             // A verbatim file has no child blocks to position.
+        }
+
+        /// <summary>Re-walks the chunk overlay after an in-place edit changed RawContent.</summary>
+        public void ReparseChunks()
+        {
+            Chunks = ParseChunks(RawContent);
         }
 
         /// <summary>The room chunk (chunk 0), or null if the file is empty/malformed.</summary>

@@ -52,6 +52,114 @@ namespace ScummEditor.Engine.Encoders
             return entries;
         }
 
+        // --- import (write-back) ---------------------------------------------
+
+        /// <summary>
+        /// Writes edited OBJECT NAMES back into a v3 old-bundle game, re-pointing every shifted offset
+        /// via ScummV3OldWriter. Only ids present in <paramref name="idToText"/> are touched; an
+        /// unchanged name is skipped. (Script / verb-code bytecode import is layered on next.)
+        /// </summary>
+        public static GameTextImportReport ImportNames(ScummGameData game, System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec)
+        {
+            var report = new GameTextImportReport();
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            var matched = new HashSet<string>();
+
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var dataFile = disk.Tree as ScummV3OldBundleDataFile;
+                if (dataFile == null || dataFile.RawContent == null) continue;
+                int roomNo = RoomNumberFromPath(disk.FilePath);
+                string lf = "LF" + roomNo.ToString("D3");
+
+                // Collect every name edit for this file FROM THE ORIGINAL bytes, then apply them in
+                // descending offset order so each splice never invalidates a not-yet-applied (lower) one.
+                byte[] data = dataFile.RawContent;
+                var room = new ScummV3OldRoom(data);
+                List<V3OldChunk> chunks = dataFile.Chunks;
+                var edits = new List<NameEdit>();
+                var usedLabels = new HashSet<string>();
+
+                for (int i = 0; i < room.NumObjects; i++)
+                {
+                    int objptr = room.ObjectCodeOffset(i);
+                    if (objptr <= 2 || objptr >= data.Length) continue;
+
+                    int objId = ReadU16(data, objptr + 4);
+                    string obj = "OBJ" + objId.ToString("D5");
+                    string baseObj = obj;
+                    for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
+
+                    int nameRel = objptr + 16 < data.Length ? data[objptr + 16] : 0;
+                    if (nameRel == 0) continue;
+                    int nameOffset = objptr + nameRel;
+                    int chunkEnd = ChunkEndContaining(chunks, objptr, data.Length);
+                    if (nameOffset <= 0 || nameOffset >= chunkEnd) continue;
+
+                    string id = lf + "." + obj + ".name";
+                    string newText;
+                    if (!idToText.TryGetValue(id, out newText)) continue;
+                    matched.Add(id);
+
+                    string encodeError;
+                    byte[] newName = codec.Encode(newText, out encodeError);
+                    if (newName == null) { report.Errors.Add(id + ": " + encodeError); continue; }
+
+                    int oldLen = ZeroTerminatedLength(data, nameOffset, chunkEnd);
+                    if (SliceEquals(data, nameOffset, oldLen, newName)) continue; // unchanged
+                    edits.Add(new NameEdit { Id = id, Offset = nameOffset, OldLen = oldLen, NewBytes = newName });
+                }
+
+                // Several objects can share ONE name string (e.g. four "door" objects point at the same
+                // bytes). Apply each byte region only once - re-editing a shared region with a stale
+                // offset would corrupt the file. Conflicting values for a shared region are reported.
+                var appliedAt = new Dictionary<int, NameEdit>();
+                var unique = new List<NameEdit>();
+                foreach (NameEdit e in edits)
+                {
+                    NameEdit prior;
+                    if (appliedAt.TryGetValue(e.Offset, out prior))
+                    {
+                        if (!SliceEquals(prior.NewBytes, 0, prior.NewBytes.Length, e.NewBytes))
+                            report.Warnings.Add(e.Id + ": shares its name with " + prior.Id + " (same bytes); kept '" + prior.Id + "'");
+                        continue;
+                    }
+                    appliedAt[e.Offset] = e;
+                    unique.Add(e);
+                }
+
+                unique.Sort((a, b) => b.Offset.CompareTo(a.Offset)); // descending, so a splice never moves a lower not-yet-applied edit
+                foreach (NameEdit e in unique)
+                {
+                    ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, e.Offset, e.OldLen, e.NewBytes);
+                    report.StringsChanged++;
+                    report.BlocksRebuilt++;
+                }
+            }
+
+            report.EntriesMatched = matched.Count;
+            foreach (var kv in idToText)
+                if (!matched.Contains(kv.Key) && report.Warnings.Count < 50)
+                    report.Warnings.Add("ID not found (or not an object name) in the game: " + kv.Key);
+            return report;
+        }
+
+        private class NameEdit
+        {
+            public string Id;
+            public int Offset;
+            public int OldLen;
+            public byte[] NewBytes;
+        }
+
+        private static bool SliceEquals(byte[] buf, int offset, int length, byte[] other)
+        {
+            if (other.Length != length) return false;
+            for (int i = 0; i < length; i++)
+                if (buf[offset + i] != other[i]) return false;
+            return true;
+        }
+
         // --- objects: names + verb code --------------------------------------
 
         private static void AddObjects(List<GameTextEntry> entries, byte[] data, ScummV3OldRoom room,
