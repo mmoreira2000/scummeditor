@@ -69,7 +69,57 @@ namespace ScummEditor.Engine.Encoders
                 if (onProgress != null) onProgress(i + 1, rooms.Count);
             }
 
+            if (options.Costumes)
+            {
+                count += ExportCostumes(game, folder);
+            }
+
             return count;
+        }
+
+        /// <summary>Exports every costume frame, located via the index COSTUME directory (room, offset).</summary>
+        private static int ExportCostumes(ScummGameData game, string folder)
+        {
+            var index = game.IndexFile as Structures.IndexFile.ScummV3OldBundleIndexFile;
+            if (index == null || index.CostumeDirectory == null) return 0;
+
+            var byRoom = RoomsByNumber(game);
+            var costumeDecoder = new CostumeImageDecoderV4();
+            Color[] egaPalette = new Color[16];
+            Array.Copy(EgaColorTable.Colors256, egaPalette, 16);
+
+            int count = 0;
+            Structures.IndexFile.V3OldResourceDirectory dir = index.CostumeDirectory;
+            for (int c = 0; c < dir.Count; c++)
+            {
+                int offset = dir.Offsets[c];
+                if (offset == 0xFFFF || offset == 0) continue;
+                ScummV3OldBundleDataFile df;
+                if (!byRoom.TryGetValue(dir.RoomNumbers[c], out df)) continue;
+
+                var costume = new CostumeV3Old(df.RawContent, offset);
+                for (int k = 0; k < costume.Frames.Count; k++)
+                {
+                    Bitmap frame = costumeDecoder.Decode(costume.Frames[k], 16, egaPalette, false);
+                    if (frame != null)
+                    {
+                        Save(frame, folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                        count++;
+                    }
+                }
+            }
+            return count;
+        }
+
+        private static Dictionary<int, ScummV3OldBundleDataFile> RoomsByNumber(ScummGameData game)
+        {
+            var map = new Dictionary<int, ScummV3OldBundleDataFile>();
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df != null) map[RoomNumberFromPath(disk.FilePath)] = df;
+            }
+            return map;
         }
 
         private static void Save(Bitmap bitmap, string folder, string fileName)
