@@ -173,6 +173,65 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega, "door")]
+        [InlineData(GameLibrary.LoomEga, "leaf")]
+        public void V3OldTextExtractsCleanStrings(string relativePath, string expectedName)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+
+            var entries = ScummV3OldTextManager.Extract(game, GameTextCodec.Default());
+
+            // A real v3old game has thousands of translatable strings (dialogue, object names, verbs).
+            Assert.True(entries.Count > 1000, "expected many text entries, got " + entries.Count);
+
+            int names = 0, talk = 0;
+            bool sawExpectedName = false;
+            foreach (GameTextEntry e in entries)
+            {
+                if (e.Kind == "objectName") { names++; if (e.Text == expectedName) sawExpectedName = true; }
+                if (e.Kind == "talk") talk++;
+
+                // No entry should be over-read garbage: a real string is mostly printable, not a run
+                // of control-code escape tokens. Guard against the chunk-bound regressions.
+                Assert.False(IsControlGarbage(e.Text), "garbage (over-read) entry: " + e.Id + " = " + e.Text);
+            }
+
+            Assert.True(names > 100, "expected many object names, got " + names);
+            Assert.True(talk > 500, "expected much dialogue, got " + talk);
+            Assert.True(sawExpectedName, "expected to find the object name '" + expectedName + "'");
+        }
+
+        /// <summary>True when the decoded text is dominated by control-code escape tokens (an over-read).</summary>
+        private static bool IsControlGarbage(string text)
+        {
+            int controlTokens = 0, visible = 0;
+            int i = 0;
+            while (i < text.Length)
+            {
+                if (text[i] == '{')
+                {
+                    int close = text.IndexOf('}', i + 1);
+                    if (close < 0) { visible++; i++; continue; }
+                    string token = text.Substring(i + 1, close - i - 1);
+                    // {0xNN} low-control bytes (0x01..0x1F) are escape noise, not glyphs.
+                    if (token.StartsWith("0x") && token.Length == 4)
+                    {
+                        int v;
+                        if (int.TryParse(token.Substring(2), System.Globalization.NumberStyles.HexNumber, null, out v) && v < 0x20)
+                            controlTokens++;
+                        else visible++;
+                    }
+                    i = close + 1;
+                    continue;
+                }
+                if (!char.IsWhiteSpace(text[i])) visible++;
+                i++;
+            }
+            // garbage = at least two control-byte tokens and more of them than visible characters
+            return controlTokens >= 2 && controlTokens >= visible;
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)
