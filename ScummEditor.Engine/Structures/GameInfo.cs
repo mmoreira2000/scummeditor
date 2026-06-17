@@ -15,6 +15,21 @@ namespace ScummEditor.Engine.Structures
         /// </summary>
         public int IndexXorKey { get; set; }
 
+        /// <summary>
+        /// True when the data/index blocks use the "small header" ([size:4 LE][tag:2]) layout - the
+        /// SCUMM v4 games and the GF_OLD256 v3 games (Indy3 VGA, Zak/Loom FM-Towns). v5/v6 use the
+        /// "big header" ([tag:4][size:4 BE]); the v3 old-bundle games (Loom EGA) use neither (untagged
+        /// uint16-size chunks). Drives BlockBase.IsSmallHeader.
+        /// </summary>
+        public bool UsesSmallHeader { get; set; }
+
+        /// <summary>
+        /// True for the v3 "old bundle" games (Loom EGA, Indy3 EGA, Zak DOS): whole files XOR 0xFF,
+        /// a magic-prefixed fixed-layout 00.LFL index, and untagged [size:uint16 LE] room chunks.
+        /// These do not use the BlockBase small/big header machinery at all.
+        /// </summary>
+        public bool UsesOldBundle { get; set; }
+
         /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
         public bool IsTalkie { get; set; }
 

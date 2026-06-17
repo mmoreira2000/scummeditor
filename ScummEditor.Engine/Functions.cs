@@ -140,6 +140,13 @@ namespace ScummEditor.Engine
                 return v4;
             }
 
+            // Then the SCUMM v3 layout (00.LFL index + NN.LFL room files; two-digit names).
+            GameInfo v3 = DetectScummV3(folder);
+            if (v3 != null)
+            {
+                return v3;
+            }
+
             var none = new GameInfo();
             none.LoadedGame = ScummGame.None;
             return none;
@@ -186,7 +193,8 @@ namespace ScummEditor.Engine
                 Xored = true,
                 XorKey = 0x69,      // DISKnn.LEC data
                 IndexXorKey = 0x00, // 000.LFL is plaintext
-                ScummVersion = 4
+                ScummVersion = 4,
+                UsesSmallHeader = true // [size:4 LE][tag:2] blocks
             };
 
             // Loom CD ships ripped CD audio tracks (CDDA.SOU); MI1 floppy has none.
@@ -260,6 +268,238 @@ namespace ScummEditor.Engine
             catch (IOException)
             {
                 return false;
+            }
+        }
+
+        /// <summary>
+        /// Detects a SCUMM v3 game (Indiana Jones 3, Loom EGA, Zak). v3 stores one room per file
+        /// (00.LFL index + NN.LFL rooms + 9x.LFL charsets), in two sub-families decided by the index:
+        ///   - GF_OLD256 (Indy3 VGA, Zak FM-Towns): plaintext, v4-style small-header blocks; 00.LFL
+        ///     begins with a small-header "0R" block.
+        ///   - old-bundle (Loom EGA, Indy3 EGA): whole files XOR 0xFF; 00.LFL decrypts to magic 0x0100.
+        /// The specific game is told apart from the index resource counts alone (never the EXE).
+        /// </summary>
+        private static GameInfo DetectScummV3(string folder)
+        {
+            string indexPath = Path.Combine(folder, "00.LFL");
+            if (!File.Exists(indexPath))
+            {
+                return null;
+            }
+
+            byte[] head = ReadFileHead(indexPath, 6);
+            if (head == null || head.Length < 6)
+            {
+                return null;
+            }
+
+            bool oldBundle;
+            int xorKey;
+            if (head[4] == (byte)'0' && head[5] == (byte)'R')
+            {
+                // GF_OLD256: plaintext small-header index starting with the room directory "0R".
+                oldBundle = false;
+                xorKey = 0x00;
+            }
+            else if ((head[0] ^ 0xFF) == 0x00 && (head[1] ^ 0xFF) == 0x01)
+            {
+                // old-bundle: XOR 0xFF over the whole file; decrypts to the magic word 0x0100.
+                oldBundle = true;
+                xorKey = 0xFF;
+            }
+            else
+            {
+                return null;
+            }
+
+            List<string> rooms = EnumerateV3Rooms(folder);
+            if (rooms.Count == 0)
+            {
+                return null;
+            }
+
+            var result = new GameInfo
+            {
+                LoadedGame = IdentifyV3Game(indexPath, oldBundle, xorKey, folder),
+                IndexFile = indexPath,
+                DataFile = rooms[0],
+                DataFiles = rooms,                 // one NN.LFL per room
+                FontFiles = EnumerateV3Fonts(folder), // 9x.LFL charsets
+                Xored = xorKey != 0,
+                XorKey = xorKey,
+                IndexXorKey = xorKey,
+                ScummVersion = 3,
+                UsesSmallHeader = !oldBundle, // GF_OLD256 uses the v4 [size:4 LE][tag:2] header
+                UsesOldBundle = oldBundle     // EGA games use untagged [size:uint16] chunks
+            };
+
+            // FM-Towns releases ship ripped CD audio (CDDA.SOU); mark the CD edition.
+            var cdAudioInfo = new FileInfo(Path.Combine(folder, "CDDA.SOU"));
+            if (cdAudioInfo.Exists)
+            {
+                result.CdAudioFilePath = cdAudioInfo.FullName;
+                if (cdAudioInfo.Length >= TalkieMinimumSpeechBytes)
+                {
+                    result.HasCdAudio = true;
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>The NN.LFL room files (01-89), ordered by room number; excludes 00 and the 9x charsets.</summary>
+        private static List<string> EnumerateV3Rooms(string folder)
+        {
+            var rooms = new List<KeyValuePair<int, string>>();
+            foreach (string path in Directory.GetFiles(folder, "*.LFL"))
+            {
+                int number = ParseLflNumber(Path.GetFileNameWithoutExtension(path));
+                if (number >= 1 && number <= 89)
+                {
+                    rooms.Add(new KeyValuePair<int, string>(number, path));
+                }
+            }
+            return rooms.OrderBy(r => r.Key).Select(r => r.Value).ToList();
+        }
+
+        /// <summary>The 9x.LFL charset files (90-99), ordered by number.</summary>
+        private static List<string> EnumerateV3Fonts(string folder)
+        {
+            var fonts = new List<KeyValuePair<int, string>>();
+            foreach (string path in Directory.GetFiles(folder, "*.LFL"))
+            {
+                int number = ParseLflNumber(Path.GetFileNameWithoutExtension(path));
+                if (number >= 90 && number <= 99)
+                {
+                    fonts.Add(new KeyValuePair<int, string>(number, path));
+                }
+            }
+            return fonts.OrderBy(f => f.Key).Select(f => f.Value).ToList();
+        }
+
+        /// <summary>Parses an "NN" LFL base name to its number, or -1 when it is not all digits.</summary>
+        private static int ParseLflNumber(string nameWithoutExtension)
+        {
+            int number;
+            return int.TryParse(nameWithoutExtension, out number) ? number : -1;
+        }
+
+        /// <summary>
+        /// Identifies the v3 game from the index resource counts (rooms/scripts/sounds/costumes) - a
+        /// data-only signal, never the EXE. Indy3 has ~139 scripts/~84 sounds; Zak ~199/199; Loom EGA
+        /// ~200 scripts/~80 sounds. Falls back to the CD-audio signal (FM-Towns) when counts are unclear.
+        /// </summary>
+        private static ScummGame IdentifyV3Game(string indexPath, bool oldBundle, int xorKey, string folder)
+        {
+            int[] counts = ReadV3DirectoryCounts(indexPath, oldBundle, xorKey);
+            if (counts != null)
+            {
+                int scripts = counts[1];
+                int sounds = counts[2];
+
+                if (scripts >= 180 && sounds >= 180)
+                {
+                    return ScummGame.ZakMcKracken; // Zak: ~199 scripts and sounds
+                }
+                if (scripts >= 110 && scripts < 170 && sounds < 130)
+                {
+                    return ScummGame.IndianaJones3; // Indy3: ~139 scripts, ~84 sounds
+                }
+                if (oldBundle)
+                {
+                    return ScummGame.Loom; // Loom EGA: ~200 scripts, ~80 sounds
+                }
+            }
+
+            return File.Exists(Path.Combine(folder, "CDDA.SOU")) ? ScummGame.ZakMcKracken : ScummGame.IndianaJones3;
+        }
+
+        /// <summary>
+        /// Reads {rooms, scripts, sounds, costumes} from the v3 index without fully parsing it.
+        /// old-bundle: magic(2)+numObj(2)+objTable(numObj*4) then four [count:1][count bytes][count*2 LE]
+        /// directories in order ROOM, COSTUME, SCRIPT, SOUND. small-header: the count is the uint16 at
+        /// each 0R/0S/0N/0C block's body. Returns null on any malformed read.
+        /// </summary>
+        private static int[] ReadV3DirectoryCounts(string indexPath, bool oldBundle, int xorKey)
+        {
+            try
+            {
+                byte[] data = File.ReadAllBytes(indexPath);
+                if (xorKey != 0)
+                {
+                    for (int i = 0; i < data.Length; i++)
+                    {
+                        data[i] ^= (byte)xorKey;
+                    }
+                }
+
+                if (oldBundle)
+                {
+                    int p = 2; // skip magic
+                    int numObjects = data[p] | (data[p + 1] << 8);
+                    p += 2 + numObjects * 4;
+
+                    int rooms = ReadOldBundleDirCount(data, ref p);
+                    int costumes = ReadOldBundleDirCount(data, ref p);
+                    int scripts = ReadOldBundleDirCount(data, ref p);
+                    int sounds = ReadOldBundleDirCount(data, ref p);
+                    return new[] { rooms, scripts, sounds, costumes };
+                }
+
+                int rRooms = 0, rScripts = 0, rSounds = 0, rCostumes = 0;
+                int q = 0;
+                while (q + 8 <= data.Length)
+                {
+                    uint size = (uint)(data[q] | (data[q + 1] << 8) | (data[q + 2] << 16) | (data[q + 3] << 24));
+                    string tag = string.Empty + (char)data[q + 4] + (char)data[q + 5];
+                    if (size < 6 || q + size > data.Length)
+                    {
+                        break;
+                    }
+
+                    int count = data[q + 6] | (data[q + 7] << 8);
+                    if (tag == "0R") rRooms = count;
+                    else if (tag == "0S") rScripts = count;
+                    else if (tag == "0N") rSounds = count;
+                    else if (tag == "0C") rCostumes = count;
+
+                    q += (int)size;
+                }
+                return new[] { rRooms, rScripts, rSounds, rCostumes };
+            }
+            catch (IOException)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>Reads one old-bundle directory ([count:1][count roomno bytes][count uint16 offsets]) and returns its count, advancing p.</summary>
+        private static int ReadOldBundleDirCount(byte[] data, ref int p)
+        {
+            int count = data[p];
+            p += 1 + count + count * 2;
+            return count;
+        }
+
+        /// <summary>Reads up to <paramref name="length"/> bytes from the start of a file; null on error.</summary>
+        private static byte[] ReadFileHead(string path, int length)
+        {
+            try
+            {
+                using (FileStream stream = File.OpenRead(path))
+                {
+                    var head = new byte[length];
+                    int read = stream.Read(head, 0, length);
+                    if (read < length)
+                    {
+                        return null;
+                    }
+                    return head;
+                }
+            }
+            catch (IOException)
+            {
+                return null;
             }
         }
     }

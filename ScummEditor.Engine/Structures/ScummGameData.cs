@@ -51,6 +51,10 @@ namespace ScummEditor.Engine.Structures
             {
                 return new ScummGameDataV4();
             }
+            if (gameInfo != null && gameInfo.ScummVersion == 3 && !gameInfo.UsesOldBundle)
+            {
+                return new ScummGameDataV3Small256(); // Indy3 VGA, Zak FM-Towns (v3 old-bundle added in M2)
+            }
             return new ScummGameDataV5V6();
         }
 
