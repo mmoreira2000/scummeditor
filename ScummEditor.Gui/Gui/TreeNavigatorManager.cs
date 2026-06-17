@@ -156,7 +156,7 @@ namespace ScummEditor.Gui
                 var sound = new ScummV3OldSound(df.RawContent, offset);
                 if (sound.AdLibOffset < 0) continue; // nothing playable/exportable
                 var node = _treeView.Nodes.Add("SoundV3", string.Format("Sound {0} (room {1}){2}", s, dir.RoomNumbers[s], sound.IsMusic ? " - music" : string.Empty));
-                node.Tag = sound;
+                node.Tag = new V3OldSoundRef { DataFile = df, Index = index, RoomNo = dir.RoomNumbers[s], Offset = offset };
             }
         }
 
@@ -335,8 +335,8 @@ namespace ScummEditor.Gui
                 return;
             }
 
-            // v3 old-bundle sounds are tagless resources, not BlockBase; their own viewer plays/exports them.
-            var v3oldSound = e.Node.Tag as ScummV3OldSound;
+            // v3 old-bundle sounds are tagless resources, not BlockBase; their own viewer plays/exports/imports them.
+            var v3oldSound = e.Node.Tag as V3OldSoundRef;
             if (v3oldSound != null)
             {
                 _v3oldSoundControl.SetData(v3oldSound);

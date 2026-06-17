@@ -308,5 +308,34 @@ namespace ScummEditor.Engine.Encoders
         }
 
         private static int ReadU16(byte[] data, int p) { return data[p] | (data[p + 1] << 8); }
+
+        // ---------------------------------------------------------------------
+        // Sound import (raw AdLib payload replacement)
+        // ---------------------------------------------------------------------
+
+        /// <summary>
+        /// Replaces the raw AdLib payload of a v3 old-bundle sound (the bytes after the AD chunk's
+        /// 4-byte header) with <paramref name="newPayload"/>, re-pointing the offsets the size change
+        /// shifts via ScummV3OldWriter.ApplyEdit. This is an asset-level swap of the OPL2 stream
+        /// (translation has no text in audio, and there is no MIDI-to-AdLib encoder); the payload must
+        /// be a valid AdLib resource (e.g. one exported by the sound viewer or produced for ScummVM).
+        /// Returns false (with a reason) when the sound has no AD chunk.
+        /// </summary>
+        public static bool ImportRawAdLib(ScummV3OldBundleDataFile dataFile, Structures.IndexFile.ScummV3OldBundleIndexFile index,
+            int roomNo, int soundOffset, byte[] newPayload, out string error)
+        {
+            error = null;
+            var sound = new ScummV3OldSound(dataFile.RawContent, soundOffset);
+            if (sound.AdLibOffset < 0)
+            {
+                error = "this sound has no AdLib chunk to replace";
+                return false;
+            }
+            int adOffs = sound.AdLibOffset;
+            int oldPayloadLen = sound.AdLibSize - 4; // AD chunk = [size:u16][2 bytes][payload]
+            // Replace [adOffs+4, adOffs+adSize) and grow the AD size word at adOffs by the delta.
+            ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, adOffs + 4, oldPayloadLen, newPayload, adOffs);
+            return true;
+        }
     }
 }

@@ -503,6 +503,53 @@ namespace ScummEditor.UnitTests
             Assert.True(edited > 0, "no editable costume frame found");
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldRawAdLibImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummEditor.Engine.Structures.IndexFile.ScummV3OldBundleIndexFile;
+            Skip.If(index == null || index.SoundDirectory == null, "no sound directory");
+
+            var byRoom = new System.Collections.Generic.Dictionary<int, ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile>();
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile;
+                if (df != null) byRoom[RoomNo(disk.FilePath)] = df;
+            }
+
+            bool tested = false;
+            var sdir = index.SoundDirectory;
+            for (int s = 0; s < sdir.Count && !tested; s++)
+            {
+                int off = sdir.Offsets[s];
+                if (off == 0xFFFF || off == 0) continue;
+                ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile df;
+                if (!byRoom.TryGetValue(sdir.RoomNumbers[s], out df)) continue;
+                var snd = new ScummEditor.Engine.Structures.DataFile.ScummV3OldSound(df.RawContent, off);
+                byte[] payload = snd.GetAdLibPayload();
+                if (payload == null) continue;
+
+                // no-op: re-importing the same payload leaves the room byte-identical
+                byte[] before; using (var ms = new System.IO.MemoryStream()) { df.SaveToBinaryWriter(ms); before = ms.ToArray(); }
+                string err;
+                Assert.True(ScummV3OldGraphics.ImportRawAdLib(df, index, sdir.RoomNumbers[s], off, payload, out err), err);
+                byte[] after; using (var ms = new System.IO.MemoryStream()) { df.SaveToBinaryWriter(ms); after = ms.ToArray(); }
+                Assert.Equal(before.Length, after.Length);
+                for (int k = 0; k < before.Length; k++) Assert.Equal(before[k], after[k]);
+
+                // grow: a larger payload re-extracts at the new length
+                var bigger = new byte[payload.Length + 3];
+                System.Array.Copy(payload, bigger, payload.Length);
+                Assert.True(ScummV3OldGraphics.ImportRawAdLib(df, index, sdir.RoomNumbers[s], off, bigger, out err), err);
+                var snd2 = new ScummEditor.Engine.Structures.DataFile.ScummV3OldSound(df.RawContent, off);
+                Assert.Equal(bigger.Length, snd2.GetAdLibPayload().Length);
+                tested = true;
+            }
+            Assert.True(tested, "no AdLib sound found to import");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)
