@@ -22,6 +22,13 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Indiana Jones 3 reads getActorX/getActorY with a byte (not word) direct actor param.</summary>
         public bool IsIndy3 { get; set; }
 
+        /// <summary>
+        /// True for the single-byte v3 "old bundle" games (Loom EGA, Indy3 EGA), where 0xFE is a second
+        /// in-string escape marker. The FM-Towns/256 v3 games (which may be Japanese SJIS) leave this
+        /// false so 0xFE stays a content byte, exactly like v5+.
+        /// </summary>
+        public bool IsOldBundle { get; set; }
+
         public static new ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset)
         {
             return Disassemble(code, startOffset, null, false);
@@ -34,13 +41,31 @@ namespace ScummEditor.Engine.Encoders
 
         public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels, bool isIndy3)
         {
-            return new ScummV3Disassembler { IsIndy3 = isIndy3 }.RunDisassembly(code, startOffset, namedLabels);
+            return Disassemble(code, startOffset, namedLabels, isIndy3, false);
+        }
+
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels, bool isIndy3, bool isOldBundle)
+        {
+            return new ScummV3Disassembler { IsIndy3 = isIndy3, IsOldBundle = isOldBundle }.RunDisassembly(code, startOffset, namedLabels);
+        }
+
+        protected override bool IsStringEscape(byte b)
+        {
+            return b == 0xFF || (IsOldBundle && b == 0xFE);
         }
 
         protected override void Decode(byte op, int offset)
         {
             switch (op)
             {
+                case 0x02: case 0x82: // startMusic - in v3 this is the FM-Towns CD query: it STORES a
+                    // result var (word) then reads a var-or-direct byte (3 operand bytes), not the
+                    // single byte the v4/v5 base reads. Reading only one byte desyncs the rest of the
+                    // script (this was the root of the Loom/Indy3 verb-script over-reads).
+                    // scummvm o5_startMusic, script_v5.cpp (the version==3 path).
+                    SetResult(offset, ReadVarRef(), "startMusic(" + GetVarOrDirectByte(0x80) + ")");
+                    break;
+
                 case 0x30: case 0xB0: // setBoxFlags: a var-or-direct byte + a plain byte
                 {
                     string box = GetVarOrDirectByte(0x80);
@@ -48,6 +73,17 @@ namespace ScummEditor.Engine.Encoders
                     Emit(offset, "setBoxFlags(" + box + ", " + flags + ");");
                     break;
                 }
+
+                case 0xAE: // wait - Indiana Jones 3 (non-Macintosh) hardwires this to waitForMessage
+                    // with NO sub-op byte; every other v3 game reads a sub-op (base WaitOps). Reading
+                    // the absent sub-op over-reads and desyncs Indy3 scripts. scummvm o5_wait.
+                    if (IsIndy3)
+                    {
+                        Emit(offset, "wait.waitForMessage();");
+                        break;
+                    }
+                    base.Decode(op, offset);
+                    break;
 
                 case 0x3B: case 0xBB: // waitForActor (re-enabled in v3; NOP-ish, but consumes the actor param)
                     Emit(offset, "waitForActor(" + GetVarOrDirectByte(0x80) + ");");

@@ -217,6 +217,16 @@ namespace ScummEditor.Engine.Encoders
         // Strings use the same friendly tokens as the v6 listings and the text export.
         private static readonly GameTextCodec ListingCodec = GameTextCodec.Default();
 
+        /// <summary>
+        /// True when <paramref name="b"/> introduces an in-string escape (followed by a function code
+        /// and, for most codes, a 16-bit argument). Base = only 0xFF; the single-byte v3 old-bundle
+        /// games override this to also treat 0xFE as an escape.
+        /// </summary>
+        protected virtual bool IsStringEscape(byte b)
+        {
+            return b == 0xFF;
+        }
+
         protected string ReadString(string kind)
         {
             int start = _pos;
@@ -226,12 +236,13 @@ namespace ScummEditor.Engine.Encoders
                 byte b = ReadByte();
                 if (b == 0) { terminated = true; break; }
 
-                // SCUMM string escape: ONLY 0xFF (mirrors ScummEngine::resStrLen / convertMessageToString
-                // for every version we handle - v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument,
-                // every other code is followed by a 16-bit word. 0xFE is NOT an escape - it is an ordinary
+                // SCUMM string escape: 0xFF for every version we handle (mirrors ScummEngine::resStrLen /
+                // convertMessageToString, v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument, every
+                // other code is followed by a 16-bit word. 0xFE is NOT an escape here - it is an ordinary
                 // content byte (the Japanese CJK newline glyph, and a legal SJIS trail byte), so treating
-                // it as one desynced Japanese (SJIS) strings and the rest of the script after them.
-                if (b == 0xFF)
+                // it as one desynced Japanese (SJIS) strings. The single-byte v3 old-bundle games DO use
+                // 0xFE as a second escape marker, so ScummV3Disassembler widens IsStringEscape for them.
+                if (IsStringEscape(b))
                 {
                     byte code = ReadByte();
                     if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
