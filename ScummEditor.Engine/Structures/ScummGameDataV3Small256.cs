@@ -27,6 +27,11 @@ namespace ScummEditor.Engine.Structures
             return new ScummV4IndexFile(LoadedGameInfo);
         }
 
+        protected override void AfterLoad()
+        {
+            LoadV3Charsets();
+        }
+
         /// <summary>
         /// Links each script/sound/costume directory entry to the block holding its bytes. The entry
         /// offset is file-absolute within the room's NN.LFL (RO at 0), and the entry's room number

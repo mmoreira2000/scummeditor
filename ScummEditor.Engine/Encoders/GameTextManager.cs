@@ -110,6 +110,12 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
         private static ScummV6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
         {
+            if (context.GameInfo != null && context.GameInfo.ScummVersion == 3)
+            {
+                // v3 = the v4 language with a few more opcode deltas (ScummV3Disassembler).
+                bool isIndy3 = context.GameInfo.LoadedGame == Structures.ScummGame.IndianaJones3;
+                return ScummV3Disassembler.Disassemble(code, start, null, isIndy3);
+            }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 4)
             {
                 // v4 = the v5 parameter-bit language with a few opcode deltas (ScummV4Disassembler).
@@ -301,58 +307,88 @@ namespace ScummEditor.Engine.Encoders
             var list = new List<Source>();
             foreach (DataDisk disk in game.DataDisks)
             {
-                foreach (BlockBase lfBlock in disk.Tree.Childrens)
+                // v4 packs rooms in LF disk blocks; v3 (GF_OLD256) keeps one room per NN.LFL with the
+                // room/scripts as the file's top-level children (no LF wrapper).
+                bool hasLf = false;
+                foreach (BlockBase c in disk.Tree.Childrens)
                 {
-                    var lf = lfBlock as ScummV4DiskBlock;
-                    if (lf == null) continue;
+                    if (c is ScummV4DiskBlock) { hasLf = true; break; }
+                }
 
-                    string lfId = "LF" + lf.RoomNumber.ToString("D3");
-                    int sc = 0, en = 0, ex = 0;
-
-                    foreach (BlockBase child in lf.Childrens)
+                if (hasLf)
+                {
+                    foreach (BlockBase lfBlock in disk.Tree.Childrens)
                     {
-                        var globalScript = child as ScriptBlockV4;
-                        if (globalScript != null && globalScript.BlockType == "SC")
-                        {
-                            list.Add(new Source { Id = lfId + ".SC" + (sc++).ToString("D3"), Script = globalScript });
-                            continue;
-                        }
-
-                        var room = child as ScummV4RoomBlock;
-                        if (room == null) continue;
-
-                        var usedLabels = new HashSet<string>(); // a room can repeat an object id
-                        foreach (BlockBase roomChild in room.Childrens)
-                        {
-                            var script = roomChild as ScriptBlockV4;
-                            if (script != null)
-                            {
-                                if (script.BlockType == "EN")
-                                    list.Add(new Source { Id = lfId + ".EN" + (en++).ToString("D3"), Script = script });
-                                else if (script.BlockType == "EX")
-                                    list.Add(new Source { Id = lfId + ".EX" + (ex++).ToString("D3"), Script = script });
-                                else if (script.BlockType == "LS")
-                                    list.Add(new Source { Id = lfId + ".LS" + Math.Max(script.ScriptId, 0).ToString("D3"), Script = script });
-                                continue;
-                            }
-
-                            var obcd = roomChild as ObjectCode;
-                            if (obcd != null && obcd.HasCodeHeader)
-                            {
-                                string obj = "OBJ" + obcd.ObjectId.ToString("D5");
-                                string baseObj = obj;
-                                for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
-
-                                if (obcd.VerbCodeOffset >= 0 && obcd.VerbCodeLength > 0)
-                                    list.Add(new Source { Id = lfId + "." + obj, Obcd = obcd });
-                                if (obcd.ObnaBodyOffset >= 0)
-                                    list.Add(new Source { Id = lfId + "." + obj + ".name", Obcd = obcd, IsName = true });
-                            }
-                        }
+                        var lf = lfBlock as ScummV4DiskBlock;
+                        if (lf == null) continue;
+                        AddRoomContainerSources(list, "LF" + lf.RoomNumber.ToString("D3"), lf.Childrens);
                     }
+                }
+                else
+                {
+                    int room = RoomNumberFromDiskPath(disk.FilePath);
+                    AddRoomContainerSources(list, "LF" + room.ToString("D3"), disk.Tree.Childrens);
                 }
             }
             return list;
+        }
+
+        /// <summary>
+        /// Collects the translatable sources (global SC scripts, plus a room's EN/EX/LS scripts and
+        /// OBCD verb code / names) from one room container's children - an LF block for v4, or a v3
+        /// NN.LFL's top-level children. Shared so v3 reuses the exact v4 enumeration.
+        /// </summary>
+        private static void AddRoomContainerSources(List<Source> list, string lfId, List<BlockBase> children)
+        {
+            int sc = 0, en = 0, ex = 0;
+            foreach (BlockBase child in children)
+            {
+                var globalScript = child as ScriptBlockV4;
+                if (globalScript != null && globalScript.BlockType == "SC")
+                {
+                    list.Add(new Source { Id = lfId + ".SC" + (sc++).ToString("D3"), Script = globalScript });
+                    continue;
+                }
+
+                var room = child as ScummV4RoomBlock;
+                if (room == null) continue;
+
+                var usedLabels = new HashSet<string>(); // a room can repeat an object id
+                foreach (BlockBase roomChild in room.Childrens)
+                {
+                    var script = roomChild as ScriptBlockV4;
+                    if (script != null)
+                    {
+                        if (script.BlockType == "EN")
+                            list.Add(new Source { Id = lfId + ".EN" + (en++).ToString("D3"), Script = script });
+                        else if (script.BlockType == "EX")
+                            list.Add(new Source { Id = lfId + ".EX" + (ex++).ToString("D3"), Script = script });
+                        else if (script.BlockType == "LS")
+                            list.Add(new Source { Id = lfId + ".LS" + Math.Max(script.ScriptId, 0).ToString("D3"), Script = script });
+                        continue;
+                    }
+
+                    var obcd = roomChild as ObjectCode;
+                    if (obcd != null && obcd.HasCodeHeader)
+                    {
+                        string obj = "OBJ" + obcd.ObjectId.ToString("D5");
+                        string baseObj = obj;
+                        for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
+
+                        if (obcd.VerbCodeOffset >= 0 && obcd.VerbCodeLength > 0)
+                            list.Add(new Source { Id = lfId + "." + obj, Obcd = obcd });
+                        if (obcd.ObnaBodyOffset >= 0)
+                            list.Add(new Source { Id = lfId + "." + obj + ".name", Obcd = obcd, IsName = true });
+                    }
+                }
+            }
+        }
+
+        private static int RoomNumberFromDiskPath(string path)
+        {
+            string name = System.IO.Path.GetFileNameWithoutExtension(path);
+            int n;
+            return int.TryParse(name, out n) ? n : 0;
         }
 
         // ---------------------------------------------------------------------

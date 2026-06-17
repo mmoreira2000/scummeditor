@@ -204,7 +204,7 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Result-variable statement ("Global[x] = expr;"), or a captured nested expression.</summary>
         private string _nestedResult; // non-null while decoding the nested opcode of an expression
 
-        private void SetResult(int offset, string target, string expr)
+        protected void SetResult(int offset, string target, string expr)
         {
             if (_nestedResult == "")
             {
@@ -1100,7 +1100,7 @@ namespace ScummEditor.Engine.Encoders
                     case 2: parts.Add("clipped(" + GetVarOrDirectWordAux(sub, 0x80) + ")"); break;
                     case 3: parts.Add("erase(" + GetVarOrDirectWordAux(sub, 0x80) + ", " + GetVarOrDirectWordAux(sub, 0x40) + ")"); break;
                     case 4: parts.Add("center()"); break;
-                    case 6: parts.Add("left()"); break;
+                    case 6: parts.Add(PrintSubOp6(sub)); break;
                     case 7: parts.Add("overhead()"); break;
                     case 8: parts.Add("playCDTrack(" + GetVarOrDirectWordAux(sub, 0x80) + ", " + GetVarOrDirectWordAux(sub, 0x40) + ")"); break;
                     case 15:
@@ -1116,6 +1116,15 @@ namespace ScummEditor.Engine.Encoders
             }
 
             Emit(offset, group.Replace("()", "") + "." + string.Join(".", parts.ToArray()) + ";");
+        }
+
+        /// <summary>
+        /// print/printEgo sub-op 6. v5/v4 take no argument ("left"); SCUMM v3 reads a word (text
+        /// height). Overridden by ScummV3Disassembler; the default preserves the v4/v5/v6 behaviour.
+        /// </summary>
+        protected virtual string PrintSubOp6(byte sub)
+        {
+            return "left()";
         }
 
         private void StringOps(int offset)
@@ -1196,11 +1205,20 @@ namespace ScummEditor.Engine.Encoders
                 }
                 case 12: Emit(offset, "cursorCommand.initCursor(" + GetVarOrDirectByteAux(sub, 0x80) + ");"); break;
                 case 13: Emit(offset, "cursorCommand.initCharset(" + GetVarOrDirectByteAux(sub, 0x80) + ");"); break;
-                case 14: Emit(offset, "cursorCommand.charsetColors(" + ReadWordVarArgs() + ");"); break;
+                case 14: Emit(offset, CursorSubOp14(sub)); break;
                 default:
                     Emit(offset, "cursorCommand.op_0x" + (sub & 0x1F).ToString("X2") + "();");
                     break;
             }
+        }
+
+        /// <summary>
+        /// cursorCommand sub-op 14. v5/v4 take a word var-arg list (charset colours); SCUMM v3 reads
+        /// two var-or-direct bytes (loadCharset). Overridden by ScummV3Disassembler; default = v4/v5/v6.
+        /// </summary>
+        protected virtual string CursorSubOp14(byte sub)
+        {
+            return "cursorCommand.charsetColors(" + ReadWordVarArgs() + ");";
         }
 
         private void ResourceRoutines(int offset)
@@ -1274,7 +1292,7 @@ namespace ScummEditor.Engine.Encoders
             }
         }
 
-        private void RoomOps(int offset)
+        protected virtual void RoomOps(int offset)
         {
             byte sub = ReadByte();
             switch (sub & 0x1F)

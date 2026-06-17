@@ -52,7 +52,12 @@ namespace ScummEditor.Engine.Encoders
             System.Array.Copy(obcd.RawContent, obcd.VerbCodeOffset, slice, 0, obcd.VerbCodeLength);
 
             int scummVersion = obcd.GameInfo != null ? obcd.GameInfo.ScummVersion : 0;
-            if (scummVersion == 4)
+            if (scummVersion == 3)
+            {
+                bool isIndy3 = obcd.GameInfo != null && obcd.GameInfo.LoadedGame == Structures.ScummGame.IndianaJones3;
+                result.Code = ScummV3Disassembler.Disassemble(slice, 0, labels, isIndy3);
+            }
+            else if (scummVersion == 4)
             {
                 result.Code = ScummV4Disassembler.Disassemble(slice, 0, labels);
             }

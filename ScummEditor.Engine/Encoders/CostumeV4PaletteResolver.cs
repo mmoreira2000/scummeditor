@@ -13,8 +13,24 @@ namespace ScummEditor.Engine.Encoders
         public static Color[] Resolve(CostumeV4 costume)
         {
             Color[] roomColors = null;
+
+            // v4 packs the room and its costumes in an LF disk block; v3 (GF_OLD256) keeps one room
+            // per NN.LFL where the costume's RO is a sibling under the data-file container.
+            ScummV4RoomBlock room = null;
             var disk = costume.Parent as ScummV4DiskBlock;
-            ScummV4RoomBlock room = disk != null ? disk.GetRoom() : null;
+            if (disk != null)
+            {
+                room = disk.GetRoom();
+            }
+            else
+            {
+                var v3File = costume.Parent as ScummV3Small256DataFile;
+                if (v3File != null)
+                {
+                    room = v3File.GetRoom();
+                }
+            }
+
             if (room != null)
             {
                 PaletteData pa = room.GetPA();

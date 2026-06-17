@@ -90,6 +90,30 @@ namespace ScummEditor.Engine.Encoders
             return new ZPlaneDecoder().Decode(strips, width, height);
         }
 
+        /// <summary>
+        /// Decodes an EGA strip-table image straight from a raw byte buffer: the strip table (smapLen
+        /// LE16, then numStrips LE16 offsets relative to <paramref name="baseIndex"/>, then the raw
+        /// strips) sits at <paramref name="baseIndex"/> in <paramref name="body"/>. Used by the v3
+        /// "old bundle" rooms (Loom EGA, Indy3 EGA), whose room image is inline in an untagged room
+        /// chunk rather than in a BM block. Returns null when the table/strips fall outside the body.
+        /// </summary>
+        public Bitmap DecodeEgaImage(byte[] body, int baseIndex, int width, int height, Color[] paletteColors)
+        {
+            if (body == null || paletteColors == null || width <= 0 || height <= 0)
+            {
+                return null;
+            }
+
+            int numStrips = width / 8;
+            long tableEnd = (long)baseIndex + 2 + (long)numStrips * 2;
+            if (numStrips <= 0 || baseIndex < 0 || body.Length < tableEnd)
+            {
+                return null;
+            }
+
+            return DecodeEga(body, baseIndex, numStrips, width, height, paletteColors);
+        }
+
         private Bitmap Decode(ScummV4ImageBlock image, int width, int height, bool isEga, PaletteData palette)
         {
             if (width == 0 || height == 0)
@@ -120,6 +144,13 @@ namespace ScummEditor.Engine.Encoders
             if (isEga)
             {
                 return DecodeEga(body, baseIndex, numStrips, width, height, paletteColors);
+            }
+
+            // v3 GF_OLD256 (Indy3 VGA, Zak/Indy3 FM-Towns) uses the VGA strip table but the FM-Towns
+            // per-strip codecs (1/2/3/4/7), which the v5/v6 ImageDecoder does not implement.
+            if (image.GameInfo != null && image.GameInfo.ScummVersion == 3)
+            {
+                return new FmTownsStripDecoder().DecodeImage(body, baseIndex, width, height, paletteColors);
             }
 
             List<StripData> strips = BuildVgaStrips(body, baseIndex, numStrips);
