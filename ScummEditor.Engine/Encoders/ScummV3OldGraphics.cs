@@ -151,21 +151,77 @@ namespace ScummEditor.Engine.Encoders
                 var edits = new List<ImageEdit>();
                 CollectBackgroundEdit(dataFile, folder, i, edits, report);
                 CollectObjectEdits(dataFile, folder, i, edits, report);
+                CollectCostumeEdits(dataFile, index, roomNo, folder, edits, report);
 
-                // Several objects can share one OBIM image; apply each byte region once.
+                // Several objects/costumes can share one byte region; apply each region once.
                 var appliedAt = new HashSet<int>();
                 edits.Sort((a, b) => b.Offset.CompareTo(a.Offset));
                 foreach (ImageEdit e in edits)
                 {
                     if (!appliedAt.Add(e.Offset)) continue;
-                    ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, e.Offset, e.OldLen, e.NewBytes);
+                    ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, e.Offset, e.OldLen, e.NewBytes, e.SizeWordOffset);
                     report.Imported++;
                 }
             }
             return report;
         }
 
-        private class ImageEdit { public int Offset; public int OldLen; public byte[] NewBytes; }
+        private class ImageEdit { public int Offset; public int OldLen; public byte[] NewBytes; public int SizeWordOffset = -1; }
+
+        /// <summary>Collects costume-frame edits for this room (Costume#c FrameIndex#k.png) via the index COSTUME dir.</summary>
+        private static void CollectCostumeEdits(ScummV3OldBundleDataFile dataFile, Structures.IndexFile.ScummV3OldBundleIndexFile index,
+            int roomNo, string folder, List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
+        {
+            if (index == null || index.CostumeDirectory == null) return;
+            var encoder = new CostumeImageEncoderV4();
+            var decoder = new CostumeImageDecoderV4();
+            Color[] egaPalette = new Color[16];
+            Array.Copy(EgaColorTable.Colors256, egaPalette, 16);
+            Structures.IndexFile.V3OldResourceDirectory dir = index.CostumeDirectory;
+
+            for (int c = 0; c < dir.Count; c++)
+            {
+                if (dir.RoomNumbers[c] != roomNo) continue;
+                int offset = dir.Offsets[c];
+                if (offset == 0xFFFF || offset == 0) continue;
+
+                var costume = new CostumeV3Old(dataFile.RawContent, offset);
+                if (costume.Frames.Count == 0) continue;
+
+                var replacements = new Dictionary<int, byte[]>();
+                for (int k = 0; k < costume.Frames.Count; k++)
+                {
+                    string path = Path.Combine(folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                    if (!File.Exists(path)) continue;
+                    try
+                    {
+                        using (var bitmap = (Bitmap)Image.FromFile(path))
+                        {
+                            CostumeImageData frame = costume.Frames[k];
+                            if (bitmap.Width != frame.Width || bitmap.Height != frame.Height)
+                            {
+                                report.Errors.Add(string.Format("Costume#{0} FrameIndex#{1}: must be {2}x{3}", c, k, frame.Width, frame.Height));
+                                continue;
+                            }
+                            // Skip a frame whose pixels are unchanged (the RLE re-encodes differently
+                            // than the original, so a byte compare would needlessly rewrite every
+                            // costume on a text-only translation); compare the decoded pixels instead.
+                            if (FrameUnchanged(decoder, frame, egaPalette, bitmap)) continue;
+                            replacements[k] = encoder.Encode(bitmap, 16); // 16-colour EGA
+                        }
+                    }
+                    catch (Exception ex) { report.Errors.Add(string.Format("Costume#{0} FrameIndex#{1}: {2}", c, k, ex.Message)); }
+                }
+                if (replacements.Count == 0) continue;
+
+                try
+                {
+                    byte[] rebuilt = costume.BuildWithReplacedFrames(replacements);
+                    edits.Add(new ImageEdit { Offset = offset, OldLen = costume.ResourceSize, NewBytes = rebuilt, SizeWordOffset = offset });
+                }
+                catch (Exceptions.ImageEncodeException ex) { report.Errors.Add(string.Format("Costume#{0}: {1}", c, ex.Message)); }
+            }
+        }
 
         private static void CollectBackgroundEdit(ScummV3OldBundleDataFile dataFile, string folder, int roomIndex,
             List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
@@ -213,6 +269,21 @@ namespace ScummEditor.Engine.Encoders
             }
             catch (Exceptions.ImageEncodeException ex) { report.Errors.Add(label + ": " + ex.Message); }
             catch (Exception ex) { report.Errors.Add(label + ": " + ex.Message); }
+        }
+
+        /// <summary>True when the imported bitmap's pixels equal what the original CEL decodes to.</summary>
+        private static bool FrameUnchanged(CostumeImageDecoderV4 decoder, CostumeImageData frame, Color[] palette, Bitmap imported)
+        {
+            using (Bitmap original = decoder.Decode(frame, 16, palette, false))
+            {
+                if (original == null || original.Width != imported.Width || original.Height != imported.Height) return false;
+                byte[,] a = IndexedImageHelper.GetIndexMatrix(original);
+                byte[,] b = IndexedImageHelper.GetIndexMatrix(imported);
+                for (int x = 0; x < a.GetLength(0); x++)
+                    for (int y = 0; y < a.GetLength(1); y++)
+                        if ((a[x, y] & 0x0F) != (b[x, y] & 0x0F)) return false;
+                return true;
+            }
         }
 
         private static bool SliceEquals(byte[] buf, int offset, byte[] other)

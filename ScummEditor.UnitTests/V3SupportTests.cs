@@ -448,6 +448,61 @@ namespace ScummEditor.UnitTests
             Assert.Equal(music, midiOk);
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldCostumeFrameImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummEditor.Engine.Structures.IndexFile.ScummV3OldBundleIndexFile;
+            Skip.If(index == null || index.CostumeDirectory == null, "no costume directory");
+
+            var byRoom = new System.Collections.Generic.Dictionary<int, ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile>();
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile;
+                if (df != null) byRoom[RoomNo(disk.FilePath)] = df;
+            }
+            var decoder = new CostumeImageDecoderV4();
+            var encoder = new CostumeImageEncoderV4();
+            Color[] ega = new Color[16];
+            System.Array.Copy(EgaColorTable.Colors256, ega, 16);
+
+            int edited = 0;
+            var cdir = index.CostumeDirectory;
+            for (int c = 0; c < cdir.Count && edited < 4; c++)
+            {
+                int off = cdir.Offsets[c];
+                if (off == 0xFFFF || off == 0) continue;
+                ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile df;
+                if (!byRoom.TryGetValue(cdir.RoomNumbers[c], out df)) continue;
+                var cost = new ScummEditor.Engine.Structures.DataFile.CostumeV3Old(df.RawContent, off);
+                int fi = -1;
+                for (int k = 0; k < cost.Frames.Count; k++) if (cost.Frames[k].Width >= 2 && cost.Frames[k].Height >= 2) { fi = k; break; }
+                if (fi < 0) continue;
+
+                using (Bitmap bmp0 = decoder.Decode(cost.Frames[fi], 16, ega, false))
+                {
+                    byte[,] m = IndexedImageHelper.GetIndexMatrix(bmp0);
+                    byte nv = (byte)((m[0, 0] + 1) & 0x0F);
+                    m[0, 0] = nv;
+                    using (Bitmap edit = IndexedImageHelper.FromIndexMatrix(m, bmp0.Palette.Entries, -1))
+                    {
+                        var repl = new System.Collections.Generic.Dictionary<int, byte[]> { { fi, encoder.Encode(edit, 16) } };
+                        byte[] rebuilt = cost.BuildWithReplacedFrames(repl);
+                        ScummV3OldWriter.ApplyEdit(df, index, cdir.RoomNumbers[c], off, cost.ResourceSize, rebuilt, off);
+                    }
+                    var cost2 = new ScummEditor.Engine.Structures.DataFile.CostumeV3Old(df.RawContent, off);
+                    using (Bitmap bmp1 = decoder.Decode(cost2.Frames[fi], 16, ega, false))
+                    {
+                        Assert.Equal(nv, IndexedImageHelper.GetIndexMatrix(bmp1)[0, 0]);
+                    }
+                    edited++;
+                }
+            }
+            Assert.True(edited > 0, "no editable costume frame found");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)
