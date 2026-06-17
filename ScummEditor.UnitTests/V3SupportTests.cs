@@ -414,6 +414,40 @@ namespace ScummEditor.UnitTests
             return int.TryParse(Path.GetFileNameWithoutExtension(path), out n) ? n : 0;
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldSoundExtractsAdLibMusicToMidi(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummEditor.Engine.Structures.IndexFile.ScummV3OldBundleIndexFile;
+            Skip.If(index == null || index.SoundDirectory == null, "no sound directory");
+
+            var byRoom = new System.Collections.Generic.Dictionary<int, ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile>();
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile;
+                if (df != null) byRoom[RoomNo(disk.FilePath)] = df;
+            }
+
+            int music = 0, midiOk = 0;
+            var dir = index.SoundDirectory;
+            for (int s = 0; s < dir.Count; s++)
+            {
+                int off = dir.Offsets[s];
+                if (off == 0xFFFF || off == 0) continue;
+                ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile df;
+                if (!byRoom.TryGetValue(dir.RoomNumbers[s], out df)) continue;
+                var snd = new ScummEditor.Engine.Structures.DataFile.ScummV3OldSound(df.RawContent, off);
+                if (!snd.IsMusic) continue;
+                music++;
+                byte[] midi = ScummV4AdLibMidi.ToStandardMidi(snd.GetAdLibPayload());
+                if (midi != null && midi.Length > 14 && midi[0] == (byte)'M' && midi[1] == (byte)'T' && midi[2] == (byte)'h' && midi[3] == (byte)'d') midiOk++;
+            }
+            Assert.True(music > 0, "no AdLib music sounds found");
+            Assert.Equal(music, midiOk);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)
