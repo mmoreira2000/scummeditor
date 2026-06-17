@@ -338,6 +338,28 @@ namespace ScummEditor.UnitTests
             return controlTokens >= 2 && controlTokens >= visible;
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldImageExportProducesFiles(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            string dir = Path.Combine(Path.GetTempPath(), "v3oldgfx_" + System.Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var options = new ScummV4GraphicsBatch.ExportOptions();
+                int exported = ScummV3OldGraphics.Export(game, dir, options, null, null);
+                int files = Directory.GetFiles(dir, "*.png").Length;
+                Assert.True(exported > 0, "no EGA images exported");
+                Assert.Equal(exported, files);
+            }
+            finally
+            {
+                Directory.Delete(dir, true);
+            }
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)

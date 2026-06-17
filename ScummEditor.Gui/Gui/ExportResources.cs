@@ -45,7 +45,12 @@ namespace ScummEditor.Gui
             // rooms over several DISKnn.LEC disks; v5/v6 keep everything in one LFLF data file. v3
             // "GF_OLD256" rooms reuse the v4 block layout (one NN.LFL per room), so they take the v4 path.
             int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
-            if (version == 3 || version == 4)
+            bool oldBundle = _scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.UsesOldBundle;
+            if (version == 3 && oldBundle)
+            {
+                ExportV3Old(location); // raw-room EGA games (Loom EGA, Indy3 EGA)
+            }
+            else if (version == 3 || version == 4)
             {
                 ExportV4(location);
             }
@@ -53,6 +58,17 @@ namespace ScummEditor.Gui
             {
                 ExportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-exports the EGA backgrounds + object images of a v3 old-bundle game.</summary>
+        private void ExportV3Old(string location)
+        {
+            int roomCount = ScummV3OldGraphics.EnumerateRooms(_scummFile).Count;
+            Progress.Maximum = Math.Max(1, roomCount);
+            ShowProgress();
+
+            int exported = ScummV3OldGraphics.Export(_scummFile, location, BuildV4Options(), OnExportProgress, () => _cancelExport);
+            FinishExport(exported);
         }
 
         /// <summary>Batch-exports every v4 image (backgrounds, objects, z-planes, costume frames).</summary>
