@@ -41,10 +41,14 @@ namespace ScummEditor.Engine.Encoders
             public List<string> Errors = new List<string>();
         }
 
-        /// <summary>The LF disk blocks (one room each) across every DISKnn.LEC, in a stable order.</summary>
-        public static List<ScummV4DiskBlock> EnumerateRooms(ScummGameData game)
+        /// <summary>
+        /// The room containers in a stable, game-wide order: v4 LF disk blocks (one room each, spread
+        /// over the DISKnn.LEC files) or v3 "GF_OLD256" room files (one NN.LFL each). Both expose the
+        /// same v4 room/costume blocks, so the batch walks them uniformly.
+        /// </summary>
+        public static List<IScummRoomContainer> EnumerateRooms(ScummGameData game)
         {
-            var rooms = new List<ScummV4DiskBlock>();
+            var rooms = new List<IScummRoomContainer>();
             if (game.DataDisks == null) return rooms;
             foreach (DataDisk disk in game.DataDisks)
             {
@@ -53,10 +57,10 @@ namespace ScummEditor.Engine.Encoders
             return rooms;
         }
 
-        private static void CollectDiskBlocks(BlockBase block, List<ScummV4DiskBlock> acc)
+        private static void CollectDiskBlocks(BlockBase block, List<IScummRoomContainer> acc)
         {
-            var lf = block as ScummV4DiskBlock;
-            if (lf != null) acc.Add(lf);
+            var container = block as IScummRoomContainer;
+            if (container != null) acc.Add(container);
             foreach (BlockBase child in block.Childrens) CollectDiskBlocks(child, acc);
         }
 
@@ -64,7 +68,7 @@ namespace ScummEditor.Engine.Encoders
         {
             var decoder = new ScummV4ImageDecoder();
             var costumeDecoder = new CostumeImageDecoderV4();
-            List<ScummV4DiskBlock> rooms = EnumerateRooms(game);
+            List<IScummRoomContainer> rooms = EnumerateRooms(game);
             int count = 0;
 
             for (int i = 0; i < rooms.Count; i++)
@@ -166,9 +170,13 @@ namespace ScummEditor.Engine.Encoders
         public static ImportReport Import(ScummGameData game, string folder, Action<int, int> onProgress)
         {
             var report = new ImportReport();
-            var encoder = new ScummV4ImageEncoder();
+            // v3 "GF_OLD256" rooms reuse the v4 block layout but store FM-Towns codecs, so they need
+            // the raw256 re-encoder; v4 uses the standard VGA/EGA codec picker.
+            ScummV4ImageEncoder encoder = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 3
+                ? new ScummV3ImageEncoder()
+                : new ScummV4ImageEncoder();
             var costumeEncoder = new CostumeImageEncoderV4();
-            List<ScummV4DiskBlock> rooms = EnumerateRooms(game);
+            List<IScummRoomContainer> rooms = EnumerateRooms(game);
 
             List<ImageInfo> files = Directory.GetFiles(folder, "*.png").Select(f => new ImageInfo(f)).ToList();
             report.Found = files.Count;
@@ -185,7 +193,7 @@ namespace ScummEditor.Engine.Encoders
                     continue;
                 }
 
-                ScummV4DiskBlock lf = rooms[file.RoomIndex];
+                IScummRoomContainer lf = rooms[file.RoomIndex];
                 ScummV4RoomBlock room = lf.GetRoom();
 
                 try
@@ -206,7 +214,7 @@ namespace ScummEditor.Engine.Encoders
             return report;
         }
 
-        private static void ImportOne(ImageInfo file, ScummV4RoomBlock room, ScummV4DiskBlock lf, Bitmap bitmap,
+        private static void ImportOne(ImageInfo file, ScummV4RoomBlock room, IScummRoomContainer lf, Bitmap bitmap,
             ScummV4ImageEncoder encoder, CostumeImageEncoderV4 costumeEncoder, ImportReport report, string name)
         {
             if (file.ImageType == ImageType.Costume)

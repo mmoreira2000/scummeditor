@@ -55,8 +55,10 @@ namespace ScummEditor.Gui
             Application.DoEvents();
 
             // The actual import loops live in the engine (ScummV4GraphicsBatch / ScummV5V6GraphicsBatch);
-            // this dialog only picks the folder and drives the progress bar.
-            if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 4)
+            // this dialog only picks the folder and drives the progress bar. v3 "GF_OLD256" rooms reuse
+            // the v4 block layout, so they take the v4 path.
+            int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
+            if (version == 3 || version == 4)
             {
                 ImportV4(location);
             }

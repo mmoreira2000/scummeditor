@@ -24,9 +24,12 @@ namespace ScummEditor.Engine.Structures.DataFile
     {
         private const int GlyphBytes = 8; // 8 rows, 1 bpp, 8 px wide
 
-        public byte[] RawContent { get; private set; }
+        public byte[] RawContent { get; set; }
         public int NumChars { get; private set; }
         public int FontHeight { get; private set; }
+
+        /// <summary>The 9N.LFL file this charset was loaded from; used to write edits back to disk.</summary>
+        public string FilePath { get; set; }
 
         /// <summary>Loads a 9N.LFL font from its (already plaintext) bytes.</summary>
         public void LoadFromFileBytes(byte[] bytes)
@@ -34,6 +37,13 @@ namespace ScummEditor.Engine.Structures.DataFile
             RawContent = bytes;
             NumChars = bytes.Length > 6 ? bytes[6] : 0;
             FontHeight = bytes.Length > 7 ? bytes[7] : 0;
+        }
+
+        /// <summary>Re-reads NumChars/FontHeight from RawContent after a PNG import rebuilds it.</summary>
+        public void Reparse()
+        {
+            NumChars = RawContent.Length > 6 ? RawContent[6] : 0;
+            FontHeight = RawContent.Length > 7 ? RawContent[7] : 0;
         }
 
         private int WidthTableStart { get { return 8; } }

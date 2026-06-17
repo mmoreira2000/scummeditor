@@ -19,7 +19,7 @@ namespace ScummEditor.Engine.Structures.DataFile
     the whole v4 block machinery (ScummV4Blocks, ScummV4RoomBlock, ObjectCode, CostumeV4, SoundBlockV4)
     is reused unchanged; the index gives resource positions as file-absolute offsets (RO at 0).
     */
-    public class ScummV3Small256DataFile : ScummV5V6DataFile
+    public class ScummV3Small256DataFile : ScummV5V6DataFile, IScummRoomContainer
     {
         public ScummV3Small256DataFile(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo) { }
 
@@ -63,6 +63,12 @@ namespace ScummEditor.Engine.Structures.DataFile
         public ScummV4RoomBlock GetRoom()
         {
             return Childrens.OfType<ScummV4RoomBlock>().FirstOrDefault();
+        }
+
+        /// <summary>The costumes (CO) that sit alongside the room as top-level siblings of RO.</summary>
+        public List<CostumeV4> GetCostumes()
+        {
+            return Childrens.OfType<CostumeV4>().ToList();
         }
     }
 }

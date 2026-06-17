@@ -42,8 +42,10 @@ namespace ScummEditor.Gui
 
             // The actual export loops live in the engine (ScummV4GraphicsBatch / ScummV5V6GraphicsBatch).
             // This dialog only collects the options + folder and drives the progress bar. v4 spreads its
-            // rooms over several DISKnn.LEC disks; v5/v6 keep everything in one LFLF data file.
-            if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 4)
+            // rooms over several DISKnn.LEC disks; v5/v6 keep everything in one LFLF data file. v3
+            // "GF_OLD256" rooms reuse the v4 block layout (one NN.LFL per room), so they take the v4 path.
+            int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
+            if (version == 3 || version == 4)
             {
                 ExportV4(location);
             }

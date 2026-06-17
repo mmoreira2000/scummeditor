@@ -16,6 +16,7 @@ namespace ScummEditor.Gui
         private Dictionary<string, BlockBaseControl> _controlViewers;
         private readonly SpeechSouControl _speechSouControl = new SpeechSouControl();
         private readonly CdAudioSouControl _cdAudioSouControl = new CdAudioSouControl();
+        private readonly CharsetV3Control _charsetV3Control = new CharsetV3Control();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -97,6 +98,13 @@ namespace ScummEditor.Gui
             {
                 CreateScummV4IndexFileTree(v4Index);
             }
+            else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
+            {
+                // The v3 old-bundle index is kept verbatim (no typed RNAM/MAXS/DROO blocks the v5/v6
+                // tree expects, and the index file is not a BlockBase the viewer can render). Show a
+                // labelled, inert node rather than crashing on the cast.
+                _treeView.Nodes.Add("IndexFile", "Index File (00.LFL, raw)");
+            }
             else if (GameData.IndexFile != null)
             {
                 CreateScummIndexFileTree(GameData.IndexFile);
@@ -116,7 +124,21 @@ namespace ScummEditor.Gui
             }
 
             CreateFontFileNodes();
+            CreateV3FontNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
+        }
+
+        /// <summary>Root nodes for the standalone v3 charset files (9N.LFL); the CharsetV3 viewer handles them.</summary>
+        private void CreateV3FontNodes()
+        {
+            if (GameData.V3Charsets == null) return;
+
+            foreach (CharsetV3 charset in GameData.V3Charsets)
+            {
+                string fileName = charset.FilePath != null ? System.IO.Path.GetFileName(charset.FilePath) : "9N.LFL";
+                var node = _treeView.Nodes.Add("FontV3", "Font (" + fileName + ")");
+                node.Tag = charset;
+            }
         }
 
         /// <summary>Root nodes for the standalone font files (v4 90x.LFL); the Charset viewer handles them.</summary>
@@ -268,6 +290,16 @@ namespace ScummEditor.Gui
                 _cdAudioSouControl.SetData(cdAudioFile);
                 _displayPanel.Controls.Add(_cdAudioSouControl);
                 _cdAudioSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v3 charsets (9N.LFL) are standalone font files, not BlockBase, so they get their own viewer.
+            var charsetV3 = e.Node.Tag as CharsetV3;
+            if (charsetV3 != null)
+            {
+                _charsetV3Control.SetData(charsetV3);
+                _displayPanel.Controls.Add(_charsetV3Control);
+                _charsetV3Control.Dock = DockStyle.Fill;
                 return;
             }
 

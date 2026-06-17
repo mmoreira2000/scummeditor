@@ -318,13 +318,15 @@ namespace ScummEditor.Engine
                 return null;
             }
 
+            List<string> fonts = EnumerateV3Fonts(folder); // 9x.LFL charsets
+
             var result = new GameInfo
             {
-                LoadedGame = IdentifyV3Game(indexPath, oldBundle, xorKey, folder),
+                LoadedGame = IdentifyV3Game(indexPath, oldBundle, xorKey, folder, rooms.Count, fonts.Count),
                 IndexFile = indexPath,
                 DataFile = rooms[0],
                 DataFiles = rooms,                 // one NN.LFL per room
-                FontFiles = EnumerateV3Fonts(folder), // 9x.LFL charsets
+                FontFiles = fonts,
                 Xored = xorKey != 0,
                 XorKey = xorKey,
                 IndexXorKey = xorKey,
@@ -385,33 +387,34 @@ namespace ScummEditor.Engine
         }
 
         /// <summary>
-        /// Identifies the v3 game from the index resource counts (rooms/scripts/sounds/costumes) - a
-        /// data-only signal, never the EXE. Indy3 has ~139 scripts/~84 sounds; Zak ~199/199; Loom EGA
-        /// ~200 scripts/~80 sounds. Falls back to the CD-audio signal (FM-Towns) when counts are unclear.
+        /// Identifies the v3 game from data-only signals (never the EXE). The charset (9x.LFL) count is
+        /// the most reliable one and is stable across languages, graphic editions (EGA/VGA/FM-Towns)
+        /// and versions: Indiana Jones 3 ships 6-7 charsets, Zak McKracken 2, and Loom exactly 1. The
+        /// index resource counts cannot tell Indy3 from Zak on FM-Towns (which pads every directory to
+        /// 99 rooms / 199 scripts / 199 sounds), so the charset count is checked first, with the index
+        /// counts and room-file count as fallbacks for unusual layouts.
         /// </summary>
-        private static ScummGame IdentifyV3Game(string indexPath, bool oldBundle, int xorKey, string folder)
+        private static ScummGame IdentifyV3Game(string indexPath, bool oldBundle, int xorKey, string folder, int roomFileCount, int fontFileCount)
         {
+            if (fontFileCount >= 4) return ScummGame.IndianaJones3; // Indy3 ships 6-7 charsets
+            if (fontFileCount == 2) return ScummGame.ZakMcKracken;  // Zak ships 2 charsets
+            if (fontFileCount == 1) return ScummGame.Loom;          // Loom ships exactly 1 charset
+
+            // Unusual charset count: fall back to the index resource counts.
             int[] counts = ReadV3DirectoryCounts(indexPath, oldBundle, xorKey);
             if (counts != null)
             {
+                int rooms = counts[0];
                 int scripts = counts[1];
                 int sounds = counts[2];
 
-                if (scripts >= 180 && sounds >= 180)
-                {
-                    return ScummGame.ZakMcKracken; // Zak: ~199 scripts and sounds
-                }
-                if (scripts >= 110 && scripts < 170 && sounds < 130)
-                {
-                    return ScummGame.IndianaJones3; // Indy3: ~139 scripts, ~84 sounds
-                }
-                if (oldBundle)
-                {
-                    return ScummGame.Loom; // Loom EGA: ~200 scripts, ~80 sounds
-                }
+                if (rooms >= 100 || scripts >= 200) return ScummGame.Loom;       // Loom: 100 rooms / 200 scripts
+                if (scripts >= 180 && sounds >= 180) return ScummGame.ZakMcKracken; // Zak: ~199 scripts and sounds
+                if (scripts >= 110 && scripts < 170 && sounds < 130) return ScummGame.IndianaJones3; // Indy3: ~139/~84
             }
 
-            return File.Exists(Path.Combine(folder, "CDDA.SOU")) ? ScummGame.ZakMcKracken : ScummGame.IndianaJones3;
+            // Last resort: Indy3 ships far more room files (~83) than Zak (~59).
+            return roomFileCount >= 70 ? ScummGame.IndianaJones3 : ScummGame.ZakMcKracken;
         }
 
         /// <summary>

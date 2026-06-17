@@ -5,7 +5,7 @@ using System.Linq;
 namespace ScummEditor.Engine.Structures.DataFile
 {
     /// <summary>A v4 room container (LF). Begins with a 2-byte room number, then the room blocks.</summary>
-    public class ScummV4DiskBlock : BlockBase
+    public class ScummV4DiskBlock : BlockBase, IScummRoomContainer
     {
         public ScummV4DiskBlock(BlockBase blockBase) : base(blockBase) { }
 

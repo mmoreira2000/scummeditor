@@ -51,7 +51,14 @@ namespace ScummEditor.Engine.Structures.DataFile
                 V4Prefix = binaryReader.ReadBytes(2);
             }
 
-            Colors = new Color[256];
+            // The colour count comes from the block size, not a fixed 256: most rooms hold a full
+            // 256-colour palette, but some (e.g. Loom's FM-Towns rooms) store a 16-colour one
+            // (block size 56 = 6 header + 2 prefix + 16*3). Deriving it keeps the block byte-exact and
+            // lets CalculateBlockSize agree with the loaded size.
+            int paletteBytes = (int)BlockSize - HeaderLength - (V4Prefix != null ? V4Prefix.Length : 0);
+            int colorCount = paletteBytes > 0 ? paletteBytes / 3 : 0;
+
+            Colors = new Color[colorCount];
             for (int i = 0; i < Colors.Length; i++)
             {
                 var r = binaryReader.ReadByte();

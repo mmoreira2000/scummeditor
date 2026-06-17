@@ -1,3 +1,19 @@
+2.5.0
+-----
+* SCUMM v3 support. Indiana Jones and the Last Crusade, Loom and Zak McKracken can now be opened, viewed and edited. v3 comes in two very different on-disk forms and both are detected from the data files alone (never the game EXE): the 256-colour "small header" games (Indy3 VGA, and the FM-Towns CD releases of Indy3, Loom and Zak - one NN.LFL file per room, a plaintext 00.LFL index and 9N.LFL fonts) get the full feature set below; the older XOR-encrypted EGA games (Indy3 EGA, Loom EGA) are detected, loaded and viewed (room and object backgrounds decode, fonts display) and round-trip byte-for-byte. Every release of all three games - all languages and graphic editions - is identified correctly (the game is told apart by its charset count, which is stable across editions, since the FM-Towns builds pad their resource directories to identical sizes).
+
+* v3 room and object images. The FM-Towns/256 backgrounds and object images (compression codecs 1-4 and 7) and the EGA backgrounds are decoded and exported as lossless indexed PNGs. For the 256-colour games an edited PNG can be imported back: only the changed 8-pixel columns are re-encoded (as raw pixels, which the engine accepts), so an untouched image stays byte-for-byte identical and a translated one differs only where it was painted. Their z-plane (walk-behind) masks export and import too.
+
+* v3 costumes, scripts and text. Costume frames decode with the room palette; a new v3 script disassembler (v3 shares the parameter-bit language with v4/v5 plus a handful of its own opcodes) renders scripts and object verb code; and object names, verb scripts and dialogue can be exported and imported for translation, with all tables and jump offsets remapped automatically when a translation changes length.
+
+* v3 fonts are editable. The 9N.LFL charsets are shown as a glyph atlas, and a new "Export/Import PNG" pair writes an editable 16x16 grid of the 8x8 glyphs so the accented characters a translation needs can be drawn in an image editor and imported back (extending the font when a new slot is filled).
+
+* The batch "Export/Import Game Graphics" and the per-room image, costume, font and sound viewers all work on v3 games, reusing the v4 pipeline; an unedited export/import round-trips every room file byte-for-byte.
+
+* Fix: a room palette is now read at its declared size instead of always assuming 256 colours, so the 16-colour rooms in Loom's FM-Towns release no longer shift when the file is re-saved (this also makes any future palette edit safe). A v3 index that ends with trailing padding (Indiana Jones 3 FM-Towns) now loads instead of failing.
+
+* Known limitation: a small number of object verb scripts in Indiana Jones 3 and Loom do not yet fully disassemble (Zak decodes 100%); those few scripts are left untouched by the translation tools rather than risk corrupting them. Editing the EGA editions (image import, text, costumes, sound) is not yet available; use the VGA / FM-Towns editions of those games to translate.
+
 2.0.0
 -----
 * Full SCUMM v4 support. The Secret of Monkey Island (Floppy EGA and VGA, in English, French, German, Italian and Spanish) and Loom (CD) can now be opened, viewed and edited with the same feature set as the v5/v6 games. v4 games spread their data over several DISKnn.LEC disks with a plaintext 000.LFL index and standalone 90x.LFL fonts; all of it loads and every container round-trips byte-for-byte.

@@ -42,7 +42,7 @@ namespace ScummEditor.Engine.Structures
             }
             foreach (string path in LoadedGameInfo.FontFiles)
             {
-                var charset = new CharsetV3();
+                var charset = new CharsetV3 { FilePath = path };
                 charset.LoadFromFileBytes(File.ReadAllBytes(path));
                 V3Charsets.Add(charset);
             }
@@ -159,6 +159,15 @@ namespace ScummEditor.Engine.Structures
             foreach (FontResource font in Fonts)
             {
                 File.WriteAllBytes(font.FilePath, font.Charset.RawContent);
+            }
+
+            // Write back the standalone v3 charset files (9N.LFL, always plaintext = the charset bytes).
+            foreach (CharsetV3 charset in V3Charsets)
+            {
+                if (!string.IsNullOrEmpty(charset.FilePath))
+                {
+                    File.WriteAllBytes(charset.FilePath, charset.RawContent);
+                }
             }
         }
 

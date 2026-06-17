@@ -15,6 +15,15 @@ namespace ScummEditor.UnitTests
     /// </summary>
     public static class GameLibrary
     {
+        // SCUMM v3 - "GF_OLD256" small-header games (Indy3 VGA/FM-Towns, Zak FM-Towns, Loom FM-Towns)
+        public const string Indy3Vga = "ScummV3/Indiana Jones and the Last Crusade - The Graphic Adventure (1989)/Floppy VGA v2.0 3.0.23";
+        public const string Indy3FmTowns = "ScummV3/Indiana Jones and the Last Crusade - The Graphic Adventure (1989)/FM Towns";
+        public const string ZakFmTowns = "ScummV3/Zak McKracken and the Alien Mindbenders (1988)/FM Towns v1.0";
+        public const string LoomFmTowns = "ScummV3/Loom (1990)/FM Towns";
+        // SCUMM v3 - "GF_OLD_BUNDLE" XOR-0xFF EGA games (Indy3 EGA, Loom EGA)
+        public const string Indy3Ega = "ScummV3/Indiana Jones and the Last Crusade - The Graphic Adventure (1989)/Floppy EGA v1.4";
+        public const string LoomEga = "ScummV3/Loom (1990)/Floppy EGA v1.1";
+
         // SCUMM v4 (multi-disk floppy / Loom CD)
         public const string MonkeyIsland1FloppyVga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy VGA";
         public const string MonkeyIsland1FloppyEga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy EGA";
