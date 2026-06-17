@@ -360,6 +360,60 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldImageImportIsLosslessAndEditable(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var decoder = new ScummV3OldImageDecoder();
+            int rooms = 0;
+
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummEditor.Engine.Structures.DataFile.ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummEditor.Engine.Structures.DataFile.ScummV3OldRoom(df.RawContent);
+                using (Bitmap original = decoder.DecodeBackground(room))
+                {
+                    if (original == null) continue;
+                    rooms++;
+
+                    // (a) a no-op re-encode reproduces the original strip table byte-for-byte
+                    int oldLen = df.RawContent[room.ImageOffset] | (df.RawContent[room.ImageOffset + 1] << 8);
+                    byte[] noop = ScummV3OldImageEncoder.Encode(df.RawContent, room.ImageOffset, room.Width, room.Height, original);
+                    Assert.Equal(oldLen, noop.Length);
+                    for (int k = 0; k < oldLen; k++) Assert.Equal(df.RawContent[room.ImageOffset + k], noop[k]);
+
+                    // (b) editing one pixel round-trips exactly through encode -> ApplyEdit -> decode
+                    byte[,] matrix = IndexedImageHelper.GetIndexMatrix(original);
+                    byte newValue = (byte)((matrix[0, 0] + 1) & 0x0F);
+                    matrix[0, 0] = newValue;
+                    int roomNo = RoomNo(disk.FilePath);
+                    using (Bitmap edited = IndexedImageHelper.FromIndexMatrix(matrix, original.Palette.Entries, -1))
+                    {
+                        byte[] newTable = ScummV3OldImageEncoder.Encode(df.RawContent, room.ImageOffset, room.Width, room.Height, edited);
+                        ScummV3OldWriter.ApplyEdit(df, game.IndexFile as ScummEditor.Engine.Structures.IndexFile.ScummV3OldBundleIndexFile,
+                            roomNo, room.ImageOffset, oldLen, newTable);
+                    }
+                    var room2 = new ScummEditor.Engine.Structures.DataFile.ScummV3OldRoom(df.RawContent);
+                    using (Bitmap reDecoded = decoder.DecodeBackground(room2))
+                    {
+                        byte[,] after = IndexedImageHelper.GetIndexMatrix(reDecoded);
+                        Assert.Equal(newValue, after[0, 0]);
+                    }
+                    if (rooms >= 5) break; // a sample proves the path
+                }
+            }
+            Assert.True(rooms > 0, "no decodable backgrounds found");
+        }
+
+        private static int RoomNo(string path)
+        {
+            int n;
+            return int.TryParse(Path.GetFileNameWithoutExtension(path), out n) ? n : 0;
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)

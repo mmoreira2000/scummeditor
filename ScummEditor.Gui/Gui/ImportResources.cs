@@ -58,7 +58,12 @@ namespace ScummEditor.Gui
             // this dialog only picks the folder and drives the progress bar. v3 "GF_OLD256" rooms reuse
             // the v4 block layout, so they take the v4 path.
             int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
-            if (version == 3 || version == 4)
+            bool oldBundle = _scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.UsesOldBundle;
+            if (version == 3 && oldBundle)
+            {
+                ImportV3Old(location); // raw-room EGA games (Loom EGA, Indy3 EGA)
+            }
+            else if (version == 3 || version == 4)
             {
                 ImportV4(location);
             }
@@ -66,6 +71,14 @@ namespace ScummEditor.Gui
             {
                 ImportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-imports edited EGA backgrounds + object images into a v3 old-bundle game.</summary>
+        private void ImportV3Old(string location)
+        {
+            ShowProgress(location);
+            ScummV4GraphicsBatch.ImportReport report = ScummV3OldGraphics.Import(_scummFile, location, OnImportProgress);
+            ShowImportResult(report.Imported, report.Found, report.Errors);
         }
 
         /// <summary>Batch-imports every PNG back into a v4 game (backgrounds, objects, z-planes, costume frames).</summary>
