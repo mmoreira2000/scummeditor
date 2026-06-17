@@ -112,9 +112,12 @@ namespace ScummEditor.Engine.Encoders
         {
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 3)
             {
-                // v3 = the v4 language with a few more opcode deltas (ScummV3Disassembler).
+                // v3 = the v4 language with a few more opcode deltas (ScummV3Disassembler). The
+                // old-bundle EGA games also treat 0xFE as a string escape, so thread that through (it
+                // must match between an initial scan and the rebuild's verify re-scan, or they diverge).
                 bool isIndy3 = context.GameInfo.LoadedGame == Structures.ScummGame.IndianaJones3;
-                return ScummV3Disassembler.Disassemble(code, start, null, isIndy3);
+                bool isOldBundle = context.GameInfo.UsesOldBundle;
+                return ScummV3Disassembler.Disassemble(code, start, null, isIndy3, isOldBundle);
             }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 4)
             {
@@ -238,7 +241,7 @@ namespace ScummEditor.Engine.Encoders
             return entries.Count;
         }
 
-        private static void WriteEntriesFile(List<GameTextEntry> entries, string path, GameTextCodec codec, string gameLabel)
+        internal static void WriteEntriesFile(List<GameTextEntry> entries, string path, GameTextCodec codec, string gameLabel)
         {
             var sb = new StringBuilder();
             sb.AppendLine("; ScummEditor game text export v1");
@@ -411,7 +414,7 @@ namespace ScummEditor.Engine.Encoders
         /// Parses an exported text file into id->text pairs and the charmap codec from its header.
         /// Returns null (and records the error) when the file has no valid '; charmap:' line.
         /// </summary>
-        private static Dictionary<string, string> ParseTextFile(string path, GameTextImportReport report, out GameTextCodec codec)
+        internal static Dictionary<string, string> ParseTextFile(string path, GameTextImportReport report, out GameTextCodec codec)
         {
             codec = null;
             string[] lines = File.ReadAllLines(path, Encoding.UTF8);
@@ -600,7 +603,7 @@ namespace ScummEditor.Engine.Encoders
         /// Returns null (with an error message) if anything cannot be remapped safely; the
         /// result is re-disassembled and verified before being accepted.
         /// </summary>
-        private static byte[] RebuildCode(BlockBase context, byte[] buf, int codeStart, ScummV6Disassembler.Result scan,
+        internal static byte[] RebuildCode(BlockBase context, byte[] buf, int codeStart, ScummV6Disassembler.Result scan,
                                           Dictionary<int, byte[]> replacements, out string error)
         {
             error = null;

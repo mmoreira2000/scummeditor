@@ -33,7 +33,7 @@ namespace ScummEditor.Engine.Encoders
         /// that the size change shifts. delta == 0 leaves the bytes byte-identical.
         /// </summary>
         public static void ApplyEdit(ScummV3OldBundleDataFile dataFile, ScummV3OldBundleIndexFile index,
-            int roomNo, int editOffset, int oldLen, byte[] newBytes)
+            int roomNo, int editOffset, int oldLen, byte[] newBytes, int sizeWordOffset = -1)
         {
             byte[] old = dataFile.RawContent;
             int delta = newBytes.Length - oldLen;
@@ -51,22 +51,23 @@ namespace ScummEditor.Engine.Encoders
                 return;
             }
 
+            // The room-header / object-table / local-script-table re-pointing is a no-op for an edit in
+            // a sub-resource (every room value sits before it), so it can run unconditionally; the room
+            // size word @0 only grows when the edit is actually inside the room resource.
             int oldRoomSize = ReadU16(old, 0);
-            if (editOffset < oldRoomSize)
-            {
-                FixUpRoomResource(result, editOffset, delta);
-            }
-            else
-            {
-                FixUpSubResource(old, result, editOffset, delta);
-            }
+            FixUpRoomResource(result, editOffset, delta, growRoomSize: editOffset < oldRoomSize);
+
+            // The edited resource's OWN [size:u16] word (a script chunk's; -1 for object names / verb
+            // code, which carry no length and live inside the room resource sized by @0).
+            if (sizeWordOffset >= 0 && sizeWordOffset + 1 < result.Length)
+                WriteU16(result, sizeWordOffset, ReadU16(result, sizeWordOffset) + delta);
 
             FixUpIndex(index, roomNo, editOffset, delta);
             dataFile.ReparseChunks();
         }
 
-        /// <summary>Re-points the room header / object tables when the edit lands inside the room resource.</summary>
-        private static void FixUpRoomResource(byte[] buf, int editOffset, int delta)
+        /// <summary>Re-points the room header / object tables / intra-object pointers shifted by an edit.</summary>
+        private static void FixUpRoomResource(byte[] buf, int editOffset, int delta, bool growRoomSize)
         {
             int numObjects = buf[20];
             int numSounds = buf[23];
@@ -108,8 +109,8 @@ namespace ScummEditor.Engine.Encoders
                 }
             }
 
-            // Room resource size word (@0) grows with the edit.
-            ShiftIfAfter(buf, 0, editOffset, delta, alwaysIfSizeWord: true);
+            // Room resource size word (@0) grows only when the edit is inside the room resource.
+            if (growRoomSize) ShiftIfAfter(buf, 0, editOffset, delta, alwaysIfSizeWord: true);
 
             // Header sub-block pointers (file-relative offsets into the room resource).
             ShiftIfAfter(buf, 0x0A, editOffset, delta); // IM00 (background)
@@ -130,25 +131,6 @@ namespace ScummEditor.Engine.Encoders
             {
                 ShiftIfAfter(buf, p + 1, editOffset, delta);
                 p += 3;
-            }
-        }
-
-        /// <summary>Re-points the edited sub-resource's own size word when the edit lands in a sub-resource chunk.</summary>
-        private static void FixUpSubResource(byte[] old, byte[] buf, int editOffset, int delta)
-        {
-            // Find the chunk (in the OLD layout) whose [size:u16] header contains editOffset, then grow
-            // that size word. The chain tiles from offset 0; sub-resources start at the room size.
-            int p = 0;
-            while (p + 2 <= old.Length)
-            {
-                int size = ReadU16(old, p);
-                if (size < 2 || p + size > old.Length) break;
-                if (editOffset >= p && editOffset < p + size)
-                {
-                    WriteU16(buf, p, size + delta); // same position in result (p < editOffset)
-                    return;
-                }
-                p += size;
             }
         }
 

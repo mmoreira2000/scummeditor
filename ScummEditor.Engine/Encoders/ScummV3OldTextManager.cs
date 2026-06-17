@@ -28,6 +28,27 @@ namespace ScummEditor.Engine.Encoders
     */
     public static class ScummV3OldTextManager
     {
+        /// <summary>Exports all translatable text of a v3 old-bundle game to a flat .txt (GUI entry point).</summary>
+        public static int ExportToFile(ScummGameData game, string path, GameTextCodec codec, string gameLabel)
+        {
+            List<GameTextEntry> entries = Extract(game, codec);
+            GameTextManager.WriteEntriesFile(entries, path, codec, gameLabel);
+            return entries.Count;
+        }
+
+        /// <summary>Imports an edited .txt back into a v3 old-bundle game (GUI entry point).</summary>
+        public static GameTextImportReport ImportFromFile(ScummGameData game, string path)
+        {
+            var report = new GameTextImportReport();
+            GameTextCodec codec;
+            System.Collections.Generic.Dictionary<string, string> fileTexts = GameTextManager.ParseTextFile(path, report, out codec);
+            if (fileTexts == null) return report;
+
+            GameTextImportReport applied = Import(game, fileTexts, codec);
+            applied.LinesParsed = report.LinesParsed;
+            return applied;
+        }
+
         public static List<GameTextEntry> Extract(ScummGameData game, GameTextCodec codec)
         {
             var entries = new List<GameTextEntry>();
@@ -150,6 +171,212 @@ namespace ScummEditor.Engine.Encoders
             public int Offset;
             public int OldLen;
             public byte[] NewBytes;
+            public int SizeWordOffset = -1; // a script chunk's own [size:u16] word; -1 for names / verb code
+        }
+
+        /// <summary>
+        /// Writes edited text (object names AND script / verb-code dialogue) back into a v3 old-bundle
+        /// game. Bytecode carriers are rebuilt with the shared jump-remapping rebuilder; every shifted
+        /// offset is re-pointed by ScummV3OldWriter. Edits within one room file are applied in
+        /// descending offset order so a splice never invalidates a not-yet-applied lower edit.
+        /// </summary>
+        public static GameTextImportReport Import(ScummGameData game, System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec)
+        {
+            var report = new GameTextImportReport();
+            bool isIndy3 = game.LoadedGameInfo != null && game.LoadedGameInfo.LoadedGame == ScummGame.IndianaJones3;
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            var matched = new HashSet<string>();
+
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var dataFile = disk.Tree as ScummV3OldBundleDataFile;
+                if (dataFile == null || dataFile.RawContent == null) continue;
+                int roomNo = RoomNumberFromPath(disk.FilePath);
+                string lf = "LF" + roomNo.ToString("D3");
+
+                // Collect every slice edit for this file FROM THE ORIGINAL bytes.
+                var edits = new List<NameEdit>();
+                CollectObjectEdits(dataFile, idToText, codec, lf, isIndy3, edits, matched, report);
+                CollectScriptEdits(dataFile, index, idToText, codec, lf, roomNo, isIndy3, edits, matched, report);
+
+                // Dedupe shared byte regions (apply once), then apply highest-offset first.
+                var appliedAt = new Dictionary<int, NameEdit>();
+                var unique = new List<NameEdit>();
+                foreach (NameEdit e in edits)
+                {
+                    if (appliedAt.ContainsKey(e.Offset)) continue;
+                    appliedAt[e.Offset] = e;
+                    unique.Add(e);
+                }
+                unique.Sort((a, b) => b.Offset.CompareTo(a.Offset));
+                foreach (NameEdit e in unique)
+                {
+                    ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, e.Offset, e.OldLen, e.NewBytes, e.SizeWordOffset);
+                    report.StringsChanged++;
+                    report.BlocksRebuilt++;
+                }
+            }
+
+            report.EntriesMatched = matched.Count;
+            foreach (var kv in idToText)
+                if (!matched.Contains(kv.Key) && report.Warnings.Count < 50)
+                    report.Warnings.Add("ID not found in the game: " + kv.Key);
+            return report;
+        }
+
+        /// <summary>Collects object-name and object-verb-code slice edits (mirrors AddObjects' id scheme).</summary>
+        private static void CollectObjectEdits(ScummV3OldBundleDataFile dataFile, System.Collections.Generic.Dictionary<string, string> idToText,
+            GameTextCodec codec, string lf, bool isIndy3, List<NameEdit> edits, HashSet<string> matched, GameTextImportReport report)
+        {
+            byte[] data = dataFile.RawContent;
+            var room = new ScummV3OldRoom(data);
+            List<V3OldChunk> chunks = dataFile.Chunks;
+            List<int> boundaries = CollectStructuralBoundaries(data, room);
+            var usedLabels = new HashSet<string>();
+
+            for (int i = 0; i < room.NumObjects; i++)
+            {
+                int objptr = room.ObjectCodeOffset(i);
+                if (objptr <= 2 || objptr >= data.Length) continue;
+                int chunkEnd = ChunkEndContaining(chunks, objptr, data.Length);
+
+                int objId = ReadU16(data, objptr + 4);
+                string obj = "OBJ" + objId.ToString("D5");
+                string baseObj = obj;
+                for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
+
+                // name
+                int nameRel = objptr + 16 < data.Length ? data[objptr + 16] : 0;
+                int nameOffset = nameRel != 0 ? objptr + nameRel : 0;
+                if (nameOffset > 0 && nameOffset < chunkEnd)
+                {
+                    string id = lf + "." + obj + ".name";
+                    string newText;
+                    if (idToText.TryGetValue(id, out newText))
+                    {
+                        matched.Add(id);
+                        string err;
+                        byte[] newName = codec.Encode(newText, out err);
+                        int oldLen = ZeroTerminatedLength(data, nameOffset, chunkEnd);
+                        if (newName == null) report.Errors.Add(id + ": " + err);
+                        else if (!SliceEquals(data, nameOffset, oldLen, newName))
+                            edits.Add(new NameEdit { Id = id, Offset = nameOffset, OldLen = oldLen, NewBytes = newName });
+                    }
+                }
+
+                // verb code segments
+                int verbTable = objptr + 17;
+                var codeStarts = new List<int>();
+                int p = verbTable;
+                while (p + 2 < chunkEnd && data[p] != 0)
+                {
+                    int abs = objptr + ReadU16(data, p + 1);
+                    if (abs > verbTable && abs < chunkEnd) codeStarts.Add(abs);
+                    p += 3;
+                }
+                codeStarts.Sort();
+                for (int v = 0; v < codeStarts.Count; v++)
+                {
+                    int segStart = codeStarts[v];
+                    int segEnd = NextBoundaryAbove(boundaries, segStart, chunkEnd);
+                    if (v + 1 < codeStarts.Count && codeStarts[v + 1] < segEnd) segEnd = codeStarts[v + 1];
+                    // Verb code has no own size word (-1): it lives in the room resource, sized by @0.
+                    AddBytecodeEdit(dataFile, data, segStart, segEnd, -1, lf + "." + obj + ".v" + v.ToString("D2"), isIndy3, idToText, codec, edits, matched, report);
+                }
+            }
+        }
+
+        /// <summary>Collects global-script and local-script slice edits (mirrors AddGlobalScripts/AddLocalScripts).</summary>
+        private static void CollectScriptEdits(ScummV3OldBundleDataFile dataFile, ScummV3OldBundleIndexFile index,
+            System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec, string lf, int roomNo,
+            bool isIndy3, List<NameEdit> edits, HashSet<string> matched, GameTextImportReport report)
+        {
+            byte[] data = dataFile.RawContent;
+            var room = new ScummV3OldRoom(data);
+            List<int> boundaries = CollectStructuralBoundaries(data, room);
+
+            // Global scripts are index-loaded resources: [size:u16][2][bytecode], so the size word at
+            // their offset IS the length, and editing one grows that word.
+            if (index != null && index.ScriptDirectory != null)
+            {
+                V3OldResourceDirectory dir = index.ScriptDirectory;
+                for (int s = 0; s < dir.Count; s++)
+                {
+                    if (dir.RoomNumbers[s] != roomNo) continue;
+                    int off = dir.Offsets[s];
+                    if (off == 0xFFFF || off == 0 || off + 4 > data.Length) continue;
+                    int end = ScriptEnd(data, off);
+                    AddBytecodeEdit(dataFile, data, off + 4, end, off, lf + ".SC" + s.ToString("D3"), isIndy3, idToText, codec, edits, matched, report);
+                }
+            }
+
+            // Local scripts live inside the room resource as raw bytecode (no length-prefixed resource
+            // header the engine relies on - it runs them to a terminal opcode). Bytecode starts at
+            // off+4 and is bounded by the next structural element; there is no own size word to grow.
+            int p = 29 + room.NumObjects * 4 + room.NumSounds + room.NumScripts;
+            while (p + 3 <= data.Length && data[p] != 0)
+            {
+                int id = data[p];
+                int off = ReadU16(data, p + 1);
+                p += 3;
+                if (off <= 0 || off + 4 > data.Length) continue;
+                int end = NextBoundaryAbove(boundaries, off, data.Length);
+                AddBytecodeEdit(dataFile, data, off + 4, end, -1, lf + ".LS" + id.ToString("D3"), isIndy3, idToText, codec, edits, matched, report);
+            }
+        }
+
+        /// <summary>End of a script resource: its own [size:u16] word at <paramref name="off"/> is its length.</summary>
+        private static int ScriptEnd(byte[] data, int off)
+        {
+            int size = ReadU16(data, off);
+            int end = off + size;
+            return (size >= 4 && end <= data.Length) ? end : data.Length;
+        }
+
+        /// <summary>
+        /// Disassembles a bytecode slice [start,end), and if any of its strings are edited, rebuilds the
+        /// slice (jump-remapped + verified by the shared rebuilder) and records the resulting slice edit.
+        /// </summary>
+        private static void AddBytecodeEdit(ScummV3OldBundleDataFile dataFile, byte[] data, int start, int end,
+            int sizeWordOffset, string idPrefix, bool isIndy3, System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec,
+            List<NameEdit> edits, HashSet<string> matched, GameTextImportReport report)
+        {
+            if (start < 0 || end <= start || end > data.Length) return;
+
+            var slice = new byte[end - start];
+            System.Array.Copy(data, start, slice, 0, slice.Length);
+            ScummV6Disassembler.Result scan = ScummV3Disassembler.Disassemble(slice, 0, null, isIndy3, true);
+
+            var replacements = new Dictionary<int, byte[]>();
+            for (int k = 0; k < scan.Strings.Count; k++)
+            {
+                ScummV6Disassembler.StringRef sref = scan.Strings[k];
+                if (sref.Kind == "actorName" || sref.Kind == "file") continue;
+                string id = idPrefix + ".t" + k.ToString("D3");
+                string newText;
+                if (!idToText.TryGetValue(id, out newText)) continue;
+                matched.Add(id);
+
+                string err;
+                byte[] content = codec.Encode(newText, out err);
+                if (content == null) { report.Errors.Add(id + ": " + err); continue; }
+                int contentLen = sref.Length - (sref.Terminated ? 1 : 0);
+                if (SliceEquals(slice, sref.Offset, contentLen, content)) continue; // unchanged
+                replacements[k] = content;
+            }
+            if (replacements.Count == 0) return;
+
+            if (!scan.DecodedToEnd)
+            {
+                report.Errors.Add(idPrefix + ": bytecode does not decode to the end; left unchanged");
+                return;
+            }
+
+            string rebuildError;
+            byte[] rebuilt = GameTextManager.RebuildCode(dataFile, slice, 0, scan, replacements, out rebuildError);
+            if (rebuilt == null) { report.Errors.Add(idPrefix + ": " + rebuildError + "; left unchanged"); return; }
+
+            edits.Add(new NameEdit { Id = idPrefix, Offset = start, OldLen = slice.Length, NewBytes = rebuilt, SizeWordOffset = sizeWordOffset });
         }
 
         private static bool SliceEquals(byte[] buf, int offset, int length, byte[] other)
@@ -165,6 +392,13 @@ namespace ScummEditor.Engine.Encoders
         private static void AddObjects(List<GameTextEntry> entries, byte[] data, ScummV3OldRoom room,
             List<V3OldChunk> chunks, string lf, bool isIndy3, GameTextCodec codec)
         {
+            // Verb code has no stored length; a block ends where the next structural element begins.
+            // Collect every structural offset in the room (the room-header pointers, every object's
+            // image/code/name, the local scripts, and the room-resource end) so each verb block can be
+            // bounded by the nearest one above it - otherwise the last verb over-reads into its
+            // neighbours and yields other objects' dialogue under the wrong id.
+            List<int> boundaries = CollectStructuralBoundaries(data, room);
+
             var usedLabels = new HashSet<string>();
             for (int i = 0; i < room.NumObjects; i++)
             {
@@ -211,14 +445,14 @@ namespace ScummEditor.Engine.Encoders
                 if (codeStarts.Count > 0)
                 {
                     codeStarts.Sort();
-                    // The block after the last verb is the object name (when it follows the code) or
-                    // the OBCD chunk end - whichever comes first bounds the final verb.
-                    int finalBound = (nameOffset > codeStarts[codeStarts.Count - 1] && nameOffset < chunkEnd)
-                        ? nameOffset : chunkEnd;
                     for (int v = 0; v < codeStarts.Count; v++)
                     {
                         int segStart = codeStarts[v];
-                        int segEnd = v + 1 < codeStarts.Count ? codeStarts[v + 1] : finalBound;
+                        // End at the nearest of: the next verb of this object, or the next structural
+                        // element in the room (object/name/image/script/room-end). This bounds the last
+                        // verb tightly instead of running to the room-resource end.
+                        int segEnd = NextBoundaryAbove(boundaries, segStart, chunkEnd);
+                        if (v + 1 < codeStarts.Count && codeStarts[v + 1] < segEnd) segEnd = codeStarts[v + 1];
                         AddBytecodeStrings(entries, data, segStart, segEnd, lf + "." + obj + ".v" + v.ToString("D2"), isIndy3, codec);
                     }
                 }
@@ -230,7 +464,10 @@ namespace ScummEditor.Engine.Encoders
         private static void AddLocalScripts(List<GameTextEntry> entries, byte[] data, ScummV3OldRoom room,
             List<V3OldChunk> chunks, string lf, bool isIndy3, GameTextCodec codec)
         {
-            // The local-script table follows the object tables + the sound/script id lists.
+            // Local scripts are raw bytecode inside the room resource (no length-prefixed resource the
+            // engine reads): bytecode at off+4, bounded by the next structural element (NOT the leading
+            // word, which is not a length, and NOT the room-resource end, which would over-read).
+            List<int> boundaries = CollectStructuralBoundaries(data, room);
             int p = 29 + room.NumObjects * 4 + room.NumSounds + room.NumScripts;
             while (p + 3 <= data.Length)
             {
@@ -238,7 +475,9 @@ namespace ScummEditor.Engine.Encoders
                 if (id == 0) break; // terminator
                 int offset = ReadU16(data, p + 1);
                 p += 3;
-                AddScriptChunk(entries, data, chunks, offset, lf + ".LS" + id.ToString("D3"), isIndy3, codec);
+                if (offset <= 0 || offset + 4 > data.Length) continue;
+                int end = NextBoundaryAbove(boundaries, offset, data.Length);
+                AddBytecodeStrings(entries, data, offset + 4, end, lf + ".LS" + id.ToString("D3"), isIndy3, codec);
             }
         }
 
@@ -261,10 +500,60 @@ namespace ScummEditor.Engine.Encoders
             int chunkStart, string id, bool isIndy3, GameTextCodec codec)
         {
             if (chunkStart < 0 || chunkStart + 4 > data.Length) return;
-            // Bound the bytecode by the chunk chain (the resource's own chunk), not the leading size
-            // word, which is not a dependable length for every resource.
-            int chunkEnd = ChunkEndContaining(chunks, chunkStart, data.Length);
+            // A script is a [size:u16][2][bytecode] resource, so its own size word is its length. (For
+            // a local script that sits inside the room-resource chunk the chunk chain would over-read
+            // to the room end, so the size word is the right bound.)
+            int chunkEnd = ScriptEnd(data, chunkStart);
             AddBytecodeStrings(entries, data, chunkStart + 4, chunkEnd, id, isIndy3, codec);
+        }
+
+        /// <summary>
+        /// Every structural offset inside the room resource: the room-header sub-block pointers, each
+        /// object's image/code/name, the local-script entries, and the room-resource end (@0). Used to
+        /// bound a verb-code block at the nearest element after it (verb code carries no length).
+        /// </summary>
+        private static List<int> CollectStructuralBoundaries(byte[] data, ScummV3OldRoom room)
+        {
+            var b = new List<int>();
+            int roomSize = ReadU16(data, 0);
+            b.Add(roomSize > 0 ? roomSize : data.Length);
+            AddBoundary(b, room.ImageOffset);
+            AddBoundary(b, room.BoxOffset);
+            AddBoundary(b, room.ExitScriptOffset);
+            AddBoundary(b, room.EntryScriptOffset);
+
+            for (int i = 0; i < room.NumObjects; i++)
+            {
+                AddBoundary(b, room.ObjectImageOffset(i));
+                int objptr = room.ObjectCodeOffset(i);
+                AddBoundary(b, objptr);
+                int nameRel = objptr > 0 && objptr + 16 < data.Length ? data[objptr + 16] : 0;
+                if (nameRel != 0) AddBoundary(b, objptr + nameRel);
+            }
+
+            int p = 29 + room.NumObjects * 4 + room.NumSounds + room.NumScripts;
+            while (p + 3 <= data.Length && data[p] != 0)
+            {
+                AddBoundary(b, ReadU16(data, p + 1));
+                p += 3;
+            }
+
+            b.Sort();
+            return b;
+        }
+
+        private static void AddBoundary(List<int> list, int value)
+        {
+            if (value > 0) list.Add(value);
+        }
+
+        /// <summary>The smallest boundary strictly greater than <paramref name="offset"/>, or <paramref name="fallback"/>.</summary>
+        private static int NextBoundaryAbove(List<int> boundaries, int offset, int fallback)
+        {
+            int best = fallback;
+            foreach (int b in boundaries)
+                if (b > offset && b < best) best = b;
+            return best;
         }
 
         /// <summary>End offset of the chunk-chain chunk that contains <paramref name="offset"/>, or the fallback.</summary>

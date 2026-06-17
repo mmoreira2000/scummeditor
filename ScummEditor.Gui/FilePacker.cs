@@ -286,9 +286,16 @@ namespace ScummEditor.Gui
             try
             {
                 string gameLabel = Path.GetFileName(scummFile.LoadedGameInfo.DataFile);
-                int count = scummFile.LoadedGameInfo.ScummVersion == 4
-                    ? GameTextManager.ExportToFileV4(scummFile, dlg.FileName, codec, gameLabel)
-                    : GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec, gameLabel);
+                // v3 old-bundle (Loom EGA, Indy3 EGA) uses its own raw-room text pipeline; v4 and v3
+                // "GF_OLD256" (one NN.LFL per room) use the v4 path; v5/v6 use the LFLF data file.
+                int version = scummFile.LoadedGameInfo.ScummVersion;
+                int count;
+                if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
+                    count = ScummV3OldTextManager.ExportToFile(scummFile, dlg.FileName, codec, gameLabel);
+                else if (version == 4 || version == 3)
+                    count = GameTextManager.ExportToFileV4(scummFile, dlg.FileName, codec, gameLabel);
+                else
+                    count = GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec, gameLabel);
                 MessageBox.Show(this, count + " texts exported to:\n" + dlg.FileName,
                     "Export game texts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
@@ -368,9 +375,14 @@ namespace ScummEditor.Gui
 
             try
             {
-                GameTextImportReport report = scummFile.LoadedGameInfo.ScummVersion == 4
-                    ? GameTextManager.ImportFromFileV4(scummFile, dlg.FileName)
-                    : GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
+                int version = scummFile.LoadedGameInfo.ScummVersion;
+                GameTextImportReport report;
+                if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
+                    report = ScummV3OldTextManager.ImportFromFile(scummFile, dlg.FileName);
+                else if (version == 4 || version == 3)
+                    report = GameTextManager.ImportFromFileV4(scummFile, dlg.FileName);
+                else
+                    report = GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
 
                 string message = report.Summary();
                 if (report.HasChanges)

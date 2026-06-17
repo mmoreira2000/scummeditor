@@ -255,6 +255,59 @@ namespace ScummEditor.UnitTests
             Assert.True(applied > 0, "no name edit took effect");
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.Indy3Ega)]
+        [InlineData(GameLibrary.LoomEga)]
+        public void V3OldTextImportIsByteSafe(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var codec = GameTextCodec.Default();
+
+            var baseEntries = ScummV3OldTextManager.Extract(game, codec);
+            var baseline = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (GameTextEntry e in baseEntries) baseline[e.Id] = e.Text;
+
+            // Edit names + dialogue, choosing DISTINCT baseline texts so shared byte regions do not
+            // muddy the comparison.
+            var edits = new System.Collections.Generic.Dictionary<string, string>();
+            var usedBase = new System.Collections.Generic.HashSet<string>();
+            int names = 0, talk = 0;
+            foreach (GameTextEntry e in baseEntries)
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(e.Text, "^[A-Za-z0-9 .,'!?]+$") || e.Text.Length < 4) continue;
+                if (!usedBase.Add(e.Text)) continue;
+                if (e.Kind == "objectName" && names < 20) { edits[e.Id] = e.Text + " EDIT"; names++; }
+                else if (e.Kind == "talk" && talk < 30) { edits[e.Id] = (talk % 2 == 0) ? e.Text + " [longer]" : "Curto."; talk++; }
+            }
+            Skip.If(edits.Count == 0, "no editable strings found");
+
+            var editedBaseTexts = new System.Collections.Generic.HashSet<string>();
+            foreach (var kv in edits) editedBaseTexts.Add(baseline[kv.Key]);
+
+            ScummV3OldTextManager.Import(game, edits, codec);
+
+            var after = new System.Collections.Generic.Dictionary<string, string>();
+            var afterEntries = ScummV3OldTextManager.Extract(game, codec);
+            foreach (GameTextEntry e in afterEntries) after[e.Id] = e.Text;
+
+            // No precisely-bounded resource may change except the edits and their shared-region siblings,
+            // no string may become control-byte garbage, and no resource may be lost.
+            foreach (var kv in baseline)
+            {
+                if (edits.ContainsKey(kv.Key)) continue;
+                string got; after.TryGetValue(kv.Key, out got);
+                if (got == kv.Value) continue;
+                if (editedBaseTexts.Contains(kv.Value)) continue; // shared region with an edit
+                Assert.True(false, "text edit corrupted " + kv.Key + ": was '" + kv.Value + "' now '" + (got ?? "<gone>") + "'");
+            }
+            foreach (GameTextEntry e in afterEntries) Assert.False(IsControlGarbage(e.Text), "garbage after import: " + e.Id);
+            Assert.Equal(baseEntries.Count, afterEntries.Count);
+
+            int applied = 0;
+            foreach (var kv in edits) if (after.TryGetValue(kv.Key, out var g) && g == kv.Value) applied++;
+            Assert.True(applied >= edits.Count * 0.9, "too few edits applied: " + applied + "/" + edits.Count);
+        }
+
         /// <summary>True when the decoded text is dominated by control-code escape tokens (an over-read).</summary>
         private static bool IsControlGarbage(string text)
         {
