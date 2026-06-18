@@ -443,9 +443,17 @@ namespace ScummEditor.Gui
 
         private void exportGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (scummFile == null || scummFile.DataFile == null)
+            if (scummFile == null || scummFile.LoadedGameInfo == null
+                || scummFile.LoadedGameInfo.LoadedGame == ScummGame.None)
             {
                 MessageBox.Show(this, "Open a game first.", "Export game fonts");
+                return;
+            }
+
+            // v2 (Maniac/Zak) has no LFL charset - its font lives in the game .EXE.
+            if (scummFile.LoadedGameInfo.ScummVersion <= 2)
+            {
+                ExportV2ExeFont();
                 return;
             }
 
@@ -469,9 +477,16 @@ namespace ScummEditor.Gui
 
         private void importGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            if (scummFile == null || scummFile.DataFile == null)
+            if (scummFile == null || scummFile.LoadedGameInfo == null
+                || scummFile.LoadedGameInfo.LoadedGame == ScummGame.None)
             {
                 MessageBox.Show(this, "Open a game first.", "Import game fonts");
+                return;
+            }
+
+            if (scummFile.LoadedGameInfo.ScummVersion <= 2)
+            {
+                ImportV2ExeFont();
                 return;
             }
 
@@ -486,6 +501,98 @@ namespace ScummEditor.Gui
                 string report = CharsetPngCodec.ImportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this,
                     report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
+                    "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Import game fonts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>Exports the v2 EXE-embedded font (MANIAC.EXE / ZAK.EXE) as an editable PNG atlas.</summary>
+        private void ExportV2ExeFont()
+        {
+            string exePath = ScummV2ExeFontCodec.FindGameExe(Path.GetDirectoryName(scummFile.LoadedGameInfo.DataFile));
+            if (exePath == null)
+            {
+                MessageBox.Show(this, "Could not find the game executable (MANIAC.EXE / ZAK.EXE) next to the data files.",
+                    "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            string error;
+            ScummV2ExeFont font = ScummV2ExeFont.Read(File.ReadAllBytes(exePath), out error);
+            if (font == null)
+            {
+                MessageBox.Show(this, "Could not read the font from " + Path.GetFileName(exePath) + ":\n" + error,
+                    "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var dlg = new FolderBrowserDialog { Description = "Folder to save the EXE font (font.png + font.guide.png)" };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                string png = Path.Combine(dlg.SelectedPath, "font.png");
+                ScummV2ExeFontCodec.ExportPng(font, png, Path.Combine(dlg.SelectedPath, "font.guide.png"));
+                MessageBox.Show(this,
+                    "The font from " + Path.GetFileName(exePath) + " was exported to:\n" + png
+                    + "\n\nEdit the punctuation/symbol slots (e.g. $ % ' < = > [ \\ ] _ { | } ~) to hold accented "
+                    + "letters, then use Import game fonts.\n\nNote: an EXE font edit shows only under the original "
+                    + "DOS engine (DOSBox); ScummVM uses its own built-in font.",
+                    "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export game fonts",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        /// <summary>Imports an edited PNG atlas back into a copy of the v2 game executable (same size, in place).</summary>
+        private void ImportV2ExeFont()
+        {
+            string exePath = ScummV2ExeFontCodec.FindGameExe(Path.GetDirectoryName(scummFile.LoadedGameInfo.DataFile));
+            if (exePath == null)
+            {
+                MessageBox.Show(this, "Could not find the game executable (MANIAC.EXE / ZAK.EXE) next to the data files.",
+                    "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var open = new OpenFileDialog { Filter = "Font atlas (font.png)|*.png|All files (*.*)|*.*", Title = "Select the edited font PNG" };
+            if (open.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                string error;
+                ScummV2ExeFont font = ScummV2ExeFont.Read(File.ReadAllBytes(exePath), out error);
+                if (font == null)
+                {
+                    MessageBox.Show(this, "Could not read the font from " + Path.GetFileName(exePath) + ":\n" + error,
+                        "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                string report = ScummV2ExeFontCodec.ImportPng(font, open.FileName);
+
+                // Write the patched executable where the user chooses (defaults to the original, but a copy
+                // is offered so the original EXE need not be overwritten).
+                var save = new SaveFileDialog
+                {
+                    Filter = "Game executable (*.exe)|*.exe|All files (*.*)|*.*",
+                    FileName = Path.GetFileName(exePath),
+                    InitialDirectory = Path.GetDirectoryName(exePath),
+                    Title = "Save the patched executable"
+                };
+                if (save.ShowDialog(this) != DialogResult.OK) return;
+
+                File.WriteAllBytes(save.FileName, font.ExeBytes);
+                MessageBox.Show(this,
+                    report + Environment.NewLine + Environment.NewLine + "Patched executable written to:\n" + save.FileName
+                    + "\n\nThe edited glyphs render under the original DOS engine (DOSBox), not ScummVM.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
