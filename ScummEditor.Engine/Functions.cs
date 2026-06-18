@@ -320,9 +320,18 @@ namespace ScummEditor.Engine
 
             List<string> fonts = EnumerateV3Fonts(folder); // 9x.LFL charsets
 
+            // SCUMM v2 (Maniac Mansion / Zak "Enhanced") shares the old-bundle magic 0x0100 with the v3old
+            // EGA games (Loom, Indy3), but ships NO 9x.LFL charset files (v2 fonts are baked into the engine /
+            // game EXE) and its index uses a 1-byte global-object table instead of v3old's 4-byte one. The
+            // zero-charset signal tells them apart from data alone; without it the v3old index reader walks
+            // off the end of a v2 index (it assumes the 4-byte object table).
+            bool isV2 = oldBundle && fonts.Count == 0;
+
             var result = new GameInfo
             {
-                LoadedGame = IdentifyV3Game(indexPath, oldBundle, xorKey, folder, rooms.Count, fonts.Count),
+                LoadedGame = isV2
+                    ? IdentifyV1V2Game(folder)
+                    : IdentifyV3Game(indexPath, oldBundle, xorKey, folder, rooms.Count, fonts.Count),
                 IndexFile = indexPath,
                 DataFile = rooms[0],
                 DataFiles = rooms,                 // one NN.LFL per room
@@ -330,9 +339,10 @@ namespace ScummEditor.Engine
                 Xored = xorKey != 0,
                 XorKey = xorKey,
                 IndexXorKey = xorKey,
-                ScummVersion = 3,
+                ScummVersion = isV2 ? 2 : 3,
                 UsesSmallHeader = !oldBundle, // GF_OLD256 uses the v4 [size:4 LE][tag:2] header
-                UsesOldBundle = oldBundle     // EGA games use untagged [size:uint16] chunks
+                UsesOldBundle = oldBundle,    // EGA + v1/v2 games use untagged [size:uint16] chunks
+                GlobalObjectEntrySize = isV2 ? 1 : 4 // v2 object table is 1 byte/object; v3old is 4
             };
 
             // FM-Towns releases ship ripped CD audio (CDDA.SOU); mark the CD edition.
@@ -418,6 +428,18 @@ namespace ScummEditor.Engine
         }
 
         /// <summary>
+        /// Tells Maniac Mansion from Zak McKracken in a v1/v2 game from data alone: Zak ships room 58
+        /// (58.LFL), Maniac does not (its rooms stop around 52-53). This is the same rule scummvm uses
+        /// (detection_internal.h: zak has 58.LFL, maniac does not).
+        /// </summary>
+        private static ScummGame IdentifyV1V2Game(string folder)
+        {
+            return File.Exists(Path.Combine(folder, "58.LFL"))
+                ? ScummGame.ZakMcKracken
+                : ScummGame.ManiacMansion;
+        }
+
+        /// <summary>
         /// Reads {rooms, scripts, sounds, costumes} from the v3 index without fully parsing it.
         /// old-bundle: magic(2)+numObj(2)+objTable(numObj*4) then four [count:1][count bytes][count*2 LE]
         /// directories in order ROOM, COSTUME, SCRIPT, SOUND. small-header: the count is the uint16 at
@@ -472,6 +494,12 @@ namespace ScummEditor.Engine
             }
             catch (IOException)
             {
+                return null;
+            }
+            catch (IndexOutOfRangeException)
+            {
+                // A v2 index (1-byte object table) walked with the v3old 4-byte stride runs off the end;
+                // callers treat null as "counts unknown" and fall back to other signals.
                 return null;
             }
         }

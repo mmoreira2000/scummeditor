@@ -50,7 +50,10 @@ namespace ScummEditor.Engine.Structures.IndexFile
             {
                 int p = 2; // skip magic 0x0100
                 int numObjects = RawContent[p] | (RawContent[p + 1] << 8);
-                p += 2 + numObjects * 4;
+                // Object-table stride is 4 bytes/object for v3 (Loom/Indy3 EGA) but 1 byte/object for
+                // v1/v2 (Maniac/Zak); reading the wrong stride walks every directory off-position.
+                int objectEntrySize = GameInfo != null && GameInfo.GlobalObjectEntrySize > 0 ? GameInfo.GlobalObjectEntrySize : 4;
+                p += 2 + numObjects * objectEntrySize;
 
                 RoomDirectory = ReadDirectory(RawContent, ref p);
                 CostumeDirectory = ReadDirectory(RawContent, ref p);

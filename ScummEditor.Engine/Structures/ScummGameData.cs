@@ -76,6 +76,13 @@ namespace ScummEditor.Engine.Structures
                     ? (ScummGameData)new ScummGameDataV3OldBundle() // Loom EGA, Indy3 EGA, Zak DOS
                     : new ScummGameDataV3Small256();                // Indy3 VGA, Zak FM-Towns
             }
+            if (gameInfo != null && gameInfo.ScummVersion == 2)
+            {
+                // v2 (Maniac/Zak "Enhanced") is the same GF_OLD_BUNDLE container as v3old (XOR 0xFF,
+                // [size:u16] room chunks, magic-0x0100 index); only the index object-table stride differs
+                // (carried on GameInfo), so the verbatim-round-trip v3old game data serves it directly.
+                return new ScummGameDataV3OldBundle();
+            }
             return new ScummGameDataV5V6();
         }
 
