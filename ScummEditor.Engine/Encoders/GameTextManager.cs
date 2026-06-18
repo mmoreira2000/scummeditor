@@ -539,7 +539,8 @@ namespace ScummEditor.Engine.Encoders
 
                 if (!scan.DecodedToEnd)
                 {
-                    report.Errors.Add(source.Id + ": the bytecode does not decode to the end; block left unchanged");
+                    report.Errors.Add(source.Id + ": the bytecode does not decode to the end; block left unchanged"
+                        + DecodeFailureDetail(scan, buf, start));
                     continue;
                 }
 
@@ -600,6 +601,38 @@ namespace ScummEditor.Engine.Encoders
 
         /// <summary>
         /// Rebuilds a code buffer with some strings replaced, remapping every relative jump.
+        /// <summary>
+        /// Compact diagnostic appended to a "does not decode to the end" error: how far the
+        /// disassembler got, the raw bytes around the stop point, and the tail of the listing (which
+        /// ends with the "&lt;truncated while decoding 0xNN&gt;" marker naming the opcode it choked on).
+        /// </summary>
+        internal static string DecodeFailureDetail(ScummV6Disassembler.Result scan, byte[] buf, int start)
+        {
+            int total = buf.Length - start;
+            int stopAbs = start + scan.BytesDecoded;
+            var hex = new System.Text.StringBuilder();
+            for (int b = System.Math.Max(start, stopAbs - 3); b < stopAbs + 8 && b < buf.Length; b++)
+                hex.Append(buf[b].ToString("X2") + " ");
+            // For small blocks, dump the whole thing so the desync can be decoded by hand.
+            if (total <= 64)
+            {
+                var full = new System.Text.StringBuilder();
+                for (int b = start; b < buf.Length; b++) full.Append(buf[b].ToString("X2") + " ");
+                return " [decoded " + scan.BytesDecoded + "/" + total + "; FULL: " + full.ToString().Trim() + "]";
+            }
+            string[] lines = (scan.Listing ?? string.Empty).Split('\n');
+            var tail = new System.Text.StringBuilder();
+            for (int i = System.Math.Max(0, lines.Length - 3); i < lines.Length; i++)
+            {
+                string t = lines[i].Trim();
+                if (t.Length == 0) continue;
+                if (tail.Length > 0) tail.Append("  |  ");
+                tail.Append(t);
+            }
+            return " [decoded " + scan.BytesDecoded + "/" + total + "; bytes@stop: " + hex.ToString().Trim()
+                + "; tail: " + tail + "]";
+        }
+
         /// Returns null (with an error message) if anything cannot be remapped safely; the
         /// result is re-disassembled and verified before being accepted.
         /// </summary>

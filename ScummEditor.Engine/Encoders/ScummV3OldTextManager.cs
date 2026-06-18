@@ -68,7 +68,7 @@ namespace ScummEditor.Engine.Encoders
 
                 AddObjects(entries, data, room, chunks, lf, isIndy3, codec);
                 AddLocalScripts(entries, data, room, chunks, lf, isIndy3, codec);
-                AddGlobalScripts(entries, data, index, chunks, roomNo, lf, isIndy3, codec);
+                AddGlobalScripts(entries, data, index, roomNo, lf, isIndy3, codec);
             }
             return entries;
         }
@@ -296,7 +296,9 @@ namespace ScummEditor.Engine.Encoders
             List<int> boundaries = CollectStructuralBoundaries(data, room);
 
             // Global scripts are index-loaded resources: [size:u16][2][bytecode], so the size word at
-            // their offset IS the length, and editing one grows that word.
+            // their offset IS the length, and editing one grows that word - BUT some old-bundle size
+            // words are unreliable (e.g. Loom EGA SC055's word is 34559), so the slice is also clamped
+            // to the next packed resource (NextResourceOffsetInRoom) to avoid over-reading into it.
             if (index != null && index.ScriptDirectory != null)
             {
                 V3OldResourceDirectory dir = index.ScriptDirectory;
@@ -305,32 +307,62 @@ namespace ScummEditor.Engine.Encoders
                     if (dir.RoomNumbers[s] != roomNo) continue;
                     int off = dir.Offsets[s];
                     if (off == 0xFFFF || off == 0 || off + 4 > data.Length) continue;
-                    int end = ScriptEnd(data, off);
+                    int end = ScriptEnd(data, off, NextResourceOffsetInRoom(index, roomNo, off, data.Length));
                     AddBytecodeEdit(dataFile, data, off + 4, end, off, lf + ".SC" + s.ToString("D3"), isIndy3, idToText, codec, edits, matched, report);
                 }
             }
 
-            // Local scripts live inside the room resource as raw bytecode (no length-prefixed resource
-            // header the engine relies on - it runs them to a terminal opcode). Bytecode starts at
-            // off+4 and is bounded by the next structural element; there is no own size word to grow.
+            // Local scripts: the table offset points DIRECTLY at the bytecode (scummvm runScript uses
+            // _localScriptOffsets[...] with no header add); the 4-byte resource header sits before it.
+            // So the bytecode is [off, nextElement) - start at off, not off+4 (mirrors AddLocalScripts).
             int p = 29 + room.NumObjects * 4 + room.NumSounds + room.NumScripts;
             while (p + 3 <= data.Length && data[p] != 0)
             {
                 int id = data[p];
                 int off = ReadU16(data, p + 1);
                 p += 3;
-                if (off <= 0 || off + 4 > data.Length) continue;
+                if (off <= 0 || off >= data.Length) continue;
                 int end = NextBoundaryAbove(boundaries, off, data.Length);
-                AddBytecodeEdit(dataFile, data, off + 4, end, -1, lf + ".LS" + id.ToString("D3"), isIndy3, idToText, codec, edits, matched, report);
+                AddBytecodeEdit(dataFile, data, off, end, -1, lf + ".LS" + id.ToString("D3"), isIndy3, idToText, codec, edits, matched, report);
             }
         }
 
-        /// <summary>End of a script resource: its own [size:u16] word at <paramref name="off"/> is its length.</summary>
-        private static int ScriptEnd(byte[] data, int off)
+        /// <summary>
+        /// End of a global script resource. Its own [size:u16] word at <paramref name="off"/> is normally
+        /// its length, but a few old-bundle size words are garbage (Loom EGA SC055 reads 34559), which
+        /// used to make the slice over-read to end-of-file and desync. So the size word is trusted only
+        /// when it is consistent with <paramref name="hardEnd"/> (the next packed resource); otherwise the
+        /// resource is bounded by hardEnd.
+        /// </summary>
+        private static int ScriptEnd(byte[] data, int off, int hardEnd)
         {
+            if (hardEnd <= off || hardEnd > data.Length) hardEnd = data.Length;
             int size = ReadU16(data, off);
             int end = off + size;
-            return (size >= 4 && end <= data.Length) ? end : data.Length;
+            return (size >= 4 && end <= hardEnd) ? end : hardEnd;
+        }
+
+        /// <summary>
+        /// The lowest resource offset in this room file strictly above <paramref name="off"/>, scanning the
+        /// room/costume/script/sound index directories for this room. v3 old-bundle resources are packed
+        /// back-to-back, so this is the hard upper bound of a resource whose own size word is unreliable.
+        /// </summary>
+        private static int NextResourceOffsetInRoom(ScummV3OldBundleIndexFile index, int roomNo, int off, int fallback)
+        {
+            if (index == null) return fallback;
+            int best = fallback;
+            V3OldResourceDirectory[] dirs = { index.RoomDirectory, index.CostumeDirectory, index.ScriptDirectory, index.SoundDirectory };
+            foreach (V3OldResourceDirectory dir in dirs)
+            {
+                if (dir == null || dir.Offsets == null) continue;
+                for (int i = 0; i < dir.Count; i++)
+                {
+                    if (dir.RoomNumbers[i] != roomNo) continue;
+                    int o = dir.Offsets[i];
+                    if (o > off && o < best) best = o;
+                }
+            }
+            return best;
         }
 
         /// <summary>
@@ -368,7 +400,8 @@ namespace ScummEditor.Engine.Encoders
 
             if (!scan.DecodedToEnd)
             {
-                report.Errors.Add(idPrefix + ": bytecode does not decode to the end; left unchanged");
+                report.Errors.Add(idPrefix + ": bytecode does not decode to the end; left unchanged"
+                    + GameTextManager.DecodeFailureDetail(scan, slice, 0));
                 return;
             }
 
@@ -464,9 +497,12 @@ namespace ScummEditor.Engine.Encoders
         private static void AddLocalScripts(List<GameTextEntry> entries, byte[] data, ScummV3OldRoom room,
             List<V3OldChunk> chunks, string lf, bool isIndy3, GameTextCodec codec)
         {
-            // Local scripts are raw bytecode inside the room resource (no length-prefixed resource the
-            // engine reads): bytecode at off+4, bounded by the next structural element (NOT the leading
-            // word, which is not a length, and NOT the room-resource end, which would over-read).
+            // Local scripts: the room-header table stores [id:1][offset:u16]*, and that offset points
+            // DIRECTLY at the bytecode the engine runs (scummvm script.cpp runScript: local scripts use
+            // _localScriptOffsets[...] verbatim, with NO resource-header add - unlike global scripts,
+            // which add _resourceHeaderSize). The 4-byte resource header sits just BEFORE the offset, so
+            // the bytecode is [offset, nextElement) and we must start the disassembly at offset, not
+            // offset+4 (the +4 desynced any string-bearing local script - e.g. Loom EGA LS200/LS216).
             List<int> boundaries = CollectStructuralBoundaries(data, room);
             int p = 29 + room.NumObjects * 4 + room.NumSounds + room.NumScripts;
             while (p + 3 <= data.Length)
@@ -475,14 +511,14 @@ namespace ScummEditor.Engine.Encoders
                 if (id == 0) break; // terminator
                 int offset = ReadU16(data, p + 1);
                 p += 3;
-                if (offset <= 0 || offset + 4 > data.Length) continue;
+                if (offset <= 0 || offset >= data.Length) continue;
                 int end = NextBoundaryAbove(boundaries, offset, data.Length);
-                AddBytecodeStrings(entries, data, offset + 4, end, lf + ".LS" + id.ToString("D3"), isIndy3, codec);
+                AddBytecodeStrings(entries, data, offset, end, lf + ".LS" + id.ToString("D3"), isIndy3, codec);
             }
         }
 
         private static void AddGlobalScripts(List<GameTextEntry> entries, byte[] data, ScummV3OldBundleIndexFile index,
-            List<V3OldChunk> chunks, int roomNo, string lf, bool isIndy3, GameTextCodec codec)
+            int roomNo, string lf, bool isIndy3, GameTextCodec codec)
         {
             if (index == null || index.ScriptDirectory == null) return;
             V3OldResourceDirectory dir = index.ScriptDirectory;
@@ -491,19 +527,20 @@ namespace ScummEditor.Engine.Encoders
                 if (dir.RoomNumbers[s] != roomNo) continue;
                 int offset = dir.Offsets[s];
                 if (offset == 0xFFFF || offset == 0) continue; // absent
-                AddScriptChunk(entries, data, chunks, offset, lf + ".SC" + s.ToString("D3"), isIndy3, codec);
+                int hardEnd = NextResourceOffsetInRoom(index, roomNo, offset, data.Length);
+                AddScriptChunk(entries, data, offset, hardEnd, lf + ".SC" + s.ToString("D3"), isIndy3, codec);
             }
         }
 
-        /// <summary>Disassembles a script chunk ([size:u16][2 bytes][bytecode]) and adds its strings.</summary>
-        private static void AddScriptChunk(List<GameTextEntry> entries, byte[] data, List<V3OldChunk> chunks,
-            int chunkStart, string id, bool isIndy3, GameTextCodec codec)
+        /// <summary>Disassembles a global script chunk ([size:u16][2 bytes][bytecode]) and adds its strings.</summary>
+        private static void AddScriptChunk(List<GameTextEntry> entries, byte[] data,
+            int chunkStart, int hardEnd, string id, bool isIndy3, GameTextCodec codec)
         {
             if (chunkStart < 0 || chunkStart + 4 > data.Length) return;
-            // A script is a [size:u16][2][bytecode] resource, so its own size word is its length. (For
-            // a local script that sits inside the room-resource chunk the chunk chain would over-read
-            // to the room end, so the size word is the right bound.)
-            int chunkEnd = ScriptEnd(data, chunkStart);
+            // A script is a [size:u16][2][bytecode] resource, so its own size word is its length - unless
+            // that word is garbage (some old-bundle scripts), in which case ScriptEnd clamps to hardEnd
+            // (the next packed resource) instead of over-reading into the following script.
+            int chunkEnd = ScriptEnd(data, chunkStart, hardEnd);
             AddBytecodeStrings(entries, data, chunkStart + 4, chunkEnd, id, isIndy3, codec);
         }
 

@@ -1268,6 +1268,31 @@ namespace ScummEditor.Engine.Encoders
                     Emit(offset, "resourceRoutines.loadFlObject(" + resId + ", " + room + ");");
                     return;
                 }
+
+                // FM-Towns audio sub-ops (scummvm o5_resourceRoutines cases 32-37): these read EXTRA
+                // operands after resId. The v3/v4 FM-Towns games (Loom/Indy3/Zak Towns) use 35/36/37
+                // to drive the CD/sound chip; without decoding their operands the disassembly desyncs
+                // (e.g. Loom Towns LF004.LS200 stalled on sub-op 0x23 = setVolumeCD).
+                case 35: // SO_SET_CD_VOLUME(track, volume)
+                {
+                    string vol = GetVarOrDirectByteAux(sub, 0x40);
+                    Emit(offset, "resourceRoutines.setVolumeCD(" + resId + ", " + vol + ");");
+                    return;
+                }
+                case 36: // SO_SET_SOUND_VOLUME(resid, volume, note) - a var/byte plus one plain byte
+                {
+                    string vol = GetVarOrDirectByteAux(sub, 0x40);
+                    string note = ReadByte().ToString();
+                    Emit(offset, "resourceRoutines.setSoundVolume(" + resId + ", " + vol + ", " + note + ");");
+                    return;
+                }
+                case 37: // SO_SET_SOUND_NOTE(resid, note)
+                {
+                    string note = GetVarOrDirectByteAux(sub, 0x40);
+                    Emit(offset, "resourceRoutines.setSoundNote(" + resId + ", " + note + ");");
+                    return;
+                }
+
                 default: name = "op_0x" + code.ToString("X2"); break;
             }
 

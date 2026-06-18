@@ -420,6 +420,67 @@ namespace ScummEditor.UnitTests
             Assert.True(applied >= edits.Count * 0.9, "too few edits applied: " + applied + "/" + edits.Count);
         }
 
+        /// <summary>
+        /// Regression for the FM-Towns resourceRoutines audio sub-ops (scummvm o5_resourceRoutines cases
+        /// 35/36/37 = setVolumeCD / setSoundVolume / setSoundNote). These read an EXTRA operand after the
+        /// resource id; the disassembler used to drop them, so it under-read and desynced the rest of the
+        /// script (Loom FM-Towns LF004.LS200 stalled here). Construct a script using all three and assert
+        /// it decodes cleanly to stopObjectCode.
+        /// </summary>
+        [Fact]
+        public void ResourceRoutinesFmTownsAudioSubOpsDecodeToEnd()
+        {
+            byte[] code =
+            {
+                0x0C, 0xE3, 0x04, 0x40, 0x04, 0x40,        // setVolumeCD(Local[4], Local[4])  (sub 0x23, +1 var operand)
+                0x0C, 0xE4, 0x04, 0x40, 0x04, 0x40, 0x07,  // setSoundVolume(Local[4], Local[4], 7) (sub 0x24, +var +byte)
+                0x0C, 0xE5, 0x04, 0x40, 0x04, 0x40,        // setSoundNote(Local[4], Local[4])  (sub 0x25, +1 var operand)
+                0xA0                                        // stopObjectCode
+            };
+
+            ScummV6Disassembler.Result result = ScummV3Disassembler.Disassemble(code, 0);
+
+            Assert.True(result.DecodedToEnd, "FM-Towns resourceRoutines audio sub-ops did not decode to the end: " + result.Listing);
+            Assert.Contains("setVolumeCD", result.Listing);
+            Assert.Contains("setSoundVolume", result.Listing);
+            Assert.Contains("setSoundNote", result.Listing);
+        }
+
+        /// <summary>
+        /// Regression for the two v3 old-bundle script-slicing bugs that blocked translating real dialogue:
+        /// (1) LOCAL scripts were sliced at off+4 (a phantom resource header), starting the disassembly
+        /// mid-instruction so any string-bearing local script desynced (Loom EGA LS200/LS216/LS207, Indy3
+        /// EGA LS200); the table offset actually points straight at the first opcode. (2) a GLOBAL script
+        /// with a garbage [size:u16] word (Loom EGA SC055 reads 34559) over-read to end-of-file and
+        /// desynced; it must be clamped to the next packed resource. After both fixes, editing every
+        /// ASCII string in the game must raise NO "does not decode" / "falls inside a string" error.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.LoomEga)]
+        [InlineData(GameLibrary.Indy3Ega)]
+        public void V3OldAllScriptsImportWithoutDecodeErrors(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var codec = GameTextCodec.Default();
+            var entries = ScummV3OldTextManager.Extract(game, codec);
+
+            // Edit EVERY plain-ASCII string (append a marker -> a size-changing rebuild that forces a full
+            // disassembly + jump remap of each containing script, which is exactly what desynced before).
+            var edits = new System.Collections.Generic.Dictionary<string, string>();
+            foreach (GameTextEntry e in entries)
+                if (System.Text.RegularExpressions.Regex.IsMatch(e.Text, "^[A-Za-z0-9 .,'!?]+$"))
+                    edits[e.Id] = e.Text + "!";
+            Skip.If(edits.Count == 0, "no editable strings found");
+
+            GameTextImportReport report = ScummV3OldTextManager.Import(game, edits, codec);
+
+            var decodeErrors = report.Errors
+                .Where(x => x.Contains("does not decode") || x.Contains("falls inside a string"))
+                .ToList();
+            Assert.True(decodeErrors.Count == 0,
+                "v3 old-bundle scripts failed to decode for editing:\n" + string.Join("\n", decodeErrors));
+        }
+
         /// <summary>True when the decoded text is dominated by control-code escape tokens (an over-read).</summary>
         private static bool IsControlGarbage(string text)
         {
