@@ -55,7 +55,23 @@ namespace ScummEditor.Engine.Encoders
                 finalStrips.Add(reuse ? originalStrips[i] : encoded[i]);
             }
 
-            return BuildTable(finalStrips);
+            byte[] table = BuildTable(finalStrips);
+
+            // Keep the edit SIZE-NEUTRAL when the re-encoded table is smaller than the original: pad it
+            // back to the original strip-table length so the room file (and therefore the whole 00.LFL
+            // index and its detection MD5) stays byte-identical. Otherwise a size-changing edit moves the
+            // room's sub-resource offsets in 00.LFL, the index MD5 changes, and ScummVM can no longer
+            // match the game in its database - for some editions (e.g. Loom Floppy EGA v1.1, which its
+            // fuzzy fallback rejects) that makes the edited game refuse to load even though the data is
+            // valid. ScummVM and our decoder both read the strips through the offset table and ignore the
+            // trailing padding; the engine self-locates the z-plane mask at imageOffset + smapLen, so
+            // restoring smapLen to the original keeps the mask exactly where it was.
+            int originalSmapLen = ReadU16(roomData, imageOffset);
+            if (table.Length < originalSmapLen)
+            {
+                table = PadToLength(table, originalSmapLen);
+            }
+            return table;
         }
 
         /// <summary>Parses the original EGA strips (raw RLE bytes per strip); null if the table is malformed.</summary>
@@ -126,6 +142,20 @@ namespace ScummEditor.Engine.Encoders
                 for (int y = 0; y < height; y++)
                     if ((newMatrix[x, y] & 0x0F) != (original[x, y] & 0x0F)) return false;
             return true;
+        }
+
+        /// <summary>
+        /// Returns a copy of <paramref name="table"/> grown to <paramref name="targetLength"/> with
+        /// trailing zero bytes, and its leading smapLen word set to the new length so the strip data
+        /// and the z-plane that follows stay byte-aligned with the original (the decoders read strips by
+        /// the offset table and never touch the padding).
+        /// </summary>
+        private static byte[] PadToLength(byte[] table, int targetLength)
+        {
+            var padded = new byte[targetLength];
+            Array.Copy(table, 0, padded, 0, table.Length);
+            WriteU16(padded, 0, targetLength);
+            return padded;
         }
 
         private static int ReadU16(byte[] data, int p) { return data[p] | (data[p + 1] << 8); }

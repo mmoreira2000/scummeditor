@@ -187,6 +187,58 @@ namespace ScummEditor.UnitTests
             Assert.True(moved > 0, "growing every room background left all index offsets unchanged (stale index)");
         }
 
+        /// <summary>
+        /// Regression: a v3 old-bundle (EGA) background edit whose re-encoded strip table would be
+        /// SHORTER than the original is padded back to the original length, so the room file - and
+        /// therefore the whole 00.LFL index and its detection MD5 - stays byte-identical. Without this
+        /// the index shifts, ScummVM can no longer match the game, and editions its fuzzy fallback
+        /// rejects (e.g. Loom Floppy EGA v1.1, which ships both 84.LFL and 86.LFL) refuse to load.
+        /// The guarantee: ScummV3OldImageEncoder.Encode never returns a table shorter than the original.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.LoomEga)]
+        [InlineData(GameLibrary.Indy3Ega)]
+        public void V3OldBackgroundEditIsNeverShorterThanOriginal(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var decoder = new ScummV3OldImageDecoder();
+            int rooms = 0;
+
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV3OldRoom(df.RawContent);
+                if (room.Width == 0 || room.Height == 0 || room.ImageOffset == 0) continue;
+
+                using (Bitmap bg = decoder.DecodeBackground(room))
+                {
+                    if (bg == null) continue;
+                    rooms++;
+
+                    int originalSmapLen = df.RawContent[room.ImageOffset] | (df.RawContent[room.ImageOffset + 1] << 8);
+
+                    // Paint a band on the top eighth so (most) strips are re-encoded - the case that
+                    // used to shrink the table on the rooms that compress better than our EGA encoder.
+                    byte[,] matrix = IndexedImageHelper.GetIndexMatrix(bg);
+                    int band = Math.Max(4, room.Height / 8);
+                    for (int x = 0; x < room.Width; x++)
+                        for (int y = 0; y < band; y++)
+                            matrix[x, y] = (byte)((matrix[x, y] + 1) & 0x0F);
+
+                    using (Bitmap edited = IndexedImageHelper.FromIndexMatrix(matrix, bg.Palette.Entries, -1))
+                    {
+                        byte[] reencoded = ScummV3OldImageEncoder.Encode(df.RawContent, room.ImageOffset, room.Width, room.Height, edited);
+                        Assert.True(reencoded.Length >= originalSmapLen,
+                            "re-encoded background is shorter than the original (would shift the 00.LFL index): "
+                            + reencoded.Length + " < " + originalSmapLen);
+                    }
+                }
+            }
+
+            Assert.True(rooms > 0, "no v3 old-bundle backgrounds were found");
+        }
+
         [SkippableTheory]
         [InlineData(GameLibrary.Indy3Vga)]
         [InlineData(GameLibrary.ZakFmTowns)]
