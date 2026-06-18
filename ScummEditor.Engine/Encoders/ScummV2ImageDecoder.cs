@@ -26,13 +26,38 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Decodes object image <paramref name="objectIndex"/> (its OBIM is the raw RLE stream), or null.</summary>
         public Bitmap DecodeObject(ScummV2Room room, int objectIndex)
         {
-            if (room == null) return null;
+            if (!ObjectOwnsImage(room, objectIndex)) return null;
             int obim = room.ObjectImageOffset(objectIndex);
             int width = room.ObjectWidth(objectIndex);
             int height = room.ObjectHeight(objectIndex);
-            if (obim <= 0 || obim >= room.Data.Length || width <= 0 || height <= 0) return null;
             byte[,] matrix = DecodeRle(room.Data, obim, width, height);
             return matrix == null ? null : ToBitmap(matrix);
+        }
+
+        /// <summary>
+        /// True when object <paramref name="objectIndex"/> genuinely OWNS the image at its OBIM offset.
+        /// v2 (like v0) leaves an imageless object's OBIM pointing at a code (OBCD) block, and several
+        /// multi-state objects can share one OBIM while each declares a different size; decoding such an
+        /// object against its own width/height yields garbage, and re-encoding it would splice over an
+        /// unrelated resource (another object's code, or the primary state's real image). An object owns
+        /// its image only when its OBIM is not an OBCD-table entry AND its declared graphics fit within
+        /// the object's region. Mirrors ScummVM resetRoomObjects' defaultPtr handling (object.cpp).
+        /// </summary>
+        public static bool ObjectOwnsImage(ScummV2Room room, int objectIndex)
+        {
+            if (room == null) return false;
+            int obim = room.ObjectImageOffset(objectIndex);
+            int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
+            if (obim <= 0 || obim >= room.Data.Length || w <= 0 || h <= 0) return false;
+
+            for (int k = 0; k < room.NumObjects; k++)
+            {
+                if (room.ObjectCodeOffset(k) == obim) return false; // OBIM points at a code block: imageless
+            }
+
+            int regionEnd = room.NextStructuralOffsetAbove(obim);
+            int gfxLen = GraphicsRleLength(room.Data, obim, w, h);
+            return obim + gfxLen <= regionEnd; // declared size must fit (rejects non-primary multi-state)
         }
 
         /// <summary>

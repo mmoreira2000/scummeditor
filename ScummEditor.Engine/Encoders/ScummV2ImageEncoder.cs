@@ -60,6 +60,9 @@ namespace ScummEditor.Engine.Encoders
         {
             byte[] graphics = EncodeGraphics(matrix, width, height);
             int origGraphicsLen = ScummV2ImageDecoder.GraphicsRleLength(originalData, im00Offset, width, height);
+            // Clamp to the region: a malformed / over-long graphics walk must not push zStart past the
+            // region end and silently drop the preserved mask tail.
+            if (im00Offset + origGraphicsLen > imageEnd) origGraphicsLen = Math.Max(0, imageEnd - im00Offset);
             int zStart = im00Offset + origGraphicsLen;
             int zLen = (imageEnd > zStart && imageEnd <= originalData.Length) ? imageEnd - zStart : 0;
 
@@ -82,6 +85,22 @@ namespace ScummEditor.Engine.Encoders
             var result = new byte[origGraphicsLen + mask.Length];
             Array.Copy(originalData, im00Offset, result, 0, origGraphicsLen);
             Array.Copy(mask, 0, result, origGraphicsLen, mask.Length);
+            return result;
+        }
+
+        /// <summary>
+        /// Builds the replacement IM00 content when BOTH the image and its walk-behind mask were edited:
+        /// the re-encoded graphics followed by the re-encoded mask. (Used by the batch importer when a room
+        /// has both an edited background PNG and an edited z-plane PNG.)
+        /// </summary>
+        public static byte[] EncodeImageAndMask(byte[,] matrix, byte[,] maskMatrix, int width, int height)
+        {
+            byte[] graphics = EncodeGraphics(matrix, width, height);
+            byte[] mask = EncodeMask(maskMatrix, width, height);
+
+            var result = new byte[graphics.Length + mask.Length];
+            Array.Copy(graphics, 0, result, 0, graphics.Length);
+            Array.Copy(mask, 0, result, graphics.Length, mask.Length);
             return result;
         }
 
@@ -124,7 +143,9 @@ namespace ScummEditor.Engine.Encoders
                 {
                     int start = i;
                     var lit = new List<byte>();
-                    while (i < seq.Count && lit.Count < 255)
+                    // Cap at 127: a literal count byte must keep bit 0x80 clear, or the decoder reads it
+                    // as a repeat run (DecodeMaskRle uses 0x80 to choose literal vs repeat).
+                    while (i < seq.Count && lit.Count < 127)
                     {
                         if (i + 1 < seq.Count && seq[i + 1] == seq[i]) break; // a repeat run starts next
                         lit.Add(seq[i]);
