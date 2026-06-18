@@ -1,5 +1,9 @@
+using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
+using System.Linq;
 using ScummEditor.Engine;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
@@ -94,6 +98,104 @@ namespace ScummEditor.UnitTests
             Assert.Equal(40, index.CostumeDirectory.Count);
             Assert.Equal(expectedScripts, index.ScriptDirectory.Count);
             Assert.Equal(120, index.SoundDirectory.Count);
+        }
+
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2, "key")]
+        [InlineData(GameLibrary.ZakV2, "bed")]
+        public void V2TextExtractsCleanStrings(string relativePath, string expectedName)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+
+            var entries = ScummV2TextManager.Extract(game, GameTextCodecV12.Default());
+
+            // A real v2 game has hundreds of translatable strings (object names + dialogue + verb code).
+            Assert.True(entries.Count > 500, "expected many text entries, got " + entries.Count);
+            Assert.True(entries.Count(e => e.Kind == "objectName") > 100, "expected many object names");
+            Assert.True(entries.Count(e => e.Kind == "print" || e.Kind == "printEgo") > 200, "expected much dialogue");
+            Assert.Contains(entries, e => e.Kind == "objectName" && e.Text == expectedName);
+        }
+
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2TextImportIsByteSafe(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var codec = GameTextCodecV12.Default();
+
+            var baseEntries = ScummV2TextManager.Extract(game, codec);
+            var baseline = new Dictionary<string, string>();
+            foreach (GameTextEntry e in baseEntries) baseline[e.Id] = e.Text;
+
+            // Edit distinct, pure-ASCII, token-free names + dialogue (grow + shrink) so shared regions do
+            // not muddy the comparison.
+            var edits = new Dictionary<string, string>();
+            var usedBase = new HashSet<string>();
+            int names = 0, talk = 0;
+            foreach (GameTextEntry e in baseEntries)
+            {
+                if (e.Text.Contains("{") || !System.Text.RegularExpressions.Regex.IsMatch(e.Text, "^[A-Za-z0-9 .,'!?]+$") || e.Text.Length < 4) continue;
+                if (!usedBase.Add(e.Text)) continue;
+                if (e.Kind == "objectName" && names < 20) { edits[e.Id] = e.Text + " X"; names++; }
+                else if ((e.Kind == "print" || e.Kind == "printEgo") && talk < 30) { edits[e.Id] = (talk % 2 == 0) ? e.Text + " [longer]" : "Short."; talk++; }
+            }
+            Skip.If(edits.Count == 0, "no editable strings found");
+
+            var editedBaseTexts = new HashSet<string>();
+            foreach (var kv in edits) editedBaseTexts.Add(baseline[kv.Key]);
+
+            GameTextImportReport report = ScummV2TextManager.Import(game, edits, codec);
+
+            var after = new Dictionary<string, string>();
+            var afterEntries = ScummV2TextManager.Extract(game, codec);
+            foreach (GameTextEntry e in afterEntries) after[e.Id] = e.Text;
+
+            // No precisely-bounded resource may change except the edits and their shared-region siblings.
+            foreach (var kv in baseline)
+            {
+                if (edits.ContainsKey(kv.Key)) continue;
+                string got; after.TryGetValue(kv.Key, out got);
+                if (got == kv.Value) continue;
+                if (editedBaseTexts.Contains(kv.Value)) continue;
+                Assert.True(false, "text edit corrupted " + kv.Key + ": was '" + kv.Value + "' now '" + (got ?? "<gone>") + "'");
+            }
+            Assert.Equal(baseEntries.Count, afterEntries.Count);
+
+            int applied = 0;
+            foreach (var kv in edits) if (after.TryGetValue(kv.Key, out var g) && g == kv.Value) applied++;
+            Assert.True(applied >= edits.Count * 0.9, "too few edits applied: " + applied + "/" + edits.Count);
+        }
+
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2BackgroundsDecodeToRoomDimensions(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var decoder = new ScummV2ImageDecoder();
+            int rooms = 0, objects = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV2Room(df.RawContent);
+                if (room.Width <= 0 || room.Height <= 0) continue;
+                using (Bitmap bg = decoder.DecodeBackground(room))
+                {
+                    Assert.NotNull(bg);
+                    Assert.Equal(room.Width, bg.Width);
+                    Assert.Equal(room.Height, bg.Height);
+                    rooms++;
+                }
+                for (int i = 0; i < room.NumObjects; i++)
+                {
+                    if (room.ObjectWidth(i) <= 0 || room.ObjectHeight(i) <= 0) continue;
+                    using (Bitmap o = decoder.DecodeObject(room, i)) { if (o != null) objects++; }
+                }
+            }
+            Assert.True(rooms > 20, "expected many decodable rooms, got " + rooms);
+            Assert.True(objects > 100, "expected many decodable objects, got " + objects);
         }
 
         // ------------------------------------------------------------------ helpers
