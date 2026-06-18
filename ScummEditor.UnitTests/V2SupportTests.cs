@@ -198,6 +198,40 @@ namespace ScummEditor.UnitTests
             Assert.True(objects > 100, "expected many decodable objects, got " + objects);
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2ImageImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            int rooms = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                int roomNo;
+                if (df == null || !int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV2Room(df.RawContent);
+                if (room.Width <= 0 || room.Height <= 0 || room.ImageOffset <= 0) continue;
+                byte[,] m = ScummV2ImageDecoder.DecodeRle(df.RawContent, room.ImageOffset, room.Width, room.Height);
+                if (m == null) continue;
+
+                byte newValue = (byte)((m[0, 0] + 1) & 0x0F);
+                m[0, 0] = newValue;
+                int imageEnd = room.NextStructuralOffsetAbove(room.ImageOffset);
+                byte[] newImage = ScummV2ImageEncoder.EncodeImage(df.RawContent, room.ImageOffset, imageEnd, room.Width, room.Height, m);
+                ScummV2Writer.ApplyEdit(df, index, roomNo, room.ImageOffset, imageEnd - room.ImageOffset, newImage, -1);
+
+                var room2 = new ScummV2Room(df.RawContent);
+                byte[,] m2 = ScummV2ImageDecoder.DecodeRle(df.RawContent, room2.ImageOffset, room2.Width, room2.Height);
+                Assert.NotNull(m2);
+                Assert.Equal(newValue, m2[0, 0]);
+                rooms++;
+                if (rooms >= 8) break; // a sample proves the encode + splice + relocation path
+            }
+            Assert.True(rooms > 0, "no editable backgrounds found");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)

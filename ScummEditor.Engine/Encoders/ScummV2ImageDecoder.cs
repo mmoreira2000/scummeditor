@@ -73,6 +73,36 @@ namespace ScummEditor.Engine.Encoders
             return matrix;
         }
 
+        /// <summary>
+        /// Number of bytes the graphics RLE at <paramref name="offset"/> consumes (so the z-plane mask
+        /// that follows it can be located). Walks the same stream as DecodeRle without building pixels.
+        /// </summary>
+        public static int GraphicsRleLength(byte[] code, int offset, int width, int height)
+        {
+            if (code == null || width <= 0 || height <= 0) return 0;
+            int src = offset, run = 1;
+            try
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    for (int y = 0; y < height; y++)
+                    {
+                        if (--run == 0)
+                        {
+                            byte data = code[src++];
+                            run = (data & 0x80) != 0 ? (data & 0x7F) : (data >> 4);
+                            if (run == 0) run = code[src++];
+                        }
+                    }
+                }
+            }
+            catch (IndexOutOfRangeException)
+            {
+                return src - offset;
+            }
+            return src - offset;
+        }
+
         private static Bitmap ToBitmap(byte[,] matrix)
         {
             var ega = new Color[16];
