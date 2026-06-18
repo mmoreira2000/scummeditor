@@ -265,6 +265,45 @@ namespace ScummEditor.Gui
             SaveGame();
         }
 
+        /// <summary>
+        /// Exports a small scummvm.ini "launch profile" so the edited game starts with the correct
+        /// engine/variant in ScummVM (auto-detection can fail on a modified game whose index MD5 changed).
+        /// </summary>
+        private void exportScummVmIniToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (scummFile == null || scummFile.LoadedGameInfo == null
+                || scummFile.LoadedGameInfo.LoadedGame == ScummGame.None)
+            {
+                MessageBox.Show(this, "Open a game first.", "Export ScummVM profile");
+                return;
+            }
+
+            GameInfo info = scummFile.LoadedGameInfo;
+            string gameFolder = Path.GetDirectoryName(info.DataFile);
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "ScummVM config (*.ini)|*.ini|All files (*.*)|*.*",
+                FileName = ScummVmConfigExporter.SafeIniFileName(info)
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                ScummVmConfigExporter.Export(info, gameFolder, dlg.FileName);
+                MessageBox.Show(this,
+                    "ScummVM launch profile saved to:\n" + dlg.FileName + "\n\nRun it with:\n"
+                    + "    scummvm --config=\"" + dlg.FileName + "\" " + ScummVmConfigExporter.BuildTargetName(info)
+                    + "\n\nor paste its target section into your existing scummvm.ini.",
+                    "Export ScummVM profile", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export ScummVM profile",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private void exportGameTextsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (scummFile == null || scummFile.DataFile == null)
