@@ -110,6 +110,11 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
         private static ScummV6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
         {
+            if (context.GameInfo != null && context.GameInfo.ScummVersion <= 2)
+            {
+                // v1/v2 = the byte-oriented pre-v3 language (a wholly different opcode table).
+                return ScummV12Disassembler.Disassemble(code, start);
+            }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 3)
             {
                 // v3 = the v4 language with a few more opcode deltas (ScummV3Disassembler). The

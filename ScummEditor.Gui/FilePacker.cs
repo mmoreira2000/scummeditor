@@ -329,7 +329,9 @@ namespace ScummEditor.Gui
                 // "GF_OLD256" (one NN.LFL per room) use the v4 path; v5/v6 use the LFLF data file.
                 int version = scummFile.LoadedGameInfo.ScummVersion;
                 int count;
-                if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
+                if (version <= 2)
+                    count = ScummV2TextManager.ExportToFile(scummFile, dlg.FileName, gameLabel);
+                else if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
                     count = ScummV3OldTextManager.ExportToFile(scummFile, dlg.FileName, codec, gameLabel);
                 else if (version == 4 || version == 3)
                     count = GameTextManager.ExportToFileV4(scummFile, dlg.FileName, codec, gameLabel);
@@ -416,7 +418,9 @@ namespace ScummEditor.Gui
             {
                 int version = scummFile.LoadedGameInfo.ScummVersion;
                 GameTextImportReport report;
-                if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
+                if (version <= 2)
+                    report = ScummV2TextManager.ImportFromFile(scummFile, dlg.FileName);
+                else if (version == 3 && scummFile.LoadedGameInfo.UsesOldBundle)
                     report = ScummV3OldTextManager.ImportFromFile(scummFile, dlg.FileName);
                 else if (version == 4 || version == 3)
                     report = GameTextManager.ImportFromFileV4(scummFile, dlg.FileName);
