@@ -232,6 +232,53 @@ namespace ScummEditor.UnitTests
             Assert.True(rooms > 0, "no editable backgrounds found");
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2ZPlaneDecodesAndImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            int rooms = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                int roomNo;
+                if (df == null || !int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV2Room(df.RawContent);
+                if (room.Width <= 0 || room.Height <= 0 || room.ImageOffset <= 0) continue;
+                int gfxLen = ScummV2ImageDecoder.GraphicsRleLength(df.RawContent, room.ImageOffset, room.Width, room.Height);
+                int maskStart = room.ImageOffset + gfxLen;
+                if (maskStart >= room.NextStructuralOffsetAbove(room.ImageOffset)) continue;
+                byte[,] mask = ScummV2ImageDecoder.DecodeMaskRle(df.RawContent, maskStart, room.Width, room.Height);
+                if (mask == null) continue;
+
+                byte[,] bgBefore = ScummV2ImageDecoder.DecodeRle(df.RawContent, room.ImageOffset, room.Width, room.Height);
+                byte newBit = (byte)(mask[0, 0] ^ 1);
+                mask[0, 0] = newBit;
+                int imageEnd = room.NextStructuralOffsetAbove(room.ImageOffset);
+                byte[] newImage = ScummV2ImageEncoder.EncodeImageWithMask(df.RawContent, room.ImageOffset, room.Width, room.Height, mask);
+                ScummV2Writer.ApplyEdit(df, index, roomNo, room.ImageOffset, imageEnd - room.ImageOffset, newImage, -1);
+
+                var room2 = new ScummV2Room(df.RawContent);
+                int gfxLen2 = ScummV2ImageDecoder.GraphicsRleLength(df.RawContent, room2.ImageOffset, room2.Width, room2.Height);
+                byte[,] mask2 = ScummV2ImageDecoder.DecodeMaskRle(df.RawContent, room2.ImageOffset + gfxLen2, room2.Width, room2.Height);
+                Assert.NotNull(mask2);
+                Assert.Equal(newBit, mask2[0, 0]); // the mask edit persisted
+
+                // the background pixels must be untouched by a mask edit
+                byte[,] bgAfter = ScummV2ImageDecoder.DecodeRle(df.RawContent, room2.ImageOffset, room2.Width, room2.Height);
+                Assert.NotNull(bgAfter);
+                for (int x = 0; x < room.Width; x++)
+                    for (int y = 0; y < room.Height; y++)
+                        Assert.Equal(bgBefore[x, y], bgAfter[x, y]);
+
+                rooms++;
+                if (rooms >= 5) break;
+            }
+            Assert.True(rooms > 0, "no rooms with a decodable z-plane found");
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)

@@ -74,6 +74,62 @@ namespace ScummEditor.Engine.Encoders
         }
 
         /// <summary>
+        /// Decodes the room's single walk-behind (z-plane) mask, which follows the background graphics in
+        /// the IM00 region, to a black/white bitmap (white = masked / walk-behind). Returns null if the
+        /// room has no decodable image. The mask is an RLE of per-8-column strips: a run byte (bit 0x80 =
+        /// repeat one mask byte, else one literal byte per row), each byte holding 8 horizontal mask bits
+        /// (bit 7 = leftmost). Matches ScummVM GdiV2 mask decode.
+        /// </summary>
+        public Bitmap DecodeBackgroundZPlane(ScummV2Room room)
+        {
+            if (room == null || room.Width <= 0 || room.Height <= 0 || room.ImageOffset <= 0) return null;
+            int gfxLen = GraphicsRleLength(room.Data, room.ImageOffset, room.Width, room.Height);
+            int maskStart = room.ImageOffset + gfxLen;
+            int imageEnd = room.NextStructuralOffsetAbove(room.ImageOffset);
+            if (maskStart >= imageEnd || maskStart >= room.Data.Length) return null;
+            byte[,] mask = DecodeMaskRle(room.Data, maskStart, room.Width, room.Height);
+            if (mask == null) return null;
+            return IndexedImageHelper.FromIndexMatrix(mask, new[] { Color.Black, Color.White }, -1);
+        }
+
+        /// <summary>The GdiV2 mask RLE -> a [width,height] matrix of 0/1 (1 = mask bit set). Null on a malformed stream.</summary>
+        public static byte[,] DecodeMaskRle(byte[] code, int offset, int width, int height)
+        {
+            if (code == null || width <= 0 || height <= 0) return null;
+            var mask = new byte[width, height];
+            int src = offset;
+            int theX = 0, theY = 0;
+            try
+            {
+                int run = code[src++];
+                byte data = 0;
+                while (theX < width)
+                {
+                    bool runFlag = (run & 0x80) != 0;
+                    if (runFlag) { run &= 0x7F; data = code[src++]; }
+                    do
+                    {
+                        if (!runFlag) data = code[src++];
+                        for (int b = 0; b < 8; b++)
+                        {
+                            int px = theX + b;
+                            if (px < width) mask[px, theY] = (byte)((data >> (7 - b)) & 1);
+                        }
+                        theY++;
+                        if (theY >= height) { theY = 0; theX += 8; if (theX >= width) break; }
+                    } while (--run != 0);
+                    if (theX >= width) break;
+                    run = code[src++];
+                }
+            }
+            catch (IndexOutOfRangeException)
+            {
+                return mask; // partial mask is still useful for a preview
+            }
+            return mask;
+        }
+
+        /// <summary>
         /// Number of bytes the graphics RLE at <paramref name="offset"/> consumes (so the z-plane mask
         /// that follows it can be located). Walks the same stream as DecodeRle without building pixels.
         /// </summary>

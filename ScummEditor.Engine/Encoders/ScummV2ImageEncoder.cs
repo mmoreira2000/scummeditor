@@ -68,5 +68,74 @@ namespace ScummEditor.Engine.Encoders
             if (zLen > 0) Array.Copy(originalData, zStart, result, graphics.Length, zLen);
             return result;
         }
+
+        /// <summary>
+        /// Builds the replacement IM00 content for an edited WALK-BEHIND MASK: the original graphics bytes
+        /// kept verbatim, followed by the re-encoded mask. (An edit to the mask changes the walk-behind,
+        /// not the pixels.)
+        /// </summary>
+        public static byte[] EncodeImageWithMask(byte[] originalData, int im00Offset, int width, int height, byte[,] maskMatrix)
+        {
+            int origGraphicsLen = ScummV2ImageDecoder.GraphicsRleLength(originalData, im00Offset, width, height);
+            byte[] mask = EncodeMask(maskMatrix, width, height);
+
+            var result = new byte[origGraphicsLen + mask.Length];
+            Array.Copy(originalData, im00Offset, result, 0, origGraphicsLen);
+            Array.Copy(mask, 0, result, origGraphicsLen, mask.Length);
+            return result;
+        }
+
+        /// <summary>
+        /// Re-encodes a 0/1 walk-behind mask matrix into the GdiV2 mask RLE: the strip-major sequence of
+        /// per-8-column mask bytes (bit 7 = leftmost), PackBits-style (a repeat run is 0x80|count + the
+        /// byte; a literal run is count + that many bytes). The inverse of ScummV2ImageDecoder.DecodeMaskRle.
+        /// </summary>
+        public static byte[] EncodeMask(byte[,] maskMatrix, int width, int height)
+        {
+            int numStrips = (width + 7) / 8;
+            var seq = new List<byte>(numStrips * height);
+            for (int strip = 0; strip < numStrips; strip++)
+            {
+                for (int row = 0; row < height; row++)
+                {
+                    int b = 0;
+                    for (int bit = 0; bit < 8; bit++)
+                    {
+                        int px = strip * 8 + bit;
+                        if (px < width && (maskMatrix[px, row] & 1) != 0) b |= 1 << (7 - bit);
+                    }
+                    seq.Add((byte)b);
+                }
+            }
+
+            var output = new List<byte>(seq.Count);
+            int i = 0;
+            while (i < seq.Count)
+            {
+                int repeat = 1;
+                while (i + repeat < seq.Count && seq[i + repeat] == seq[i] && repeat < 127) repeat++;
+                if (repeat >= 2)
+                {
+                    output.Add((byte)(0x80 | repeat));
+                    output.Add(seq[i]);
+                    i += repeat;
+                }
+                else
+                {
+                    int start = i;
+                    var lit = new List<byte>();
+                    while (i < seq.Count && lit.Count < 255)
+                    {
+                        if (i + 1 < seq.Count && seq[i + 1] == seq[i]) break; // a repeat run starts next
+                        lit.Add(seq[i]);
+                        i++;
+                    }
+                    if (lit.Count == 0) { lit.Add(seq[start]); i = start + 1; }
+                    output.Add((byte)lit.Count);
+                    output.AddRange(lit);
+                }
+            }
+            return output.ToArray();
+        }
     }
 }

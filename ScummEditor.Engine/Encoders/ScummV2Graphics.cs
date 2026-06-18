@@ -38,6 +38,11 @@ namespace ScummEditor.Engine.Encoders
                     Bitmap background = decoder.DecodeBackground(room);
                     if (background != null) { Save(background, folder, string.Format("Room#{0}.png", roomNo)); count++; }
                 }
+                if (options.BackgroundZPlanes)
+                {
+                    Bitmap zplane = decoder.DecodeBackgroundZPlane(room);
+                    if (zplane != null) { Save(zplane, folder, string.Format("Room#{0} ZPlane#0.png", roomNo)); count++; }
+                }
                 if (options.Objects)
                 {
                     for (int j = 0; j < room.NumObjects; j++)
