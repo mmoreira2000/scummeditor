@@ -29,6 +29,25 @@ namespace ScummEditor.Engine.Structures
         /// <summary>Standalone font files loaded for the game (v4 90x.LFL); empty for v5/v6.</summary>
         public List<FontResource> Fonts { get; private set; } = new List<FontResource>();
 
+        /// <summary>Standalone v3 charset files (9N.LFL); empty for v4/v5/v6 (which use Fonts/Charset).</summary>
+        public List<CharsetV3> V3Charsets { get; private set; } = new List<CharsetV3>();
+
+        /// <summary>Loads the v3 9N.LFL charset files (always plaintext) into V3Charsets.</summary>
+        protected void LoadV3Charsets()
+        {
+            V3Charsets.Clear();
+            if (LoadedGameInfo.FontFiles == null)
+            {
+                return;
+            }
+            foreach (string path in LoadedGameInfo.FontFiles)
+            {
+                var charset = new CharsetV3 { FilePath = path };
+                charset.LoadFromFileBytes(File.ReadAllBytes(path));
+                V3Charsets.Add(charset);
+            }
+        }
+
         /// <summary>
         /// Every editable charset of the game, in a stable order: the ones embedded in the data
         /// file (v5/v6) followed by the standalone font files (v4 90x.LFL). Batch font
@@ -50,6 +69,12 @@ namespace ScummEditor.Engine.Structures
             if (gameInfo != null && gameInfo.ScummVersion == 4)
             {
                 return new ScummGameDataV4();
+            }
+            if (gameInfo != null && gameInfo.ScummVersion == 3)
+            {
+                return gameInfo.UsesOldBundle
+                    ? (ScummGameData)new ScummGameDataV3OldBundle() // Loom EGA, Indy3 EGA, Zak DOS
+                    : new ScummGameDataV3Small256();                // Indy3 VGA, Zak FM-Towns
             }
             return new ScummGameDataV5V6();
         }
@@ -134,6 +159,15 @@ namespace ScummEditor.Engine.Structures
             foreach (FontResource font in Fonts)
             {
                 File.WriteAllBytes(font.FilePath, font.Charset.RawContent);
+            }
+
+            // Write back the standalone v3 charset files (9N.LFL, always plaintext = the charset bytes).
+            foreach (CharsetV3 charset in V3Charsets)
+            {
+                if (!string.IsNullOrEmpty(charset.FilePath))
+                {
+                    File.WriteAllBytes(charset.FilePath, charset.RawContent);
+                }
             }
         }
 

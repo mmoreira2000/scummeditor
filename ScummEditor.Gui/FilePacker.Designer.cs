@@ -41,6 +41,8 @@
             this.importGameTextsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportGameFontsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.importGameFontsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparatorScummVm = new System.Windows.Forms.ToolStripSeparator();
+            this.exportScummVmIniToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
             this.exitToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.helpToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -96,6 +98,8 @@
             this.importGameTextsToolStripMenuItem,
             this.exportGameFontsToolStripMenuItem,
             this.importGameFontsToolStripMenuItem,
+            this.toolStripSeparatorScummVm,
+            this.exportScummVmIniToolStripMenuItem,
             this.toolStripSeparator3,
             this.exitToolStripMenuItem});
             this.fileToolStripMenuItem.Name = "fileToolStripMenuItem";
@@ -171,6 +175,18 @@
             this.importGameFontsToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
             this.importGameFontsToolStripMenuItem.Text = "Import game fonts...";
             this.importGameFontsToolStripMenuItem.Click += new System.EventHandler(this.importGameFontsToolStripMenuItem_Click);
+            //
+            // toolStripSeparatorScummVm
+            //
+            this.toolStripSeparatorScummVm.Name = "toolStripSeparatorScummVm";
+            this.toolStripSeparatorScummVm.Size = new System.Drawing.Size(188, 6);
+            //
+            // exportScummVmIniToolStripMenuItem
+            //
+            this.exportScummVmIniToolStripMenuItem.Name = "exportScummVmIniToolStripMenuItem";
+            this.exportScummVmIniToolStripMenuItem.Size = new System.Drawing.Size(191, 22);
+            this.exportScummVmIniToolStripMenuItem.Text = "Export ScummVM profile (.ini)...";
+            this.exportScummVmIniToolStripMenuItem.Click += new System.EventHandler(this.exportScummVmIniToolStripMenuItem_Click);
             //
             // toolStripSeparator3
             //
@@ -436,6 +452,8 @@
         private System.Windows.Forms.ToolStripMenuItem importGameTextsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportGameFontsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem importGameFontsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparatorScummVm;
+        private System.Windows.Forms.ToolStripMenuItem exportScummVmIniToolStripMenuItem;
         private System.Windows.Forms.ToolStripButton ImportGameGraphicsButton;
         private System.Windows.Forms.ToolStripButton AboutToolbar;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;

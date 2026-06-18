@@ -16,6 +16,8 @@ namespace ScummEditor.Gui
         private Dictionary<string, BlockBaseControl> _controlViewers;
         private readonly SpeechSouControl _speechSouControl = new SpeechSouControl();
         private readonly CdAudioSouControl _cdAudioSouControl = new CdAudioSouControl();
+        private readonly CharsetV3Control _charsetV3Control = new CharsetV3Control();
+        private readonly ScummV3OldSoundControl _v3oldSoundControl = new ScummV3OldSoundControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -97,6 +99,13 @@ namespace ScummEditor.Gui
             {
                 CreateScummV4IndexFileTree(v4Index);
             }
+            else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
+            {
+                // The v3 old-bundle index is kept verbatim (no typed RNAM/MAXS/DROO blocks the v5/v6
+                // tree expects, and the index file is not a BlockBase the viewer can render). Show a
+                // labelled, inert node rather than crashing on the cast.
+                _treeView.Nodes.Add("IndexFile", "Index File (00.LFL, raw)");
+            }
             else if (GameData.IndexFile != null)
             {
                 CreateScummIndexFileTree(GameData.IndexFile);
@@ -116,7 +125,52 @@ namespace ScummEditor.Gui
             }
 
             CreateFontFileNodes();
+            CreateV3FontNodes();
+            CreateV3OldSoundNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
+        }
+
+        /// <summary>Root nodes for v3 old-bundle sounds (tagless WA+AD, located via the index SOUND dir).</summary>
+        private void CreateV3OldSoundNodes()
+        {
+            var index = GameData.IndexFile as ScummV3OldBundleIndexFile;
+            if (index == null || index.SoundDirectory == null || GameData.DataDisks == null) return;
+
+            var byRoom = new Dictionary<int, ScummV3OldBundleDataFile>();
+            foreach (DataDisk disk in GameData.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int n;
+                if (int.TryParse(System.IO.Path.GetFileNameWithoutExtension(disk.FilePath), out n)) byRoom[n] = df;
+            }
+
+            V3OldResourceDirectory dir = index.SoundDirectory;
+            for (int s = 0; s < dir.Count; s++)
+            {
+                int offset = dir.Offsets[s];
+                if (offset == 0xFFFF || offset == 0) continue;
+                ScummV3OldBundleDataFile df;
+                if (!byRoom.TryGetValue(dir.RoomNumbers[s], out df)) continue;
+
+                var sound = new ScummV3OldSound(df.RawContent, offset);
+                if (sound.AdLibOffset < 0) continue; // nothing playable/exportable
+                var node = _treeView.Nodes.Add("SoundV3", string.Format("Sound {0} (room {1}){2}", s, dir.RoomNumbers[s], sound.IsMusic ? " - music" : string.Empty));
+                node.Tag = new V3OldSoundRef { DataFile = df, Index = index, RoomNo = dir.RoomNumbers[s], Offset = offset };
+            }
+        }
+
+        /// <summary>Root nodes for the standalone v3 charset files (9N.LFL); the CharsetV3 viewer handles them.</summary>
+        private void CreateV3FontNodes()
+        {
+            if (GameData.V3Charsets == null) return;
+
+            foreach (CharsetV3 charset in GameData.V3Charsets)
+            {
+                string fileName = charset.FilePath != null ? System.IO.Path.GetFileName(charset.FilePath) : "9N.LFL";
+                var node = _treeView.Nodes.Add("FontV3", "Font (" + fileName + ")");
+                node.Tag = charset;
+            }
         }
 
         /// <summary>Root nodes for the standalone font files (v4 90x.LFL); the Charset viewer handles them.</summary>
@@ -268,6 +322,26 @@ namespace ScummEditor.Gui
                 _cdAudioSouControl.SetData(cdAudioFile);
                 _displayPanel.Controls.Add(_cdAudioSouControl);
                 _cdAudioSouControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v3 charsets (9N.LFL) are standalone font files, not BlockBase, so they get their own viewer.
+            var charsetV3 = e.Node.Tag as CharsetV3;
+            if (charsetV3 != null)
+            {
+                _charsetV3Control.SetData(charsetV3);
+                _displayPanel.Controls.Add(_charsetV3Control);
+                _charsetV3Control.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v3 old-bundle sounds are tagless resources, not BlockBase; their own viewer plays/exports/imports them.
+            var v3oldSound = e.Node.Tag as V3OldSoundRef;
+            if (v3oldSound != null)
+            {
+                _v3oldSoundControl.SetData(v3oldSound);
+                _displayPanel.Controls.Add(_v3oldSoundControl);
+                _v3oldSoundControl.Dock = DockStyle.Fill;
                 return;
             }
 

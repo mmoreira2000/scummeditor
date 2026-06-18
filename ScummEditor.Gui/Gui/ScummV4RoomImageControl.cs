@@ -25,7 +25,7 @@ namespace ScummEditor.Gui
         private readonly Button _exportButton;
         private readonly Button _importButton;
         private readonly ScummV4ImageDecoder _decoder = new ScummV4ImageDecoder();
-        private readonly ScummV4ImageEncoder _encoder = new ScummV4ImageEncoder();
+        private ScummV4ImageEncoder _encoder = new ScummV4ImageEncoder();
 
         private ScummV4RoomBlock _room;
         private ImageTarget _currentTarget;
@@ -110,6 +110,13 @@ namespace ScummEditor.Gui
             {
                 return;
             }
+
+            // v3 "GF_OLD256" rooms (Indy3 VGA, Zak FM-Towns) reuse this v4 room/image block layout but
+            // store FM-Towns codecs, so they need the raw256 re-encoder for import. The decoder already
+            // detects v3 internally and needs no switch.
+            _encoder = _room.GameInfo != null && _room.GameInfo.ScummVersion == 3
+                ? new ScummV3ImageEncoder()
+                : new ScummV4ImageEncoder();
 
             // Background, with one child node per z-plane (mask) embedded in it.
             if (_room.GetBM() != null)

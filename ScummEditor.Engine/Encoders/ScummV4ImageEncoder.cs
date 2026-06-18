@@ -88,6 +88,16 @@ namespace ScummEditor.Engine.Encoders
                 throw new ImageEncodeException("This image has no z-plane at that position to import into.");
             }
 
+            // The RLE mask scheme is not 1:1 with the game's original encoding (run boundaries can
+            // differ while decoding to the same pixels), so a straight re-encode of an unchanged mask
+            // would still shift bytes. Detect that case - the incoming mask matches what the original
+            // bytes already decode to - and leave the block untouched, so a no-op import (e.g. the
+            // batch round-trip) stays byte-for-byte identical.
+            if (MaskUnchanged(block, regions[zPlaneIndex], numStrips, width, height, bitmap))
+            {
+                return;
+            }
+
             // A z-plane mask is black/white (black = masked); the strips are encoded with a simple
             // run-length scheme that is the exact inverse of ZPlaneDecoder, so an unchanged mask
             // re-encodes to the same pixels.
@@ -98,6 +108,39 @@ namespace ScummEditor.Engine.Encoders
                 strips.Add(new ZPlaneStripData { ImageData = EncodeMaskStrip(bitmap, n * 8, height) });
             }
             block.RebuildZPlane(regions[zPlaneIndex].Start, regions[zPlaneIndex].Length, strips);
+        }
+
+        /// <summary>
+        /// True when <paramref name="bitmap"/> is the same mask the existing z-plane bytes decode to
+        /// (so re-encoding it would be a no-op). A pixel is "masked" when it is opaque black; every
+        /// other pixel (white or transparent) is unmasked, matching <see cref="EncodeMaskStrip"/>.
+        /// </summary>
+        private static bool MaskUnchanged(ScummV4ImageBlock block, (int Start, int Length) region, int numStrips, int width, int height, Bitmap bitmap)
+        {
+            List<ZPlaneStripData> originalStrips = block.GetZPlaneStrips(region.Start, region.Length, numStrips);
+            using (Bitmap originalMask = new ZPlaneDecoder().Decode(originalStrips, width, height))
+            {
+                if (originalMask == null)
+                {
+                    return false;
+                }
+                for (int y = 0; y < height; y++)
+                {
+                    for (int x = 0; x < width; x++)
+                    {
+                        if (IsMasked(bitmap.GetPixel(x, y)) != IsMasked(originalMask.GetPixel(x, y)))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            return true;
+        }
+
+        private static bool IsMasked(Color pixel)
+        {
+            return pixel.A != 0 && pixel.R == 0 && pixel.G == 0 && pixel.B == 0;
         }
 
         /// <summary>
@@ -231,7 +274,7 @@ namespace ScummEditor.Engine.Encoders
             return true;
         }
 
-        private List<StripData> EncodeVgaStrips(byte[,] indexMatrix, int width, int height, List<StripData> originalStrips)
+        protected virtual List<StripData> EncodeVgaStrips(byte[,] indexMatrix, int width, int height, List<StripData> originalStrips)
         {
             // Encode with a transparency value that no pixel uses, so the codec picker yields
             // non-transparent codecs; then restore transparency per strip from the original block.

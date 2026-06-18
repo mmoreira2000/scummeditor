@@ -23,10 +23,14 @@ namespace ScummEditor.Engine.Structures
             get { return _gameInfo; }
         }
 
-        /// <summary>True for SCUMM v4, which uses the "small header" (size-first LE, 2-char tag).</summary>
+        /// <summary>
+        /// True for the games that use the "small header" (size-first LE, 2-char tag): SCUMM v4 and
+        /// the GF_OLD256 v3 games. Decided by a GameInfo flag rather than the version number, since
+        /// v3 spans both this layout (256-colour games) and an untagged one (the EGA games).
+        /// </summary>
         protected bool IsSmallHeader
         {
-            get { return _gameInfo != null && _gameInfo.ScummVersion == 4; }
+            get { return _gameInfo != null && _gameInfo.UsesSmallHeader; }
         }
 
         /// <summary>
@@ -45,7 +49,7 @@ namespace ScummEditor.Engine.Structures
         /// </summary>
         public static string PeekTag(Stream binaryReader, GameInfo gameInfo)
         {
-            if (gameInfo != null && gameInfo.ScummVersion == 4)
+            if (gameInfo != null && gameInfo.UsesSmallHeader)
             {
                 byte[] head = binaryReader.PeekBytes(6);
                 return BinaryHelper.ConvertByteArrayToUTF8String(new[] { head[4], head[5] });

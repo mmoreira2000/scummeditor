@@ -204,7 +204,7 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Result-variable statement ("Global[x] = expr;"), or a captured nested expression.</summary>
         private string _nestedResult; // non-null while decoding the nested opcode of an expression
 
-        private void SetResult(int offset, string target, string expr)
+        protected void SetResult(int offset, string target, string expr)
         {
             if (_nestedResult == "")
             {
@@ -217,6 +217,16 @@ namespace ScummEditor.Engine.Encoders
         // Strings use the same friendly tokens as the v6 listings and the text export.
         private static readonly GameTextCodec ListingCodec = GameTextCodec.Default();
 
+        /// <summary>
+        /// True when <paramref name="b"/> introduces an in-string escape (followed by a function code
+        /// and, for most codes, a 16-bit argument). Base = only 0xFF; the single-byte v3 old-bundle
+        /// games override this to also treat 0xFE as an escape.
+        /// </summary>
+        protected virtual bool IsStringEscape(byte b)
+        {
+            return b == 0xFF;
+        }
+
         protected string ReadString(string kind)
         {
             int start = _pos;
@@ -226,12 +236,13 @@ namespace ScummEditor.Engine.Encoders
                 byte b = ReadByte();
                 if (b == 0) { terminated = true; break; }
 
-                // SCUMM string escape: ONLY 0xFF (mirrors ScummEngine::resStrLen / convertMessageToString
-                // for every version we handle - v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument,
-                // every other code is followed by a 16-bit word. 0xFE is NOT an escape - it is an ordinary
+                // SCUMM string escape: 0xFF for every version we handle (mirrors ScummEngine::resStrLen /
+                // convertMessageToString, v4-v7, heversion <= 71). Codes 1/2/3/8 take no argument, every
+                // other code is followed by a 16-bit word. 0xFE is NOT an escape here - it is an ordinary
                 // content byte (the Japanese CJK newline glyph, and a legal SJIS trail byte), so treating
-                // it as one desynced Japanese (SJIS) strings and the rest of the script after them.
-                if (b == 0xFF)
+                // it as one desynced Japanese (SJIS) strings. The single-byte v3 old-bundle games DO use
+                // 0xFE as a second escape marker, so ScummV3Disassembler widens IsStringEscape for them.
+                if (IsStringEscape(b))
                 {
                     byte code = ReadByte();
                     if (code != 1 && code != 2 && code != 3 && code != 8) ReadWord(); // 16-bit argument
@@ -1100,7 +1111,7 @@ namespace ScummEditor.Engine.Encoders
                     case 2: parts.Add("clipped(" + GetVarOrDirectWordAux(sub, 0x80) + ")"); break;
                     case 3: parts.Add("erase(" + GetVarOrDirectWordAux(sub, 0x80) + ", " + GetVarOrDirectWordAux(sub, 0x40) + ")"); break;
                     case 4: parts.Add("center()"); break;
-                    case 6: parts.Add("left()"); break;
+                    case 6: parts.Add(PrintSubOp6(sub)); break;
                     case 7: parts.Add("overhead()"); break;
                     case 8: parts.Add("playCDTrack(" + GetVarOrDirectWordAux(sub, 0x80) + ", " + GetVarOrDirectWordAux(sub, 0x40) + ")"); break;
                     case 15:
@@ -1116,6 +1127,15 @@ namespace ScummEditor.Engine.Encoders
             }
 
             Emit(offset, group.Replace("()", "") + "." + string.Join(".", parts.ToArray()) + ";");
+        }
+
+        /// <summary>
+        /// print/printEgo sub-op 6. v5/v4 take no argument ("left"); SCUMM v3 reads a word (text
+        /// height). Overridden by ScummV3Disassembler; the default preserves the v4/v5/v6 behaviour.
+        /// </summary>
+        protected virtual string PrintSubOp6(byte sub)
+        {
+            return "left()";
         }
 
         private void StringOps(int offset)
@@ -1196,11 +1216,20 @@ namespace ScummEditor.Engine.Encoders
                 }
                 case 12: Emit(offset, "cursorCommand.initCursor(" + GetVarOrDirectByteAux(sub, 0x80) + ");"); break;
                 case 13: Emit(offset, "cursorCommand.initCharset(" + GetVarOrDirectByteAux(sub, 0x80) + ");"); break;
-                case 14: Emit(offset, "cursorCommand.charsetColors(" + ReadWordVarArgs() + ");"); break;
+                case 14: Emit(offset, CursorSubOp14(sub)); break;
                 default:
                     Emit(offset, "cursorCommand.op_0x" + (sub & 0x1F).ToString("X2") + "();");
                     break;
             }
+        }
+
+        /// <summary>
+        /// cursorCommand sub-op 14. v5/v4 take a word var-arg list (charset colours); SCUMM v3 reads
+        /// two var-or-direct bytes (loadCharset). Overridden by ScummV3Disassembler; default = v4/v5/v6.
+        /// </summary>
+        protected virtual string CursorSubOp14(byte sub)
+        {
+            return "cursorCommand.charsetColors(" + ReadWordVarArgs() + ");";
         }
 
         private void ResourceRoutines(int offset)
@@ -1239,6 +1268,31 @@ namespace ScummEditor.Engine.Encoders
                     Emit(offset, "resourceRoutines.loadFlObject(" + resId + ", " + room + ");");
                     return;
                 }
+
+                // FM-Towns audio sub-ops (scummvm o5_resourceRoutines cases 32-37): these read EXTRA
+                // operands after resId. The v3/v4 FM-Towns games (Loom/Indy3/Zak Towns) use 35/36/37
+                // to drive the CD/sound chip; without decoding their operands the disassembly desyncs
+                // (e.g. Loom Towns LF004.LS200 stalled on sub-op 0x23 = setVolumeCD).
+                case 35: // SO_SET_CD_VOLUME(track, volume)
+                {
+                    string vol = GetVarOrDirectByteAux(sub, 0x40);
+                    Emit(offset, "resourceRoutines.setVolumeCD(" + resId + ", " + vol + ");");
+                    return;
+                }
+                case 36: // SO_SET_SOUND_VOLUME(resid, volume, note) - a var/byte plus one plain byte
+                {
+                    string vol = GetVarOrDirectByteAux(sub, 0x40);
+                    string note = ReadByte().ToString();
+                    Emit(offset, "resourceRoutines.setSoundVolume(" + resId + ", " + vol + ", " + note + ");");
+                    return;
+                }
+                case 37: // SO_SET_SOUND_NOTE(resid, note)
+                {
+                    string note = GetVarOrDirectByteAux(sub, 0x40);
+                    Emit(offset, "resourceRoutines.setSoundNote(" + resId + ", " + note + ");");
+                    return;
+                }
+
                 default: name = "op_0x" + code.ToString("X2"); break;
             }
 
@@ -1274,7 +1328,7 @@ namespace ScummEditor.Engine.Encoders
             }
         }
 
-        private void RoomOps(int offset)
+        protected virtual void RoomOps(int offset)
         {
             byte sub = ReadByte();
             switch (sub & 0x1F)

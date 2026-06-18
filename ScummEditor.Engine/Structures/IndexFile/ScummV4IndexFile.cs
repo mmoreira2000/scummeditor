@@ -30,6 +30,13 @@ namespace ScummEditor.Engine.Structures.IndexFile
         /// <summary>The costume directory (0C); offsets are room-relative. Null if absent.</summary>
         public ScummV4ResourceDirectory CostumeDirectory { get; private set; }
 
+        /// <summary>
+        /// Bytes after the last well-formed block. Some builds (e.g. Indy3 FM-Towns) pad the index
+        /// with a run of zeros past the object directory; they carry no resource data but are kept
+        /// verbatim so the index still saves byte-for-byte.
+        /// </summary>
+        private byte[] _trailingBytes = new byte[0];
+
         public ScummV4IndexFile(GameInfo gameInfo) : base(gameInfo)
         {
             Blocks = new List<BlockBase>();
@@ -49,9 +56,20 @@ namespace ScummEditor.Engine.Structures.IndexFile
         public override void LoadFromBinaryReader(Stream binaryReader)
         {
             Blocks = new List<BlockBase>();
+            _trailingBytes = new byte[0];
 
             while (binaryReader.Position < binaryReader.Length)
             {
+                // A well-formed small-header block is [size:4 LE][tag:2]; its size includes the
+                // header. If fewer than 6 bytes remain, or the size is too small / runs past the end,
+                // what is left is trailing padding (Indy3 FM-Towns appends zeros) - keep it verbatim.
+                long remaining = binaryReader.Length - binaryReader.Position;
+                if (remaining < 6 || !IsValidBlockSize(binaryReader, remaining))
+                {
+                    _trailingBytes = binaryReader.ReadBytes((int)remaining);
+                    break;
+                }
+
                 string tag = BlockBase.PeekTag(binaryReader, GameInfo);
 
                 // 0S/0N/0C carry room-relative resource offsets that shift when resources are
@@ -82,7 +100,23 @@ namespace ScummEditor.Engine.Structures.IndexFile
             {
                 block.SaveToBinaryWriter(binaryWriter);
             }
+            if (_trailingBytes.Length > 0)
+            {
+                binaryWriter.WriteBytes(_trailingBytes);
+            }
             binaryWriter.Flush();
+        }
+
+        /// <summary>
+        /// True when the small-header block at the current position has a sane size (at least the
+        /// 6-byte header and not past the end of what remains). The size is the leading 4 bytes (LE);
+        /// the position is left unchanged.
+        /// </summary>
+        private static bool IsValidBlockSize(Stream binaryReader, long remaining)
+        {
+            byte[] head = binaryReader.PeekBytes(4);
+            uint size = (uint)(head[0] | (head[1] << 8) | (head[2] << 16) | (head[3] << 24));
+            return size >= 6 && size <= remaining;
         }
     }
 }
