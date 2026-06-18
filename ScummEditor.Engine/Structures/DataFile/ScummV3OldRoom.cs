@@ -83,6 +83,33 @@ namespace ScummEditor.Engine.Structures.DataFile
             return (p >= 0 && p < _data.Length) ? (_data[p] & 0xF8) : 0;
         }
 
+        /// <summary>
+        /// The smallest structural offset strictly greater than <paramref name="offset"/> (the room
+        /// size word @0, the background, box and script offsets, and every OBIM/OBCD), clamped to the
+        /// room resource size. Used to bound a region (e.g. the background z-plane that sits between the
+        /// background strips and the first object) without overrunning the next sub-resource.
+        /// </summary>
+        public int NextStructuralOffsetAbove(int offset)
+        {
+            int roomSize = ReadU16(0);
+            int best = (roomSize > 0 && roomSize <= _data.Length) ? roomSize : _data.Length;
+            Consider(ref best, offset, ImageOffset);
+            Consider(ref best, offset, BoxOffset);
+            Consider(ref best, offset, ExitScriptOffset);
+            Consider(ref best, offset, EntryScriptOffset);
+            for (int i = 0; i < NumObjects; i++)
+            {
+                Consider(ref best, offset, ObjectImageOffset(i));
+                Consider(ref best, offset, ObjectCodeOffset(i));
+            }
+            return best;
+        }
+
+        private static void Consider(ref int best, int offset, int candidate)
+        {
+            if (candidate > offset && candidate < best) best = candidate;
+        }
+
         private int ReadU16(int p)
         {
             if (p < 0 || p + 1 >= _data.Length)

@@ -53,15 +53,38 @@ namespace ScummEditor.Engine.Encoders
                     }
                 }
 
-                if (options.Objects)
+                if (options.BackgroundZPlanes && decoder.CountBackgroundZPlanes(room) > 0)
+                {
+                    Bitmap zplane = decoder.DecodeBackgroundZPlane(room);
+                    if (zplane != null)
+                    {
+                        Save(zplane, folder, string.Format("Room#{0} ZP#0.png", i));
+                        count++;
+                    }
+                }
+
+                if (options.Objects || options.ObjectZPlanes)
                 {
                     for (int j = 0; j < room.NumObjects; j++)
                     {
-                        Bitmap obj = decoder.DecodeObject(room, j);
-                        if (obj != null)
+                        if (options.Objects)
                         {
-                            Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j));
-                            count++;
+                            Bitmap obj = decoder.DecodeObject(room, j);
+                            if (obj != null)
+                            {
+                                Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j));
+                                count++;
+                            }
+                        }
+
+                        if (options.ObjectZPlanes && decoder.CountObjectZPlanes(room, j) > 0)
+                        {
+                            Bitmap objZ = decoder.DecodeObjectZPlane(room, j);
+                            if (objZ != null)
+                            {
+                                Save(objZ, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", i, j));
+                                count++;
+                            }
                         }
                     }
                 }
@@ -151,15 +174,32 @@ namespace ScummEditor.Engine.Encoders
                 var edits = new List<ImageEdit>();
                 CollectBackgroundEdit(dataFile, folder, i, edits, report);
                 CollectObjectEdits(dataFile, folder, i, edits, report);
+                CollectBackgroundZPlaneEdit(dataFile, folder, i, edits, report);
+                CollectObjectZPlaneEdits(dataFile, folder, i, edits, report);
                 CollectCostumeEdits(dataFile, index, roomNo, folder, edits, report);
 
-                // Several objects/costumes can share one byte region; apply each region once.
-                var appliedAt = new HashSet<int>();
+                // Several objects/costumes can share one byte region (multi-state objects point at one
+                // OBIM, hence one image + one z-plane). Applying that region once is correct ONLY when the
+                // edits agree; two DIFFERENT edits cannot both be stored in the same bytes, so report the
+                // conflict instead of silently discarding one (which would look like a success). Apply in
+                // descending offset order so a splice never invalidates a not-yet-applied lower edit.
+                var appliedAt = new Dictionary<int, byte[]>();
                 edits.Sort((a, b) => b.Offset.CompareTo(a.Offset));
                 foreach (ImageEdit e in edits)
                 {
-                    if (!appliedAt.Add(e.Offset)) continue;
+                    byte[] already;
+                    if (appliedAt.TryGetValue(e.Offset, out already))
+                    {
+                        if (!BytesEqual(already, e.NewBytes))
+                        {
+                            report.Errors.Add(string.Format(
+                                "Room#{0}: the image/z-plane region at offset {1} is shared by several objects with conflicting edits; only the first was applied. Paint shared objects identically or edit only one.",
+                                i, e.Offset));
+                        }
+                        continue; // identical (consistent) shared edit: already applied
+                    }
                     ScummV3OldWriter.ApplyEdit(dataFile, index, roomNo, e.Offset, e.OldLen, e.NewBytes, e.SizeWordOffset);
+                    appliedAt[e.Offset] = e.NewBytes;
                     report.Imported++;
                 }
             }
@@ -253,6 +293,99 @@ namespace ScummEditor.Engine.Encoders
             }
         }
 
+        private static void CollectBackgroundZPlaneEdit(ScummV3OldBundleDataFile dataFile, string folder, int roomIndex,
+            List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
+        {
+            string path = Path.Combine(folder, string.Format("Room#{0} ZP#0.png", roomIndex));
+            if (!File.Exists(path)) return;
+
+            var room = new ScummV3OldRoom(dataFile.RawContent);
+            var decoder = new ScummV3OldImageDecoder();
+            if (decoder.CountBackgroundZPlanes(room) == 0)
+            {
+                report.Errors.Add(string.Format("Room#{0} ZP#0: the room has no z-plane region to import into", roomIndex));
+                return;
+            }
+            using (Bitmap original = decoder.DecodeBackgroundZPlane(room))
+            {
+                TryEncodeZPlane(path, dataFile.RawContent, room, room.ImageOffset, room.Width, room.Height,
+                    original, edits, report, string.Format("Room#{0} ZP#0", roomIndex));
+            }
+        }
+
+        private static void CollectObjectZPlaneEdits(ScummV3OldBundleDataFile dataFile, string folder, int roomIndex,
+            List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
+        {
+            var room = new ScummV3OldRoom(dataFile.RawContent);
+            var decoder = new ScummV3OldImageDecoder();
+            for (int j = 0; j < room.NumObjects; j++)
+            {
+                string path = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomIndex, j));
+                if (!File.Exists(path)) continue;
+                if (decoder.CountObjectZPlanes(room, j) == 0)
+                {
+                    report.Errors.Add(string.Format("Room#{0} Obj#{1} ZP#0: the object has no z-plane region to import into", roomIndex, j));
+                    continue;
+                }
+                int obim = room.ObjectImageOffset(j);
+                int w = room.ObjectWidth(j), h = room.ObjectHeight(j);
+                using (Bitmap original = decoder.DecodeObjectZPlane(room, j))
+                {
+                    TryEncodeZPlane(path, dataFile.RawContent, room, obim, w, h,
+                        original, edits, report, string.Format("Room#{0} Obj#{1} ZP#0", roomIndex, j));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Encodes an edited z-plane mask and queues a splice over the original z-plane region
+        /// [zbase, regionEnd), where zbase = imageOffset + smapLen. The region has no length word of its
+        /// own, so SizeWordOffset stays -1 (the room size word and downstream offsets are fixed by
+        /// ScummV3OldWriter.ApplyEdit). A mask whose pixels match the original is skipped so a no-op
+        /// re-import keeps the file byte-identical.
+        /// </summary>
+        private static void TryEncodeZPlane(string path, byte[] roomData, ScummV3OldRoom room, int imageOffset,
+            int width, int height, Bitmap original, List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report, string label)
+        {
+            try
+            {
+                using (var bitmap = (Bitmap)Image.FromFile(path))
+                {
+                    if (bitmap.Width != width || bitmap.Height != height)
+                    {
+                        report.Errors.Add(string.Format("{0}: the z-plane must be {1}x{2} (the original size), but it is {3}x{4}.",
+                            label, width, height, bitmap.Width, bitmap.Height));
+                        return;
+                    }
+                    if (original != null && MaskUnchanged(original, bitmap)) return;
+
+                    int smapLen = ReadU16(roomData, imageOffset);
+                    int zbase = imageOffset + smapLen;
+                    int regionEnd = room.NextStructuralOffsetAbove(imageOffset);
+                    int oldLen = regionEnd - zbase;
+                    if (oldLen <= 0)
+                    {
+                        report.Errors.Add(label + ": no z-plane region to import into");
+                        return;
+                    }
+                    byte[] newRegion = ScummV3OldZPlaneEncoder.Encode(width, height, bitmap);
+                    edits.Add(new ImageEdit { Offset = zbase, OldLen = oldLen, NewBytes = newRegion, SizeWordOffset = -1 });
+                }
+            }
+            catch (Exception ex) { report.Errors.Add(label + ": " + ex.Message); }
+        }
+
+        /// <summary>True when the two masks have the same masked (opaque-black) pixels, so re-encoding is a no-op.</summary>
+        private static bool MaskUnchanged(Bitmap original, Bitmap imported)
+        {
+            if (original == null || original.Width != imported.Width || original.Height != imported.Height) return false;
+            for (int y = 0; y < original.Height; y++)
+                for (int x = 0; x < original.Width; x++)
+                    if (ScummV4ImageEncoder.IsMasked(original.GetPixel(x, y)) != ScummV4ImageEncoder.IsMasked(imported.GetPixel(x, y)))
+                        return false;
+            return true;
+        }
+
         private static void TryEncode(string path, byte[] roomData, int imageOffset, int width, int height,
             int oldLen, List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report, string label)
         {
@@ -290,6 +423,13 @@ namespace ScummEditor.Engine.Encoders
         {
             if (offset + other.Length > buf.Length) return false;
             for (int i = 0; i < other.Length; i++) if (buf[offset + i] != other[i]) return false;
+            return true;
+        }
+
+        private static bool BytesEqual(byte[] a, byte[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
             return true;
         }
 

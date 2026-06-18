@@ -138,7 +138,7 @@ namespace ScummEditor.Engine.Encoders
             return true;
         }
 
-        private static bool IsMasked(Color pixel)
+        internal static bool IsMasked(Color pixel)
         {
             return pixel.A != 0 && pixel.R == 0 && pixel.G == 0 && pixel.B == 0;
         }
@@ -147,9 +147,10 @@ namespace ScummEditor.Engine.Encoders
         /// Encodes one 8-pixel-wide z-plane mask strip as run-length rows (the inverse of
         /// ZPlaneDecoder): a repeat run is 0x80|count + the row byte; a copy run is count + that many
         /// distinct row bytes. Each row byte holds 8 pixels (bit set = masked/black). Runs are capped
-        /// at 127 so the decoder reads them back unchanged.
+        /// at 127 so the decoder reads them back unchanged. Shared with the v3 old-bundle z-plane
+        /// encoder, whose strips use the identical RLE (only the offset-table base differs).
         /// </summary>
-        private static byte[] EncodeMaskStrip(Bitmap bitmap, int x0, int height)
+        internal static byte[] EncodeMaskStrip(Bitmap bitmap, int x0, int height)
         {
             var rows = new byte[height];
             for (int y = 0; y < height; y++)
