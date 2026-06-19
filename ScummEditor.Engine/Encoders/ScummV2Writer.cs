@@ -27,20 +27,24 @@ namespace ScummEditor.Engine.Encoders
             System.Array.Copy(newBytes, 0, result, editOffset, newBytes.Length);
             int tailStart = editOffset + oldLen;
             System.Array.Copy(old, tailStart, result, editOffset + newBytes.Length, old.Length - tailStart);
-            dataFile.RawContent = result;
 
             if (delta == 0)
             {
+                dataFile.RawContent = result;
                 dataFile.ReparseChunks();
                 return;
             }
 
+            // Do every room-resource fix-up on the local buffer FIRST: FixUpRoomResource can throw when an
+            // edit grows past a 1-byte offset's range, and only after it succeeds do we publish the new
+            // bytes - so a rejected edit leaves the data file untouched and the caller can report it.
             int oldRoomSize = ReadU16(old, 0);
             FixUpRoomResource(result, editOffset, delta, growRoomSize: editOffset < oldRoomSize);
 
             if (sizeWordOffset >= 0 && sizeWordOffset + 1 < result.Length)
                 WriteU16(result, sizeWordOffset, ReadU16(result, sizeWordOffset) + delta);
 
+            dataFile.RawContent = result;
             FixUpIndex(index, roomNo, editOffset, delta);
             dataFile.ReparseChunks();
         }

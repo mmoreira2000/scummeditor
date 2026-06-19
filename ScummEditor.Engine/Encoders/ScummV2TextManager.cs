@@ -121,8 +121,11 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Extracts all v2 text to a translation file (the shared "id = value" format).</summary>
         public static int ExportToFile(ScummGameData game, string path, string gameLabel)
         {
-            List<GameTextEntry> entries = Extract(game, GameTextCodecV12.Default());
-            GameTextManager.WriteEntriesFile(entries, path, GameTextCodec.Default(), gameLabel);
+            // Decode with the Portuguese accent map so the team sees/edits accented letters directly, and
+            // write that map into the editable "; charmap:" header (the slots match the EXE-font edits).
+            GameTextCodecV12 codec = GameTextCodecV12.Portuguese();
+            List<GameTextEntry> entries = Extract(game, codec);
+            GameTextManager.WriteEntriesFile(entries, path, codec.ToAccentSpec(), gameLabel);
             return entries.Count;
         }
 
@@ -130,11 +133,15 @@ namespace ScummEditor.Engine.Encoders
         public static GameTextImportReport ImportFromFile(ScummGameData game, string path)
         {
             var report = new GameTextImportReport();
-            GameTextCodec ignored;
-            Dictionary<string, string> fileTexts = GameTextManager.ParseTextFile(path, report, out ignored);
+            string charmapSpec;
+            Dictionary<string, string> fileTexts = GameTextManager.ParseTextFile(path, report, out charmapSpec);
             if (fileTexts == null) return report;
 
-            GameTextImportReport applied = Import(game, fileTexts, GameTextCodecV12.Default());
+            GameTextCodecV12 codec;
+            try { codec = GameTextCodecV12.FromAccentSpec(charmapSpec); }
+            catch (System.FormatException ex) { report.Errors.Add("charmap: " + ex.Message); return report; }
+
+            GameTextImportReport applied = Import(game, fileTexts, codec);
             applied.LinesParsed = report.LinesParsed;
             return applied;
         }
@@ -306,9 +313,18 @@ namespace ScummEditor.Engine.Encoders
             unique.Sort((a, b) => b.Offset.CompareTo(a.Offset));
             foreach (Edit e in unique)
             {
-                ScummV2Writer.ApplyEdit(df, index, roomNo, e.Offset, e.OldLen, e.NewBytes, e.SizeWordOffset);
-                report.BlocksRebuilt++;
-                report.StringsChanged++;
+                try
+                {
+                    ScummV2Writer.ApplyEdit(df, index, roomNo, e.Offset, e.OldLen, e.NewBytes, e.SizeWordOffset);
+                    report.BlocksRebuilt++;
+                    report.StringsChanged++;
+                }
+                catch (Exceptions.ImageEncodeException ex)
+                {
+                    // A v2 edit that grows past a 1-byte verb/name offset's range cannot be applied; report
+                    // it and keep importing the rest (ApplyEdit is transactional, so this edit is a no-op).
+                    report.Errors.Add(string.Format("room {0} offset {1}: {2}; left unchanged", roomNo, e.Offset, ex.Message));
+                }
             }
         }
 

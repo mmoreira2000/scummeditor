@@ -279,6 +279,83 @@ namespace ScummEditor.UnitTests
             Assert.True(rooms > 0, "no rooms with a decodable z-plane found");
         }
 
+        /// <summary>
+        /// A v2 text edit that grows past a 1-byte verb/name offset's range must be reported, not crash the
+        /// whole import: ScummV2Writer.ApplyEdit is transactional (a rejected edit leaves the file untouched)
+        /// and ScummV2TextManager catches it per-string. The rest of the import still applies and the game
+        /// re-extracts cleanly. (Regression for the unhandled exception found while testing accents.)
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2GrowingTextEditsAreReportedNotThrown(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            string dir = Path.Combine(Path.GetTempPath(), "v2grow_" + System.Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                string txt = Path.Combine(dir, "texts.txt");
+                ScummV2TextManager.ExportToFile(game, txt, "grow-test");
+
+                // Force growth on every object name (append a long suffix) to exercise the 1-byte-offset
+                // overflow path across many objects.
+                string[] lines = File.ReadAllLines(txt);
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    int eq = lines[i].IndexOf(" = ");
+                    if (eq <= 0 || lines[i][0] == ';') continue;
+                    string id = lines[i].Substring(0, eq);
+                    if (id.EndsWith(".name")) lines[i] = id + " = " + lines[i].Substring(eq + 3) + "XXXXXXXXXXXX";
+                }
+                File.WriteAllLines(txt, lines);
+
+                // Must not throw, regardless of how many edits overflow.
+                GameTextImportReport report = ScummV2TextManager.ImportFromFile(game, txt);
+                Assert.NotNull(report);
+
+                // The game data is still consistent: it re-extracts without throwing.
+                List<GameTextEntry> after = ScummV2TextManager.Extract(game, GameTextCodecV12.Portuguese());
+                Assert.True(after.Count > 0);
+            }
+            finally { Directory.Delete(dir, true); }
+        }
+
+        /// <summary>
+        /// The Portuguese accent map must park accents only on slots that NEVER appear as a literal glyph in
+        /// the shipped game text - otherwise exporting the untouched original would show false accents the
+        /// translator might "fix", corrupting structural bytes (object-name padding, dialogue sentinels).
+        /// This re-checks the default map against the real Maniac/Zak data (the adversarial-review blocker).
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void PortugueseAccentSlotsNeverAppearAsLiteralGlyphs(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+
+            var slots = new HashSet<int>();
+            foreach (string token in GameTextCodecV12.Portuguese().ToAccentSpec().Split(' '))
+            {
+                int x = token.IndexOf("0x", System.StringComparison.OrdinalIgnoreCase);
+                if (x >= 0) slots.Add(System.Convert.ToInt32(token.Substring(x + 2), 16));
+            }
+            Assert.NotEmpty(slots);
+
+            // Decode the original text with the PLAIN codec, strip {tokens}, and assert no accent slot byte
+            // occurs as a literal glyph.
+            foreach (GameTextEntry entry in ScummV2TextManager.Extract(game, GameTextCodecV12.Default()))
+            {
+                string t = entry.Text;
+                for (int i = 0; i < t.Length; i++)
+                {
+                    if (t[i] == '{') { int c = t.IndexOf('}', i); if (c > i) { i = c; continue; } }
+                    Assert.False(slots.Contains(t[i]),
+                        "PT accent slot 0x" + ((int)t[i]).ToString("X2") + " ('" + t[i] + "') appears literally in " + entry.Id);
+                }
+            }
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static ScummGameData SkipOrLoad(string relativePath)
