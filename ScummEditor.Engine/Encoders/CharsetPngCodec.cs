@@ -39,7 +39,12 @@ namespace ScummEditor.Engine.Encoders
         // European MI2 fonts do). Import recomputes the same margins from the same font,
         // so the convention stays self-describing.
         private const int MinimumMargin = 8;
-        private const int GridIndex = 255; // palette slot used for the cell divider lines (ignored on import)
+        // Palette slot for the cell divider lines, drawn before the glyphs and stripped on import. The line
+        // sits on each cell's left/top edge; a most-negative-offset glyph's leftmost/topmost ink can land on
+        // that same edge and overdraw the line (it is drawn after the grid) - harmless, because import only
+        // strips pixels that are STILL == GridIndex, so real ink survives. At 8bpp (maxVal==255==GridIndex)
+        // the divider would be indistinguishable from brightest ink, so the grid is omitted there entirely.
+        private const int GridIndex = 255;
         private const int OffsetBase = 0x15;
         private const int TableStart = 0x19;
 
@@ -55,11 +60,16 @@ namespace ScummEditor.Engine.Encoders
 
             var matrix = new byte[width, height];
 
-            // divider lines on the top/left edge of every cell (GridIndex pixels are ignored on import)
-            for (int x = 0; x < width; x += cellW)
-                for (int y = 0; y < height; y++) matrix[x, y] = GridIndex;
-            for (int y = 0; y < height; y += cellH)
-                for (int x = 0; x < width; x++) matrix[x, y] = GridIndex;
+            // Divider lines on the top/left edge of every cell (GridIndex pixels are ignored on import).
+            // Skipped at 8bpp, where GridIndex(255) would be a legal ink value and could not be told apart.
+            bool drawGrid = (1 << charset.BitsPerPixel) - 1 < GridIndex;
+            if (drawGrid)
+            {
+                for (int x = 0; x < width; x += cellW)
+                    for (int y = 0; y < height; y++) matrix[x, y] = GridIndex;
+                for (int y = 0; y < height; y += cellH)
+                    for (int x = 0; x < width; x++) matrix[x, y] = GridIndex;
+            }
 
             for (int slot = 0; slot < charset.Glyphs.Count && slot < 256; slot++)
             {
@@ -102,7 +112,7 @@ namespace ScummEditor.Engine.Encoders
                     palette[v] = Color.Magenta; // painting with these would be invalid
                 }
             }
-            palette[GridIndex] = Color.FromArgb(60, 80, 160); // divider lines
+            if (maxVal < GridIndex) palette[GridIndex] = Color.FromArgb(60, 80, 160); // divider lines (not at 8bpp)
             return palette;
         }
 
@@ -152,7 +162,7 @@ namespace ScummEditor.Engine.Encoders
             var bitmap = new Bitmap(Columns * cellW, Rows * cellH, PixelFormat.Format24bppRgb);
             using (Graphics gfx = Graphics.FromImage(bitmap))
             using (var extensionBrush = new SolidBrush(Color.FromArgb(255, 250, 220)))
-            using (var gridPen = new Pen(Color.FromArgb(190, 190, 190)))
+            using (var gridPen = new Pen(Color.FromArgb(60, 80, 160))) // same blue as the editable atlas divider
             using (var originPen = new Pen(Color.FromArgb(120, 170, 255)))
             using (var glyphBrush = new SolidBrush(Color.FromArgb(150, 150, 150)))
             using (var idFont = new Font("Consolas", 6f))
@@ -160,16 +170,24 @@ namespace ScummEditor.Engine.Encoders
             {
                 gfx.Clear(Color.White);
 
+                // Extension shading first (cells beyond numChars), so the grid stays visible on top of it.
+                for (int slot = charset.NumChars; slot < 256; slot++)
+                    gfx.FillRectangle(extensionBrush, (slot % Columns) * cellW, (slot / Columns) * cellH, cellW, cellH);
+
+                // Divider lines at EXACTLY the editable atlas's positions (each cell's left/top edge, no
+                // closing border) so the guide overlays the editable atlas pixel-for-pixel. Skipped at 8bpp
+                // to match the editable atlas, which omits the grid there.
+                bool drawGrid = (1 << charset.BitsPerPixel) - 1 < GridIndex;
+                if (drawGrid)
+                {
+                    for (int c = 0; c < Columns; c++) gfx.DrawLine(gridPen, c * cellW, 0, c * cellW, Rows * cellH - 1);
+                    for (int r = 0; r < Rows; r++) gfx.DrawLine(gridPen, 0, r * cellH, Columns * cellW - 1, r * cellH);
+                }
+
                 for (int slot = 0; slot < 256; slot++)
                 {
                     int cx = (slot % Columns) * cellW;
                     int cy = (slot / Columns) * cellH;
-
-                    // tint the cells beyond the current numChars (extension area)
-                    if (slot >= charset.NumChars)
-                        gfx.FillRectangle(extensionBrush, cx, cy, cellW, cellH);
-
-                    gfx.DrawRectangle(gridPen, cx, cy, cellW - 1, cellH - 1);
 
                     // origin marks: the glyph origin is at (marginX, marginY) in each cell
                     gfx.DrawLine(originPen, cx + marginX, cy + marginY - 3, cx + marginX, cy + marginY + 3);
@@ -311,10 +329,15 @@ namespace ScummEditor.Engine.Encoders
             int cellW = width / Columns, cellH = height / Rows;
             int maxVal = (1 << charset.BitsPerPixel) - 1;
 
-            // the divider lines are decoration only - drop them before any analysis
-            for (int y = 0; y < height; y++)
-                for (int x = 0; x < width; x++)
-                    if (pixels[x, y] == GridIndex) pixels[x, y] = 0;
+            // The divider lines are decoration only - drop them before any analysis. Only do this when the
+            // grid index is NOT a legal ink value: at 8bpp maxVal==255==GridIndex, so the divider is not
+            // drawn (see ExportPng) and stripping it would wipe real brightest-ink pixels.
+            if (maxVal < GridIndex)
+            {
+                for (int y = 0; y < height; y++)
+                    for (int x = 0; x < width; x++)
+                        if (pixels[x, y] == GridIndex) pixels[x, y] = 0;
+            }
 
             // Same per-font margins the export used (recomputed from the same font).
             int marginX, marginY, layoutCellW, layoutCellH;
