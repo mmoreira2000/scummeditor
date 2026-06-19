@@ -267,7 +267,8 @@ namespace ScummEditor.UnitTests
                 int slot = FirstPresentGlyph(charset);
                 Skip.If(slot < 0, "font has no glyphs to edit");
                 byte[,] pixels = ReadAtlas(png);
-                int cellX = (slot % 16) * 8, cellY = (slot / 16) * 8;
+                // The editable atlas has 1px gutters + grid lines; the glyph is the cell interior.
+                int cellX = (slot % 16) * 9 + 1, cellY = (slot / 16) * 9 + 1;
                 pixels[cellX, cellY] ^= 1; // flip the top-left pixel of that glyph
                 WriteAtlas(png, pixels, CharsetV3PngCodec.BuildEditPalette());
 

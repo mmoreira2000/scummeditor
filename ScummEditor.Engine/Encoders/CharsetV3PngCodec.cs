@@ -37,14 +37,27 @@ namespace ScummEditor.Engine.Encoders
         private const int HeaderSize = 8;  // size+reserved+reserved+numChars+fontHeight
         private const int GuideScale = 6;  // guide atlas is drawn this many times larger
 
+        // The editable atlas separates the 8x8 cells with a 1px grid line so the editor can see each
+        // slot's bounds. The glyph occupies the cell interior; the grid lives in the gutter and is never
+        // read on import. A legacy gutter-less 128x128 atlas is still accepted.
+        private const int Gutter = 1;
+        private const int Cell = GlyphSize + Gutter;        // 9
+        private const int GridSize = Columns * Cell + Gutter; // 145 (grid line before each cell + a closing one)
+        private const int LegacySize = Columns * GlyphSize;   // 128
+        private const int GridIndex = 2;                     // palette slot used for the grid lines
+
         // ---------------------------------------------------------------------
         // Export
         // ---------------------------------------------------------------------
 
         public static void ExportPng(CharsetV3 charset, string pngPath, string guidePath)
         {
-            int width = Columns * GlyphSize, height = Rows * GlyphSize;
-            var matrix = new byte[width, height];
+            var matrix = new byte[GridSize, GridSize];
+
+            // Grid lines on every gutter row/column, so each 8x8 slot's bounds are visible while editing.
+            for (int p = 0; p < GridSize; p++)
+                for (int q = 0; q < GridSize; q++)
+                    if (p % Cell == 0 || q % Cell == 0) matrix[p, q] = GridIndex;
 
             for (int slot = 0; slot < 256; slot++)
             {
@@ -53,8 +66,8 @@ namespace ScummEditor.Engine.Encoders
                     continue;
                 }
                 byte[,] values = ReadGlyphValues(charset, slot);
-                int cellX = (slot % Columns) * GlyphSize;
-                int cellY = (slot / Columns) * GlyphSize;
+                int cellX = (slot % Columns) * Cell + Gutter;
+                int cellY = (slot / Columns) * Cell + Gutter;
                 for (int y = 0; y < GlyphSize; y++)
                 {
                     for (int x = 0; x < GlyphSize; x++)
@@ -84,7 +97,8 @@ namespace ScummEditor.Engine.Encoders
             var palette = new Color[256];
             palette[0] = Color.Black;
             palette[1] = Color.White;
-            for (int v = 2; v < 256; v++)
+            palette[GridIndex] = Color.FromArgb(40, 40, 160); // grid lines (gutter only; ignored on import)
+            for (int v = 3; v < 256; v++)
             {
                 palette[v] = Color.Magenta; // painting with these would be invalid
             }
@@ -93,26 +107,36 @@ namespace ScummEditor.Engine.Encoders
 
         private static Bitmap BuildGuide(CharsetV3 charset)
         {
-            int cell = GlyphSize * GuideScale;
-            var bitmap = new Bitmap(Columns * cell, Rows * cell, PixelFormat.Format24bppRgb);
+            // The guide is a scaled-up replica of the EDITABLE atlas's layout - same 1px gutters/grid,
+            // same blue grid colour, same cell positions - plus the hex slot id and a reference glyph, so a
+            // font editor can map a cell in the guide 1:1 to the cell to paint in the editable atlas.
+            int cell = Cell * GuideScale;        // 9 * 6
+            int gut = Gutter * GuideScale;       // 1px gutter, scaled
+            int glyphPx = GlyphSize * GuideScale;
+            int size = GridSize * GuideScale;
+            var bitmap = new Bitmap(size, size, PixelFormat.Format24bppRgb);
             using (Graphics gfx = Graphics.FromImage(bitmap))
+            using (var gridBrush = new SolidBrush(Color.FromArgb(40, 40, 160)))      // matches BuildEditPalette grid
             using (var extensionBrush = new SolidBrush(Color.FromArgb(255, 250, 220)))
-            using (var gridPen = new Pen(Color.FromArgb(190, 190, 190)))
             using (var glyphBrush = new SolidBrush(Color.FromArgb(120, 120, 120)))
-            using (var idFont = new Font("Consolas", 7f))
+            using (var idFont = new Font("Consolas", 6f))
             using (var idBrush = new SolidBrush(Color.Red))
             {
                 gfx.Clear(Color.White);
+
+                // Grid lines on every gutter row/column - identical positions to the editable atlas, scaled.
+                for (int c = 0; c <= Columns; c++) gfx.FillRectangle(gridBrush, c * cell, 0, gut, size);
+                for (int r = 0; r <= Rows; r++) gfx.FillRectangle(gridBrush, 0, r * cell, size, gut);
+
                 for (int slot = 0; slot < 256; slot++)
                 {
-                    int cx = (slot % Columns) * cell;
-                    int cy = (slot / Columns) * cell;
+                    int cx = (slot % Columns) * cell + gut; // cell interior (after the gutter)
+                    int cy = (slot / Columns) * cell + gut;
 
                     if (slot >= charset.NumChars)
                     {
-                        gfx.FillRectangle(extensionBrush, cx, cy, cell, cell);
+                        gfx.FillRectangle(extensionBrush, cx, cy, glyphPx, glyphPx);
                     }
-                    gfx.DrawRectangle(gridPen, cx, cy, cell - 1, cell - 1);
 
                     if (charset.HasGlyph(slot))
                     {
@@ -129,7 +153,7 @@ namespace ScummEditor.Engine.Encoders
                         }
                     }
 
-                    gfx.DrawString(slot.ToString("X2"), idFont, idBrush, cx + 1, cy + 1);
+                    gfx.DrawString(slot.ToString("X2"), idFont, idBrush, cx, cy);
                 }
             }
             return bitmap;
@@ -211,11 +235,16 @@ namespace ScummEditor.Engine.Encoders
                 height = loaded.Height;
             }
 
-            if (width != Columns * GlyphSize || height != Rows * GlyphSize)
+            // Accept the gridded atlas (1px gutters, GridSize) or a legacy gutter-less 128x128 one; the
+            // glyph is always the 8x8 interior of each cell.
+            int cell, gutter;
+            if (width == GridSize && height == GridSize) { cell = Cell; gutter = Gutter; }
+            else if (width == LegacySize && height == LegacySize) { cell = GlyphSize; gutter = 0; }
+            else
             {
                 throw new InvalidDataException(string.Format(
-                    "Invalid dimensions {0}x{1}: a v3 font atlas must be exactly {2}x{3} (a 16x16 grid of 8x8 glyphs).",
-                    width, height, Columns * GlyphSize, Rows * GlyphSize));
+                    "Invalid dimensions {0}x{1}: a font atlas must be {2}x{2} (gridded) or {3}x{3}.",
+                    width, height, GridSize, LegacySize));
             }
 
             var plans = new SlotPlan[256];
@@ -224,8 +253,8 @@ namespace ScummEditor.Engine.Encoders
 
             for (int slot = 0; slot < 256; slot++)
             {
-                int cellX = (slot % Columns) * GlyphSize;
-                int cellY = (slot / Columns) * GlyphSize;
+                int cellX = (slot % Columns) * cell + gutter;
+                int cellY = (slot / Columns) * cell + gutter;
 
                 var values = new byte[GlyphSize, GlyphSize];
                 bool anyPixel = false;

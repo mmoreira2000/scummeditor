@@ -182,7 +182,9 @@ namespace ScummEditor.UnitTests
         /// <summary>Toggles pixel (0,0) of an atlas slot, saved as an indexed PNG the codec accepts.</summary>
         private static void TogglePixel(string png, int slot)
         {
-            int cellX = (slot % 16) * 8, cellY = (slot / 16) * 8;
+            // The editable atlas has 1px gutters + grid lines; the 8x8 glyph is the cell interior.
+            const int cellStride = 9, gutter = 1;
+            int cellX = (slot % 16) * cellStride + gutter, cellY = (slot / 16) * cellStride + gutter;
             byte[,] mtx;
             using (var bmp = (Bitmap)Image.FromFile(png)) mtx = IndexedImageHelper.GetIndexMatrix(bmp);
             mtx[cellX, cellY] = (byte)(mtx[cellX, cellY] == 0 ? 1 : 0);
