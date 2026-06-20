@@ -205,7 +205,60 @@ namespace ScummEditor.UnitTests
             Assert.True(imageless > 0, "expected at least one imageless object (OBIM pointing at an OBCD)");
         }
 
+        /// <summary>
+        /// A non-indexed (RGB) PNG carries no palette indexes, so reading it as one would silently corrupt
+        /// the region. The batch importer must REJECT it (report an error) and leave the game byte-identical,
+        /// matching the per-node OldBundleImageImporter. (Adversarial-review follow-up.)
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2NonIndexedPngIsRejectedAndLeavesGameUnchanged(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            WithExport(game, dir =>
+            {
+                string keep = FirstBackgroundPng(dir);
+                Skip.If(keep == null, "no plain background PNG was exported");
+
+                var before = SnapshotAll(game);
+                KeepOnly(dir, keep, MakeRgbCopy); // overwrite the kept PNG as truecolor RGB
+
+                ScummV4GraphicsBatch.ImportReport report = ScummV2Graphics.Import(game, dir, null);
+
+                Assert.Contains(report.Errors, e => e.Contains("indexed"));
+                Assert.Equal(0, report.Imported);
+                foreach (DataDisk disk in game.DataDisks)
+                    Assert.True(BytesEqual(before[disk.FilePath], Save(disk.Tree)),
+                        "a rejected RGB import still changed " + Path.GetFileName(disk.FilePath));
+            });
+        }
+
         // ------------------------------------------------------------------ helpers
+
+        /// <summary>The first plain "Room#N.png" background (no space = not an object / z-plane file), or null.</summary>
+        private static string FirstBackgroundPng(string dir)
+        {
+            foreach (string f in Directory.GetFiles(dir, "Room#*.png"))
+            {
+                string name = Path.GetFileName(f);
+                if (!name.Contains(" ")) return name;
+            }
+            return null;
+        }
+
+        /// <summary>Rewrites an indexed PNG in place as a truecolor (24bpp RGB) PNG with the same pixels.</summary>
+        private static void MakeRgbCopy(string path)
+        {
+            Bitmap rgb;
+            using (var src = (Bitmap)Image.FromFile(path))
+            {
+                rgb = new Bitmap(src.Width, src.Height, PixelFormat.Format24bppRgb);
+                using (Graphics g = Graphics.FromImage(rgb)) g.DrawImage(src, 0, 0, src.Width, src.Height);
+            }
+            rgb.Save(path, ImageFormat.Png);
+            rgb.Dispose();
+        }
 
         private static ScummGameData SkipOrLoad(string relativePath)
         {

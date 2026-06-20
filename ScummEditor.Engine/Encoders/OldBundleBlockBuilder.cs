@@ -46,18 +46,18 @@ namespace ScummEditor.Engine.Encoders
             { DataFile = dataFile, RoomNo = roomNo, IsV2 = model.IsV2 });
 
             if (model.HasBackground)
-                ro.Childrens.Add(Image(ro, gameInfo, dataFile, roomNo, model.IsV2, "BM", OldBundleImageKind.Background, 0));
+                ro.Childrens.Add(Image(ro, gameInfo, dataFile, index, roomNo, model.IsV2, "BM", OldBundleImageKind.Background, 0));
             if (model.HasBackgroundZPlane)
-                ro.Childrens.Add(Image(ro, gameInfo, dataFile, roomNo, model.IsV2, "ZP", OldBundleImageKind.BackgroundZPlane, 0));
+                ro.Childrens.Add(Image(ro, gameInfo, dataFile, index, roomNo, model.IsV2, "ZP", OldBundleImageKind.BackgroundZPlane, 0));
 
             foreach (OldBundleObjectInfo obj in model.Objects)
             {
                 var oc = new OldBundleBlock(ro, gameInfo, "OC", OldBundleNodeKind.Object)
                 { DataFile = dataFile, RoomNo = roomNo, IsV2 = model.IsV2, IsIndy3 = model.IsIndy3, ObjectInfo = obj, ObjectIndex = obj.Index };
                 if (obj.HasImage)
-                    oc.Childrens.Add(Image(oc, gameInfo, dataFile, roomNo, model.IsV2, "OI", OldBundleImageKind.Object, obj.Index));
+                    oc.Childrens.Add(Image(oc, gameInfo, dataFile, index, roomNo, model.IsV2, "OI", OldBundleImageKind.Object, obj.Index));
                 if (obj.HasZPlane)
-                    oc.Childrens.Add(Image(oc, gameInfo, dataFile, roomNo, model.IsV2, "ZP", OldBundleImageKind.ObjectZPlane, obj.Index));
+                    oc.Childrens.Add(Image(oc, gameInfo, dataFile, index, roomNo, model.IsV2, "ZP", OldBundleImageKind.ObjectZPlane, obj.Index));
                 ro.Childrens.Add(oc);
             }
 
@@ -102,10 +102,10 @@ namespace ScummEditor.Engine.Encoders
         }
 
         private static OldBundleBlock Image(BlockBase parent, GameInfo gameInfo, ScummV3OldBundleDataFile dataFile,
-            int roomNo, bool isV2, string tag, OldBundleImageKind kind, int objectIndex)
+            ScummV3OldBundleIndexFile index, int roomNo, bool isV2, string tag, OldBundleImageKind kind, int objectIndex)
         {
             return new OldBundleBlock(parent, gameInfo, tag, OldBundleNodeKind.Image)
-            { DataFile = dataFile, RoomNo = roomNo, IsV2 = isV2, ImageKind = kind, ObjectIndex = objectIndex };
+            { DataFile = dataFile, Index = index, RoomNo = roomNo, IsV2 = isV2, ImageKind = kind, ObjectIndex = objectIndex };
         }
 
         private static OldBundleBlock Script(BlockBase parent, GameInfo gameInfo, ScummV3OldBundleDataFile dataFile,

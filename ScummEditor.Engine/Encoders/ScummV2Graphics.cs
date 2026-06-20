@@ -118,6 +118,10 @@ namespace ScummEditor.Engine.Encoders
 
         private class ImageEdit { public int Offset; public int OldLen; public byte[] NewBytes; public int SizeWordOffset = -1; }
 
+        // A non-indexed (RGB) PNG has no palette indexes to read, so GetIndexMatrix / a luminance mask
+        // would silently produce a corrupt region. Reject it with the same message the per-node importer uses.
+        private const string NotIndexedMessage = "the image must be an indexed (palette-based) PNG so the original colour indexes are preserved. Re-export it from ScummEditor and edit it without converting it to RGB.";
+
         /// <summary>
         /// Batch PNG import for a v2 game: room backgrounds (+ their walk-behind mask), object images and
         /// costume frames, re-encoded via ScummV2ImageEncoder / CostumeImageEncoderV4 and spliced with
@@ -183,6 +187,8 @@ namespace ScummEditor.Engine.Encoders
                     {
                         if (bmp.Width != w || bmp.Height != h)
                             report.Errors.Add(string.Format("Room#{0}: the image must be {1}x{2}, but it is {3}x{4}.", roomNo, w, h, bmp.Width, bmp.Height));
+                        else if (!IndexedImageHelper.IsIndexed(bmp))
+                            report.Errors.Add(string.Format("Room#{0}: {1}", roomNo, NotIndexedMessage));
                         else
                         {
                             byte[,] m = IndexedImageHelper.GetIndexMatrix(bmp);
@@ -201,6 +207,8 @@ namespace ScummEditor.Engine.Encoders
                             report.Errors.Add(string.Format("Room#{0} ZPlane#0: the mask must be {1}x{2}, but it is {3}x{4}.", roomNo, w, h, bmp.Width, bmp.Height));
                         else
                         {
+                            // A mask is 1-bit B/W (thresholded by luminance), so a B/W PNG of any format is fine
+                            // - no indexed requirement here, unlike the image branch above.
                             byte[,] mm = MaskMatrixFromBitmap(bmp);
                             if (origMask == null || !MatrixEqual(mm, origMask)) { newMask = mm; maskChanged = true; }
                         }
@@ -249,6 +257,11 @@ namespace ScummEditor.Engine.Encoders
                         if (bmp.Width != w || bmp.Height != h)
                         {
                             report.Errors.Add(string.Format("Room#{0} Obj#{1}: the image must be {2}x{3}, but it is {4}x{5}.", roomNo, j, w, h, bmp.Width, bmp.Height));
+                            continue;
+                        }
+                        if (!IndexedImageHelper.IsIndexed(bmp))
+                        {
+                            report.Errors.Add(string.Format("Room#{0} Obj#{1}: {2}", roomNo, j, NotIndexedMessage));
                             continue;
                         }
                         byte[,] m = IndexedImageHelper.GetIndexMatrix(bmp);

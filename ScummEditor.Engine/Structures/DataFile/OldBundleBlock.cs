@@ -41,6 +41,9 @@ namespace ScummEditor.Engine.Structures.DataFile
         /// <summary>The room file this resource lives in (its RawContent holds the bytes).</summary>
         public ScummV3OldBundleDataFile DataFile;
 
+        /// <summary>The game index (needed to re-point offsets on an image import write-back).</summary>
+        public ScummV3OldBundleIndexFile Index;
+
         public int RoomNo;
         public bool IsV2;
         public bool IsIndy3;
