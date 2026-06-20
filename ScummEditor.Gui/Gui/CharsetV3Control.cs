@@ -115,7 +115,8 @@ namespace ScummEditor.Gui
             }
         }
 
-        private static Bitmap BuildAtlas(CharsetV3 charset)
+        /// <summary>Renders the scaled glyph atlas (with hex slot ids) for a charset; shared with the v2 EXE-font viewer.</summary>
+        public static Bitmap BuildAtlas(CharsetV3 charset)
         {
             int cellW = 8 * Scale + 6;
             int cellH = 8 * Scale + 14; // extra room for the slot label

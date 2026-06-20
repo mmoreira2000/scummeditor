@@ -63,8 +63,9 @@ namespace ScummEditor.Engine.Encoders
             return fallback;
         }
 
-        /// <summary>Wraps the 1024-byte glyph buffer in a CharsetV3 RawContent so the PNG codec can read it.</summary>
-        private static CharsetV3 BuildCharset(byte[] glyphBytes)
+        /// <summary>Wraps the 1024-byte glyph buffer in a CharsetV3 RawContent so the PNG codec (and the
+        /// GUI atlas viewer) can render it as a standard 128-glyph charset.</summary>
+        public static CharsetV3 BuildCharset(byte[] glyphBytes)
         {
             int numChars = ScummV2ExeFont.GlyphCount;
             int glyphTable = numChars * ScummV2ExeFont.GlyphBytesEach;

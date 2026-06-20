@@ -38,9 +38,11 @@ namespace ScummEditor.Engine.Structures.DataFile
         public int BoxOffset { get { return ReadU16(0x15); } }
         public int ExitScriptOffset { get { return ReadU16(0x19); } }
         public int EntryScriptOffset { get { return ReadU16(0x1B); } }
-        public int NumObjects { get { return _data[20]; } }
-        public int NumSounds { get { return _data[23]; } }
-        public int NumScripts { get { return _data[24]; } }
+        // Bounds-guarded like the v2 sibling (ScummV2Room) so a truncated/corrupt room file yields 0
+        // counts instead of throwing IndexOutOfRangeException up the eager tree-build / game-load path.
+        public int NumObjects { get { return _data != null && _data.Length > 20 ? _data[20] : 0; } }
+        public int NumSounds { get { return _data != null && _data.Length > 23 ? _data[23] : 0; } }
+        public int NumScripts { get { return _data != null && _data.Length > 24 ? _data[24] : 0; } }
 
         /// <summary>OBIM (object image) offset for object index i (0-based), or 0 when out of range.</summary>
         public int ObjectImageOffset(int i)
