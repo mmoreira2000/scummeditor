@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 
 namespace ScummEditor.Engine
@@ -54,7 +55,13 @@ namespace ScummEditor.Engine
                 return none;
             }
 
-            return DetectGameInFolder(folderPath);
+            GameInfo info = DetectGameInFolder(folderPath);
+            if (info != null && info.LoadedGame != ScummGame.None)
+            {
+                // Language is detected from content (index-file MD5 / heuristic), independent of the game/version.
+                info.Language = ScummLanguageDetector.Detect(info);
+            }
+            return info;
         }
 
         private static GameInfo DetectGameInFolder(string folder)

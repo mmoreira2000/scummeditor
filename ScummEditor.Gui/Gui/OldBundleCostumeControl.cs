@@ -17,6 +17,7 @@ namespace ScummEditor.Gui
     {
         private readonly Label _header;
         private readonly Button _exportButton;
+        private readonly Button _importButton;
         private readonly ListBox _frameList;
         private readonly PictureBox _picture;
         private readonly SplitContainer _split;
@@ -36,7 +37,10 @@ namespace ScummEditor.Gui
             var topBar = new Panel { Dock = DockStyle.Top, Height = 30 };
             _exportButton = new Button { Text = "Export PNG", Width = 90, Left = 3, Top = 3, Enabled = false };
             _exportButton.Click += ExportClick;
+            _importButton = new Button { Text = "Import PNG", Width = 90, Left = 99, Top = 3, Enabled = false };
+            _importButton.Click += ImportClick;
             topBar.Controls.Add(_exportButton);
+            topBar.Controls.Add(_importButton);
 
             // SplitterDistance is applied later in OnSizeChanged (not here): setting it at construction, when
             // the control still has its tiny default width, can clamp to the wrong position.
@@ -71,6 +75,7 @@ namespace ScummEditor.Gui
             _frameList.Items.Clear();
             if (_picture.Image != null) { _picture.Image.Dispose(); _picture.Image = null; }
             _exportButton.Enabled = false;
+            _importButton.Enabled = false;
             _costume = null;
 
             if (block == null) { _header.Text = "(no costume)"; return; }
@@ -87,6 +92,7 @@ namespace ScummEditor.Gui
         {
             if (_picture.Image != null) { _picture.Image.Dispose(); _picture.Image = null; }
             _exportButton.Enabled = false;
+            _importButton.Enabled = false;
             if (_costume == null || _frameList.SelectedIndex < 0 || _frameList.SelectedIndex >= _costume.Frames.Count) return;
 
             try
@@ -94,6 +100,7 @@ namespace ScummEditor.Gui
                 Bitmap frame = new CostumeImageDecoderV4().Decode(_costume.Frames[_frameList.SelectedIndex], 16, _ega, false);
                 _picture.Image = frame;
                 _exportButton.Enabled = frame != null;
+                _importButton.Enabled = frame != null;
                 _header.Text = frame == null
                     ? string.Format("Costume {0} (room {1})   ·   frame {2} - could not decode", _block.ResourceIndex, _block.RoomNo, _frameList.SelectedIndex)
                     : string.Format("Costume {0} (room {1})   ·   frame {2} of {3}   ·   {4} x {5}",
@@ -117,6 +124,39 @@ namespace ScummEditor.Gui
                 if (dlg.ShowDialog(this) != DialogResult.OK) return;
                 try { _picture.Image.Save(dlg.FileName, ImageFormat.Png); }
                 catch (Exception ex) { MessageBox.Show(this, "Export failed: " + ex.Message, "Export PNG", MessageBoxButtons.OK, MessageBoxIcon.Error); }
+            }
+        }
+
+        private void ImportClick(object sender, EventArgs e)
+        {
+            if (_block == null || _costume == null || _frameList.SelectedIndex < 0) return;
+            int frameIndex = _frameList.SelectedIndex;
+            using (var dlg = new OpenFileDialog { Filter = "PNG image (*.png)|*.png" })
+            {
+                if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+                string error;
+                bool ok;
+                try
+                {
+                    using (var png = (Bitmap)Image.FromFile(dlg.FileName))
+                    {
+                        ok = OldBundleCostumeImporter.ImportFrame(_block.DataFile, _block.Index, _block.RoomNo,
+                            _block.IsV2, _block.Offset, frameIndex, png, out error);
+                    }
+                }
+                catch (Exception ex) { ok = false; error = ex.Message; }
+
+                if (!ok)
+                {
+                    MessageBox.Show(this, error, "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                SetData(_block); // re-parse the costume from the updated bytes
+                if (frameIndex < _frameList.Items.Count) _frameList.SelectedIndex = frameIndex; // keep the frame selected
+                MessageBox.Show(this, "Frame imported. Use \"Save changes\" to write it back to the game files.",
+                    "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
     }

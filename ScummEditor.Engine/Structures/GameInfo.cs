@@ -6,6 +6,9 @@ namespace ScummEditor.Engine.Structures
     {
         public int ScummVersion { get; set; }
         public ScummGame LoadedGame { get; set; }
+
+        /// <summary>The detected release language (from the index-file MD5 / content heuristic); Unknown if undetermined.</summary>
+        public ScummLanguage Language { get; set; } = ScummLanguage.Unknown;
         public bool Xored { get; set; }
         public int XorKey { get; set; }
 

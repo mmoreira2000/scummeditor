@@ -73,7 +73,7 @@ namespace ScummEditor.Engine.Encoders
                 if (s.Kind == OldBundleCodeKind.GlobalScript)
                     fileChildren.Add(Script(dataFile, gameInfo, dataFile, model, s, "SC"));
 
-            AddCostumes(fileChildren, game, dataFile, index, model.IsV2, gameInfo);
+            AddCostumes(fileChildren, game, dataFile, index, roomNo, model.IsV2, gameInfo);
             AddSounds(fileChildren, dataFile, index, roomNo, gameInfo);
 
             dataFile.Childrens = fileChildren;
@@ -129,7 +129,7 @@ namespace ScummEditor.Engine.Encoders
         }
 
         private static void AddCostumes(List<BlockBase> fileChildren, ScummGameData game, ScummV3OldBundleDataFile dataFile,
-            ScummV3OldBundleIndexFile index, bool isV2, GameInfo gameInfo)
+            ScummV3OldBundleIndexFile index, int roomNo, bool isV2, GameInfo gameInfo)
         {
             V3OldResourceDirectory dir = index == null ? null : index.CostumeDirectory;
             if (dir == null) return;
@@ -149,7 +149,7 @@ namespace ScummEditor.Engine.Encoders
                 if (frameCount == 0) continue;
 
                 fileChildren.Add(new OldBundleBlock(dataFile, gameInfo, "CO", OldBundleNodeKind.Costume)
-                { DataFile = dataFile, IsV2 = isV2, Offset = offset, ResourceIndex = c });
+                { DataFile = dataFile, Index = index, RoomNo = roomNo, IsV2 = isV2, Offset = offset, ResourceIndex = c });
             }
         }
 

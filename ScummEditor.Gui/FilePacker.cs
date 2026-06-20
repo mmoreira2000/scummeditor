@@ -79,24 +79,22 @@ namespace ScummEditor.Gui
 
             scummFile = ScummGameData.LoadFromGameInfo(gameInfo);
 
-            string language = DetectLanguageSafe();
+            // The MD5-table language was set at detection; refine it with the content heuristic now that the
+            // game is loaded (fills Unknown, and corrects a fan-translation that kept the English index).
+            RefineLanguageSafe();
+            ScummLanguage lang = scummFile.LoadedGameInfo.Language;
+            string language = lang != ScummLanguage.Unknown ? ScummLanguageNames.DisplayName(lang) : null;
             LoadedGame.Text = BuildLoadedGameStatus(scummFile.LoadedGameInfo, language);
 
             treeNavigatorManager.GameData = scummFile;
             treeNavigatorManager.LoadTree();
         }
 
-        /// <summary>Language detection is optional - it must never break the game loading.</summary>
-        private string DetectLanguageSafe()
+        /// <summary>Language refinement is optional - it must never break the game loading.</summary>
+        private void RefineLanguageSafe()
         {
-            try
-            {
-                return GameLanguageDetector.Detect(scummFile);
-            }
-            catch (Exception)
-            {
-                return null;
-            }
+            try { ScummLanguageDetector.RefineFromContent(scummFile); }
+            catch (Exception) { }
         }
 
         /// <summary>Status bar text: game name, its edition (+ language when known) and the SCUMM version.</summary>
@@ -175,30 +173,11 @@ namespace ScummEditor.Gui
             SaveGame();
         }
 
+        // The edition (Talkie/Floppy) is shown separately - see BuildLoadedGameStatus. The name mapping
+        // itself lives in the engine (ScummGameNames) so it covers every ScummGame value and is testable.
         private string GetGameName(ScummGame game)
         {
-            // The edition (Talkie/Floppy) is detected separately - see BuildLoadedGameStatus.
-            switch (game)
-            {
-                case ScummGame.DayOfTheTentacle:
-                    return "Day of the Tentacle";
-                case ScummGame.SamAndMax:
-                    return "Sam & Max Hit the Road";
-                case ScummGame.FateOfAtlantis:
-                    return "Indiana Jones and the Fate of Atlantis";
-                case ScummGame.MonkeyIsland1VGA:
-                case ScummGame.MonkeyIsland1VGASpeech:
-                    return "The Secret of Monkey Island (CD)";
-                case ScummGame.MonkeyIsland1Floppy:
-                    return "The Secret of Monkey Island";
-                case ScummGame.MonkeyIsland2:
-                    return "Monkey Island 2: LeChuck's Revenge";
-                case ScummGame.Loom:
-                    return "Loom";
-                case ScummGame.None:
-                default:
-                    return "None";
-            }
+            return ScummGameNames.DisplayName(game);
         }
 
         private void convertFile_Click(object sender, EventArgs e)
@@ -465,7 +444,13 @@ namespace ScummEditor.Gui
 
             try
             {
-                string report = CharsetPngCodec.ExportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
+                // v3 (Loom/Indy3 EGA old-bundle AND Indy3 VGA / FM-Towns GF_OLD256) keep their fonts as
+                // standalone 9N.LFL CharsetV3 files (in V3Charsets), NOT as v4+ Charset blocks - they need
+                // the dedicated v3 codec. GetAllEditableCharsets() only sees v4+ charsets, so it would be
+                // empty here.
+                string report = HasV3Charsets()
+                    ? CharsetV3PngCodec.ExportAll(scummFile.V3Charsets, dlg.SelectedPath)
+                    : CharsetPngCodec.ExportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this, report, "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -473,6 +458,12 @@ namespace ScummEditor.Gui
                 MessageBox.Show(this, "Export failed: " + ex.Message, "Export game fonts",
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        /// <summary>True when the game's fonts are standalone v3 charsets (9N.LFL), needing CharsetV3PngCodec.</summary>
+        private bool HasV3Charsets()
+        {
+            return scummFile != null && scummFile.V3Charsets != null && scummFile.V3Charsets.Count > 0;
         }
 
         private void importGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -498,7 +489,9 @@ namespace ScummEditor.Gui
 
             try
             {
-                string report = CharsetPngCodec.ImportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
+                string report = HasV3Charsets()
+                    ? CharsetV3PngCodec.ImportAll(scummFile.V3Charsets, dlg.SelectedPath)
+                    : CharsetPngCodec.ImportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
                 MessageBox.Show(this,
                     report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
