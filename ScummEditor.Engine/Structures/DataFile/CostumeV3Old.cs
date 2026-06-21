@@ -86,6 +86,10 @@ namespace ScummEditor.Engine.Structures.DataFile
             int colorBytes = (Format == 0x57) ? 0 : 1;
             for (int i = 0; i < colorBytes; i++) Palette.Add(_data[_base + 6 + i]);
 
+            // v1 (Maniac/Zak classic, 0x57) differs: the frame table is at base+8 and its CEL offsets are
+            // relative to limbBase (base+4), the CEL header is 6 bytes, and pixels are a C64 2-bit RLE.
+            if (Format == 0x57) { ParseV1(); return; }
+
             // 16 frame-table offsets at base+9 (base-relative).
             int frameTablePos = _base + 9;
             var frameOffsets = new int[16];
@@ -145,6 +149,107 @@ namespace ScummEditor.Engine.Structures.DataFile
             int w = ReadU16(rawIndex);
             int h = ReadU16(rawIndex + 2);
             return w > 0 && w <= 1024 && h > 0 && h <= 1024;
+        }
+
+        /// <summary>
+        /// Parses a v1 (format 0x57) costume. The 16 frame-table offsets are at base+8 and their CEL offsets
+        /// are relative to limbBase = base+4 (not base); each CEL is a 6-byte header (widthBytes, height,
+        /// relX*8, -relY, moveX*8, -moveY) followed by a C64 2-bit RLE. A candidate CEL is accepted only if
+        /// its RLE decodes cleanly to exactly widthBytes*height samples within the resource (this rejects the
+        /// false positives a bare frame-table scan would otherwise pick up). CelBaseOffsets are limbBase-relative.
+        /// </summary>
+        private void ParseV1()
+        {
+            int limbBase = _base + 4;
+            int frameTablePos = _base + 8; // 16 uint16 frame-table offsets, relative to limbBase
+            if (frameTablePos + 32 > _data.Length) return;
+
+            var frameOffsets = new int[16];
+            for (int i = 0; i < 16; i++) frameOffsets[i] = ReadU16(frameTablePos + i * 2);
+
+            int boundary = frameOffsets.Max();
+            var distinct = frameOffsets.Where(o => o > 0).Distinct().OrderBy(o => o).ToList();
+
+            var celOffsets = new SortedSet<int>();
+            foreach (int fo in frameOffsets.Where(o => o > 0 && o < boundary).Distinct())
+            {
+                int tableEnd = boundary;
+                foreach (int cand in distinct) { if (cand > fo) { tableEnd = Math.Min(cand, boundary); break; } }
+
+                for (int e = fo; e + 2 <= tableEnd; e += 2)
+                {
+                    int ri = limbBase + e; // limbBase-relative -> roomData index
+                    if (ri < 0 || ri + 2 > _data.Length) continue;
+                    int celOffset = ReadU16(ri);
+                    if (celOffset >= boundary && IsSaneCelV1(limbBase + celOffset))
+                    {
+                        celOffsets.Add(celOffset);
+                        CelOffsetEntryPositions.Add(ri);
+                    }
+                }
+            }
+
+            var sorted = celOffsets.ToList();
+            CelBaseOffsets = sorted;
+            if (sorted.Count > 0) CelDataStart = limbBase + sorted[0];
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                int start = limbBase + sorted[i]; // CEL header in roomData
+                int widthBytes = _data[start];
+                int height = _data[start + 1];
+                int dataStart = start + 6;
+                int rleLen = C64RleLength(_data, dataStart, widthBytes, height, ResourceEnd);
+                if (rleLen < 0) continue;
+
+                var data = new byte[rleLen];
+                Array.Copy(_data, dataStart, data, 0, rleLen);
+
+                Frames.Add(new CostumeImageData
+                {
+                    Width = (ushort)(widthBytes * 8),
+                    Height = (ushort)height,
+                    RelX = (short)((sbyte)_data[start + 2] * 8),
+                    RelY = (short)(-(sbyte)_data[start + 3]),
+                    MoveX = (short)((sbyte)_data[start + 4] * 8),
+                    MoveY = (short)(-(sbyte)_data[start + 5]),
+                    ImageData = data
+                });
+            }
+        }
+
+        /// <summary>True when a 0x57 CEL header + its C64 RLE are well-formed and decode within the resource.</summary>
+        private bool IsSaneCelV1(int rawIndex)
+        {
+            if (rawIndex < 0 || rawIndex + 6 > _data.Length) return false;
+            int widthBytes = _data[rawIndex];
+            int height = _data[rawIndex + 1];
+            if (widthBytes <= 0 || widthBytes > 64 || height <= 0 || height > 200) return false;
+            return C64RleLength(_data, rawIndex + 6, widthBytes, height, ResourceEnd) >= 0;
+        }
+
+        /// <summary>
+        /// Number of bytes the C64 2-bit costume RLE at <paramref name="offset"/> consumes to produce exactly
+        /// widthBytes*height sample bytes, or -1 if it runs past <paramref name="maxEnd"/> (malformed / not a CEL).
+        /// </summary>
+        private static int C64RleLength(byte[] data, int offset, int widthBytes, int height, int maxEnd)
+        {
+            int total = widthBytes * height;
+            if (total <= 0 || offset < 0) return -1;
+            int p = offset, idx = 0;
+            while (idx < total)
+            {
+                if (p >= maxEnd) return -1;
+                byte len = data[p++];
+                bool rep = (len & 0x80) != 0;
+                int n = len & 0x7F;
+                if (rep) { if (p >= maxEnd) return -1; p++; }
+                for (int k = 0; k < n && idx < total; k++)
+                {
+                    if (!rep) { if (p >= maxEnd) return -1; p++; }
+                    idx++;
+                }
+            }
+            return p - offset;
         }
 
         /// <summary>

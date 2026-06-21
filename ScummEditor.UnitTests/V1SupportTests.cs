@@ -218,6 +218,67 @@ namespace ScummEditor.UnitTests
             Assert.True(objects > 50, "expected many decodable object images, got " + objects);
         }
 
+        // --- costumes (M4 format 0x57 decode) --------------------------------------
+
+        /// <summary>
+        /// v1 costumes are format 0x57 (C64-style 2-bit RLE, 6-byte CELs, frame table at base+8 with
+        /// limbBase-relative offsets) - a different container and codec from the v2/v3-old 0x58. Many
+        /// costumes and frames decode to their declared dimensions, proving the 0x57 parse + C64 RLE.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1CostumesDecode(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            Assert.NotNull(index);
+            Assert.NotNull(index.CostumeDirectory);
+
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            byte[] pal = CostumeImageDecoderV1.DefaultPalette(isManiac);
+            var decoder = new CostumeImageDecoderV1();
+
+            int costumes = 0, frames = 0;
+            V3OldResourceDirectory dir = index.CostumeDirectory;
+            for (int c = 0; c < dir.Count; c++)
+            {
+                int off = dir.Offsets[c];
+                if (off == 0xFFFF || off == 0) continue;
+                byte[] roomData = RoomData(game, dir.RoomNumbers[c]);
+                if (roomData == null || off >= roomData.Length) continue;
+
+                var cost = new CostumeV3Old(roomData, off);
+                if (cost.Format != 0x57 || cost.Frames.Count == 0) continue;
+                costumes++;
+                foreach (CostumeImageData f in cost.Frames)
+                    using (Bitmap b = decoder.Decode(f, pal))
+                    {
+                        if (b == null) continue;
+                        Assert.Equal(f.Width, b.Width);
+                        Assert.Equal(f.Height, b.Height);
+                        frames++;
+                    }
+            }
+
+            Assert.True(costumes > 15, "expected many 0x57 costumes, got " + costumes);
+            Assert.True(frames > 50, "expected many decodable costume frames, got " + frames);
+        }
+
+        private static byte[] RoomData(ScummGameData game, int roomNo)
+        {
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                int n;
+                if (int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out n) && n == roomNo)
+                {
+                    var df = disk.Tree as ScummV3OldBundleDataFile;
+                    return df == null ? null : df.RawContent;
+                }
+            }
+            return null;
+        }
+
         private static ScummGameData SkipOrLoad(string relativePath)
         {
             Skip.If(GameLibrary.Folder(relativePath) == null, "GameData folder not present: " + relativePath);
