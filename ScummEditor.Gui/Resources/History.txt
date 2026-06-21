@@ -1,3 +1,13 @@
+3.5.1
+-----
+* Editing v1 and v2 images back in is now complete. Importing edited v1 OBJECT images and walk-behind (z-plane) masks is now supported, alongside the room backgrounds and costumes that were already importable in 3.5.0; v1 per-object masks - which the original DOS engine does keep, one per object - are now decoded, exported and imported as well. v1 stores the room background and every object image against one shared tile set, so the importer preserves that set and only adds the tiles an edit needs, leaving every other image in the room untouched. An edit that cannot fit v1's format (more than 256 distinct tiles, or more than four colours in a cell) is still rejected with a clear message rather than silently corrupted.
+
+* v2 object walk-behind masks now import too (they already exported). With this, every per-resource viewer that can export an image can also import it back, across every version from v1 to v6.
+
+* Fix (important): importing a v1 room background corrupted the room's object images. Because the background and every object image share one tile set, re-encoding a background used to rebuild and renumber that set, leaving every object in the edited room pointing at the wrong tiles. Backgrounds now keep the existing tile set intact, so editing a background no longer touches any object.
+
+* Fix: a v1 image edit that needed a new tile could disturb an unedited part of the same image, and the importer could be coaxed into writing over an object that has no real image. Both are corrected - an unedited region is now guaranteed untouched, and an imageless object is refused on import just as it is when decoding.
+
 3.5.0
 -----
 * SCUMM v1 support. Maniac Mansion and Zak McKracken in their original 1987/1988 DOS floppy "classic" form can now be opened, viewed and edited - the oldest games the editor handles, completing coverage from v1 to v6. As with every other version they are recognized from the content of their data files alone (never the game EXE): the classic 00.LFL index has its own magic and, unlike every later version, stores NO resource counts at all - they are hardcoded per game - which the editor now reproduces. Every container round-trips byte-for-byte.
