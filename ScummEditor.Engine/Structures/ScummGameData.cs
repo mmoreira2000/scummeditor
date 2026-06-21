@@ -83,6 +83,13 @@ namespace ScummEditor.Engine.Structures
                 // (carried on GameInfo), so the verbatim-round-trip v3old game data serves it directly.
                 return new ScummGameDataV3OldBundle();
             }
+            if (gameInfo != null && gameInfo.ScummVersion == 1)
+            {
+                // v1 (Maniac/Zak DOS "classic") is the same GF_OLD_BUNDLE container as v2/v3old (XOR 0xFF,
+                // [size:u16] room chunks, verbatim round-trip); only the 00.LFL index layout differs
+                // (count-less, hardcoded counts), handled by ScummV3OldBundleIndexFile via UsesClassicIndex.
+                return new ScummGameDataV3OldBundle();
+            }
             return new ScummGameDataV5V6();
         }
 

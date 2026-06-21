@@ -302,6 +302,7 @@ namespace ScummEditor.Engine
 
             bool oldBundle;
             int xorKey;
+            bool classicV1 = false;
             if (head[4] == (byte)'0' && head[5] == (byte)'R')
             {
                 // GF_OLD256: plaintext small-header index starting with the room directory "0R".
@@ -310,9 +311,16 @@ namespace ScummEditor.Engine
             }
             else if ((head[0] ^ 0xFF) == 0x00 && (head[1] ^ 0xFF) == 0x01)
             {
-                // old-bundle: XOR 0xFF over the whole file; decrypts to the magic word 0x0100.
+                // old-bundle v2/v3 (enhanced): XOR 0xFF over the whole file; decrypts to magic 0x0100.
                 oldBundle = true;
                 xorKey = 0xFF;
+            }
+            else if ((head[0] ^ 0xFF) == 0x31 && (head[1] ^ 0xFF) == 0x0A)
+            {
+                // SCUMM v1 "classic" (Maniac/Zak DOS floppy): XOR 0xFF, count-less index magic 0x0A31.
+                oldBundle = true;
+                xorKey = 0xFF;
+                classicV1 = true;
             }
             else
             {
@@ -327,16 +335,18 @@ namespace ScummEditor.Engine
 
             List<string> fonts = EnumerateV3Fonts(folder); // 9x.LFL charsets
 
-            // SCUMM v2 (Maniac Mansion / Zak "Enhanced") shares the old-bundle magic 0x0100 with the v3old
-            // EGA games (Loom, Indy3), but ships NO 9x.LFL charset files (v2 fonts are baked into the engine /
-            // game EXE) and its index uses a 1-byte global-object table instead of v3old's 4-byte one. The
-            // zero-charset signal tells them apart from data alone; without it the v3old index reader walks
-            // off the end of a v2 index (it assumes the 4-byte object table).
-            bool isV2 = oldBundle && fonts.Count == 0;
+            // SCUMM v1 (classic, magic 0x0A31) and v2 (Maniac/Zak "Enhanced", magic 0x0100) both share the
+            // old-bundle XOR-0xFF container with the v3old EGA games (Loom, Indy3) but ship NO 9x.LFL charset
+            // files (their fonts are baked into the game EXE) and use a 1-byte global-object table instead of
+            // v3old's 4-byte one. v1 is told from v2 by its index magic; v2 from v3old by the zero-charset
+            // signal (without it the v3old index reader walks off the end of a v1/v2 index).
+            bool isV1 = classicV1;
+            bool isV2 = oldBundle && !classicV1 && fonts.Count == 0;
+            bool isV1OrV2 = isV1 || isV2;
 
             var result = new GameInfo
             {
-                LoadedGame = isV2
+                LoadedGame = isV1OrV2
                     ? IdentifyV1V2Game(folder)
                     : IdentifyV3Game(indexPath, oldBundle, xorKey, folder, rooms.Count, fonts.Count),
                 IndexFile = indexPath,
@@ -346,10 +356,11 @@ namespace ScummEditor.Engine
                 Xored = xorKey != 0,
                 XorKey = xorKey,
                 IndexXorKey = xorKey,
-                ScummVersion = isV2 ? 2 : 3,
+                ScummVersion = isV1 ? 1 : (isV2 ? 2 : 3),
                 UsesSmallHeader = !oldBundle, // GF_OLD256 uses the v4 [size:4 LE][tag:2] header
                 UsesOldBundle = oldBundle,    // EGA + v1/v2 games use untagged [size:uint16] chunks
-                GlobalObjectEntrySize = isV2 ? 1 : 4 // v2 object table is 1 byte/object; v3old is 4
+                GlobalObjectEntrySize = isV1OrV2 ? 1 : 4, // v1/v2 object table is 1 byte/object; v3old is 4
+                UsesClassicIndex = isV1       // v1 00.LFL is count-less with hardcoded per-game counts
             };
 
             // FM-Towns releases ship ripped CD audio (CDDA.SOU); mark the CD edition.
