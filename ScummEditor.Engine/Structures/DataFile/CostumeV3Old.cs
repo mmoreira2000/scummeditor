@@ -154,37 +154,59 @@ namespace ScummEditor.Engine.Structures.DataFile
         /// <summary>
         /// Parses a v1 (format 0x57) costume. The 16 frame-table offsets are at base+8 and their CEL offsets
         /// are relative to limbBase = base+4 (not base); each CEL is a 6-byte header (widthBytes, height,
-        /// relX*8, -relY, moveX*8, -moveY) followed by a C64 2-bit RLE. A candidate CEL is accepted only if
-        /// its RLE decodes cleanly to exactly widthBytes*height samples within the resource (this rejects the
-        /// false positives a bare frame-table scan would otherwise pick up). CelBaseOffsets are limbBase-relative.
+        /// relX*8, -relY, moveX*8, -moveY) followed by a C64 2-bit RLE. CELs are enumerated by WALKING THE
+        /// ANIMATION command stream (mirrors ScummVM costumeDecodeData) so only CELs the costume can actually
+        /// draw are listed - a deterministic, re-pack-invariant set (a bare frame-table scan would surface
+        /// dead slots as phantom frames after an import re-pack). CelBaseOffsets are limbBase-relative.
         /// </summary>
         private void ParseV1()
         {
             int limbBase = _base + 4;
-            int frameTablePos = _base + 8; // 16 uint16 frame-table offsets, relative to limbBase
-            if (frameTablePos + 32 > _data.Length) return;
+            if (_base + 26 > _data.Length) return; // header + frameOffsets (base+8) + start of dataOffsets (base+24)
 
-            var frameOffsets = new int[16];
-            for (int i = 0; i < 16; i++) frameOffsets[i] = ReadU16(frameTablePos + i * 2);
+            int numAnim = _data[_base + 4];
+            int animCmds = limbBase + ReadU16(_base + 6); // the per-limb command stream
+            int frameOffsetsTbl = _base + 8;              // 16 uint16 frame-table offsets, limbBase-relative
+            int dataOffsetsTbl = _base + 24;              // 16 uint16 per-animation offsets, limbBase-relative
 
-            int boundary = frameOffsets.Max();
-            var distinct = frameOffsets.Where(o => o > 0).Distinct().OrderBy(o => o).ToList();
-
+            // Enumerate CELs DETERMINISTICALLY by walking the animation definitions (mirrors ScummVM
+            // costumeDecodeData): for every animation, the 1-byte limb mask selects limbs, each limb gives a
+            // start index + length into the command stream, and each non-command code indexes that limb's
+            // frame table to a CEL. This reads only the (re-pack-invariant) anim / frame-table structure, never
+            // CEL-data bytes, so the frame set is stable across an import re-pack - no phantom frames.
             var celOffsets = new SortedSet<int>();
-            foreach (int fo in frameOffsets.Where(o => o > 0 && o < boundary).Distinct())
+            for (int a = 0; a <= numAnim; a++)
             {
-                int tableEnd = boundary;
-                foreach (int cand in distinct) { if (cand > fo) { tableEnd = Math.Min(cand, boundary); break; } }
-
-                for (int e = fo; e + 2 <= tableEnd; e += 2)
+                int dpos = dataOffsetsTbl + a * 2;
+                if (dpos + 2 > _data.Length) break;
+                int animOff = ReadU16(dpos);
+                if (animOff == 0) continue;
+                int r = limbBase + animOff;
+                if (r < 0 || r >= _data.Length) continue;
+                int mask = _data[r] << 8; r++;
+                for (int i = 0; i < 16 && (mask & 0xFFFF) != 0; i++, mask <<= 1)
                 {
-                    int ri = limbBase + e; // limbBase-relative -> roomData index
-                    if (ri < 0 || ri + 2 > _data.Length) continue;
-                    int celOffset = ReadU16(ri);
-                    if (celOffset >= boundary && IsSaneCelV1(limbBase + celOffset))
+                    if ((mask & 0x8000) == 0) continue;
+                    if (r >= _data.Length) break;
+                    int j = _data[r++];
+                    if (j == 0xFF) continue; // sentinel: this limb has no command (no extra byte follows)
+                    if (r >= _data.Length) break;
+                    int len = _data[r++] & 0x7F;
+                    int frameTbl = limbBase + ReadU16(frameOffsetsTbl + i * 2);
+                    for (int k = j; k <= j + len; k++)
                     {
-                        celOffsets.Add(celOffset);
-                        CelOffsetEntryPositions.Add(ri);
+                        int cmdPos = animCmds + k;
+                        if (cmdPos < 0 || cmdPos >= _data.Length) break;
+                        int code = _data[cmdPos] & 0x7F;
+                        if (code == 0x79 || code == 0x7A || code == 0x7B) continue; // start/stop/no-draw commands
+                        int entryPos = frameTbl + code * 2;
+                        if (entryPos < 0 || entryPos + 2 > _data.Length) continue;
+                        int celOffset = ReadU16(entryPos);
+                        if (celOffset > 0 && IsSaneCelV1(limbBase + celOffset))
+                        {
+                            celOffsets.Add(celOffset);
+                            CelOffsetEntryPositions.Add(entryPos);
+                        }
                     }
                 }
             }
@@ -267,15 +289,21 @@ namespace ScummEditor.Engine.Structures.DataFile
                 throw new Exceptions.ImageEncodeException("This costume's frame table could not be parsed, so it cannot be edited.");
             }
 
+            // v1 (0x57) CELs have a 6-byte header and limbBase(=base+4)-relative offsets; v2/v3-old
+            // (0x58/0x59) have a 12-byte header and base-relative offsets.
+            int headerSize = (Format == 0x57) ? 6 : 12;
+            int offsetBaseDelta = (Format == 0x57) ? 4 : 0;
+
             int celDataStartRel = CelDataStart - _base; // base-relative start of the CEL region
             var region = new System.IO.MemoryStream();
             var newOffsetByOld = new Dictionary<int, int>();
             for (int i = 0; i < Frames.Count; i++)
             {
                 int oldBaseOffset = CelBaseOffsets[i];
-                int celHeaderPos = _base + oldBaseOffset;
-                newOffsetByOld[oldBaseOffset] = celDataStartRel + (int)region.Length;
-                region.Write(_data, celHeaderPos, 12); // CEL header verbatim (size unchanged)
+                int celHeaderPos = _base + offsetBaseDelta + oldBaseOffset;
+                // record the new CEL position in the SAME convention the frame-table entries use
+                newOffsetByOld[oldBaseOffset] = celDataStartRel + (int)region.Length - offsetBaseDelta;
+                region.Write(_data, celHeaderPos, headerSize); // CEL header verbatim (size unchanged)
                 byte[] data;
                 if (!replacements.TryGetValue(i, out data)) data = Frames[i].ImageData;
                 region.Write(data, 0, data.Length);

@@ -37,10 +37,11 @@ namespace ScummEditor.Engine.Encoders
                 }
 
                 var frame = costume.Frames[frameIndex];
-                // 16-colour EGA; the 4-arg overload checks the size and that the PNG is indexed (throws).
-                // (v1 0x57 costume WRITE-BACK is deferred - its heuristic frame enumeration is not invariant
-                // to re-packing; decode/export works, see CostumeImageEncoderV1 for the validated re-encode.)
-                byte[] encoded = new CostumeImageEncoderV4().Encode(png, 16, frame.Width, frame.Height);
+                // v1 costumes (format 0x57) are a 4-colour C64 RLE; v2/v3-old (0x58) are the 16-colour
+                // bit-stream codec. Both encoders take an indexed PNG and check the size (throw otherwise).
+                byte[] encoded = costume.Format == 0x57
+                    ? new CostumeImageEncoderV1().Encode(png, frame.Width, frame.Height)
+                    : new CostumeImageEncoderV4().Encode(png, 16, frame.Width, frame.Height);
 
                 byte[] rebuilt = costume.BuildWithReplacedFrames(new Dictionary<int, byte[]> { { frameIndex, encoded } });
 

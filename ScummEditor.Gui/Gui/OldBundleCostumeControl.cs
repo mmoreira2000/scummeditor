@@ -106,7 +106,7 @@ namespace ScummEditor.Gui
                     : new CostumeImageDecoderV4().Decode(_costume.Frames[_frameList.SelectedIndex], 16, _ega, false);
                 _picture.Image = frame;
                 _exportButton.Enabled = frame != null;
-                _importButton.Enabled = frame != null && !isV1; // v1 0x57 costume write-back is deferred; export only
+                _importButton.Enabled = frame != null; // v1 (0x57) and v2/v3 (0x58) costume frame import both supported
                 _header.Text = frame == null
                     ? string.Format("Costume {0} (room {1})   ·   frame {2} - could not decode", _block.ResourceIndex, _block.RoomNo, _frameList.SelectedIndex)
                     : string.Format("Costume {0} (room {1})   ·   frame {2} of {3}   ·   {4} x {5}",

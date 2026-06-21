@@ -317,6 +317,60 @@ namespace ScummEditor.UnitTests
             Assert.True(tested > 30, "expected many frames re-encoded, got " + tested);
         }
 
+        /// <summary>
+        /// Full v1 costume frame WRITE-BACK round-trip: decode a frame, re-import it (re-encode -> rebuild the
+        /// 0x57 resource -> splice with index relocation via ApplyEdit), then re-parse from the costume offset
+        /// and re-decode - the frame count must be unchanged (the deterministic CEL enumeration is invariant to
+        /// the re-pack) and the edited frame pixel-for-pixel identical. Also exercises classic-index relocation.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1CostumeImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            Assert.NotNull(index);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            byte[] pal = CostumeImageDecoderV1.DefaultPalette(isManiac);
+            var decoder = new CostumeImageDecoderV1();
+
+            int tested = 0;
+            V3OldResourceDirectory dir = index.CostumeDirectory;
+            for (int c = 0; c < dir.Count && tested < 6; c++)
+            {
+                int off = dir.Offsets[c];
+                if (off == 0xFFFF || off == 0) continue;
+                DataDisk disk = FindDisk(game, dir.RoomNumbers[c]);
+                var df = disk == null ? null : disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null || off >= df.RawContent.Length) continue;
+
+                var cost = new CostumeV3Old(df.RawContent, off);
+                if (cost.Format != 0x57 || cost.Frames.Count == 0) continue;
+
+                int frameCount = cost.Frames.Count;
+                int fi = frameCount / 2;
+                Bitmap before = decoder.Decode(cost.Frames[fi], pal);
+                if (before == null) continue;
+
+                string err;
+                bool ok = OldBundleCostumeImporter.ImportFrame(df, index, dir.RoomNumbers[c], true, off, fi, before, out err);
+                Assert.True(ok, "v1 costume import failed: " + err);
+
+                // The edited costume keeps its own offset (only later resources shift); re-parse it.
+                var cost2 = new CostumeV3Old(df.RawContent, off);
+                Assert.Equal(frameCount, cost2.Frames.Count); // deterministic enumeration stable across the re-pack
+                using (Bitmap after = decoder.Decode(cost2.Frames[fi], pal))
+                {
+                    Assert.NotNull(after);
+                    Assert.True(BitmapsEqual(before, after), "costume frame not pixel-identical after import round-trip");
+                }
+                before.Dispose();
+                tested++;
+            }
+            Assert.True(tested > 0, "no v1 costume frame could be round-tripped");
+        }
+
         // --- GUI room model (M8) ---------------------------------------------------
 
         /// <summary>
