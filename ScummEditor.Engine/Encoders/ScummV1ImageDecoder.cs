@@ -34,6 +34,13 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Decodes the room background tilemap to a 16-colour EGA bitmap, or null if it cannot be read.</summary>
         public Bitmap DecodeBackground(ScummV1Room room)
         {
+            byte[,] matrix = BackgroundMatrix(room);
+            return matrix == null ? null : ToBitmap(matrix);
+        }
+
+        /// <summary>Decodes the room background to a [width,height] matrix of (render-remapped) EGA indices, or null.</summary>
+        public byte[,] BackgroundMatrix(ScummV1Room room)
+        {
             if (room == null) return null;
             int w = room.WidthInChars, h = room.HeightInChars;
             if (w <= 0 || h <= 0) return null;
@@ -56,7 +63,7 @@ namespace ScummEditor.Engine.Encoders
                     DrawTile(matrix, charMap, picMap[cell], colors, strip * 8, y * 8);
                 }
             }
-            return ToBitmap(matrix);
+            return matrix;
         }
 
         /// <summary>Decodes object image <paramref name="objectIndex"/> (a 3-plane combined stream at its OBIM), or null.</summary>

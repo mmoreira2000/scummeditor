@@ -218,6 +218,98 @@ namespace ScummEditor.UnitTests
             Assert.True(objects > 50, "expected many decodable object images, got " + objects);
         }
 
+        /// <summary>
+        /// Re-encoding an UNEDITED v1 background reproduces it pixel-for-pixel: decode -> ScummV1ImageEncoder
+        /// (re-quantize into charMap/picMap/colorMap, rebuild the room) -> decode again yields the identical
+        /// index matrix. This proves the GdiV1 tile re-quantization is lossless within the format's limits
+        /// (an original background satisfies the &lt;=256-tile / 4-colour-per-cell constraints by construction).
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundReencodeIsLossless(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+            var encoder = new ScummV1ImageEncoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars <= 0 || room.HeightInChars <= 0) continue;
+                byte[,] m1 = decoder.BackgroundMatrix(room);
+                if (m1 == null) continue;
+
+                string err;
+                byte[] rebuilt = encoder.EncodeBackground(room, m1, out err);
+                Assert.True(rebuilt != null, "room re-encode failed: " + err);
+
+                byte[,] m2 = decoder.BackgroundMatrix(new ScummV1Room(rebuilt));
+                Assert.NotNull(m2);
+                Assert.True(MatricesEqual(m1, m2), "v1 background re-encode was not pixel-lossless");
+                tested++;
+            }
+            Assert.True(tested > 20, "expected many v1 rooms re-encoded losslessly, got " + tested);
+        }
+
+        /// <summary>
+        /// Full v1 background WRITE-BACK round-trip: decode a room background, re-import it through
+        /// OldBundleImageImporter (re-encode -> rebuild the room resource -> splice with ApplyEdit, which
+        /// resizes the room-0 resource and relocates the costume/script/sound offsets packed after it in the
+        /// NN.LFL), then re-decode from offset 0 - the background must be pixel-for-pixel identical.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            Assert.NotNull(index);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (tested >= 5) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars <= 0 || room.HeightInChars <= 0) continue;
+                Bitmap before = decoder.DecodeBackground(room);
+                if (before == null) continue;
+
+                string err;
+                bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Background, 0, before, out err);
+                Assert.True(ok, "v1 background import failed (room " + roomNo + "): " + err);
+
+                using (Bitmap after = decoder.DecodeBackground(new ScummV1Room(df.RawContent)))
+                {
+                    Assert.NotNull(after);
+                    Assert.True(BitmapsEqual(before, after), "v1 background not pixel-identical after import round-trip (room " + roomNo + ")");
+                }
+                before.Dispose();
+                tested++;
+            }
+            Assert.True(tested > 0, "no v1 background could be round-tripped");
+        }
+
+        private static bool MatricesEqual(byte[,] a, byte[,] b)
+        {
+            if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;
+            for (int x = 0; x < a.GetLength(0); x++)
+                for (int y = 0; y < a.GetLength(1); y++)
+                    if (a[x, y] != b[x, y]) return false;
+            return true;
+        }
+
         // --- costumes (M4 format 0x57 decode) --------------------------------------
 
         /// <summary>

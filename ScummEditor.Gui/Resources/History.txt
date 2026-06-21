@@ -10,7 +10,9 @@
 
 * v1 games appear in the resource browser as a full block tree with the same per-resource viewers as the v2-v6 games (rooms, backgrounds, objects, scripts, sounds, costumes and the index directories).
 
-* Known limitations. Importing edited v1 ROOM IMAGES and COSTUMES back is not yet available - both need a lossy re-encoding specific to v1's tile / 2-bit formats - so for v1 those are export/preview only for now; v1 text and the EXE font are fully editable. v1 sound is PC-speaker data with no music track to play, so it is listed and exported raw only. As with the v2/v3 games, an edit that changes the size of the index file changes its checksum, so ScummVM's automatic detection may need the new checksum (a size-neutral edit keeps it identical).
+* Editing back in: v1 COSTUMES and room BACKGROUNDS can be imported (re-encoded into v1's tile / 4-colour formats). This is lossless within those formats; an edit that needs more than 256 distinct 8x8 tiles or more than a cell's 4 colours is rejected with a clear message rather than silently corrupted. Importing edited v1 OBJECT images and walk-behind masks is not yet available (those stay export/preview only). v1 text and the EXE font are fully editable. v1 sound is PC-speaker data with no music track to play, so it is listed and exported raw only.
+
+* Known limitation. As with the v2/v3 games, an edit that changes the size of the index file changes its checksum, so ScummVM's automatic detection may need the new checksum (a size-neutral edit keeps it identical). The v1 EXE font shows only under the original DOS engine (DOSBox), as ScummVM substitutes its own.
 
 3.0.0
 -----

@@ -60,9 +60,11 @@ namespace ScummEditor.Gui
 
             _picture.Image = image;
             _exportButton.Enabled = image != null;
-            // v1 (GdiV1 tilemap) image import is deferred (lossy tile re-quantization); export only.
+            // v1 (GdiV1 tilemap): only the room BACKGROUND re-encodes; object images and z-plane masks are
+            // export-only for now (their tile/3-plane re-encode is not implemented). v2/v3 import all kinds.
             bool isV1 = block.GameInfo != null && block.GameInfo.ScummVersion == 1;
-            _importButton.Enabled = image != null && !isV1;
+            bool importable = !isV1 || block.ImageKind == OldBundleImageKind.Background;
+            _importButton.Enabled = image != null && importable;
             _header.Text = image == null
                 ? what + " - could not decode"
                 : string.Format("{0}   ·   {1} x {2}", what, image.Width, image.Height);

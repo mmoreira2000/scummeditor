@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
 
@@ -27,6 +28,10 @@ namespace ScummEditor.Engine.Encoders
 
             try
             {
+                // v1 (Maniac/Zak classic, GdiV1 tilemap) shares the isV2=true old-bundle container but needs
+                // its own re-encoder; detect it from the data file's version.
+                if (dataFile.GameInfo != null && dataFile.GameInfo.ScummVersion == 1)
+                    return ImportV1(dataFile, index, roomNo, kind, objectIndex, png, out error);
                 return isV2
                     ? ImportV2(dataFile, index, roomNo, kind, objectIndex, png, out error)
                     : ImportV3(dataFile, index, roomNo, kind, objectIndex, png, out error);
@@ -154,6 +159,49 @@ namespace ScummEditor.Engine.Encoders
                 default:
                     error = "Unsupported image kind."; return false;
             }
+        }
+
+        // --- v1 (Maniac / Zak classic, GdiV1 tilemap) -------------------------
+
+        private static bool ImportV1(ScummV3OldBundleDataFile df, ScummV3OldBundleIndexFile index, int roomNo,
+            OldBundleImageKind kind, int objectIndex, Bitmap png, out string error)
+        {
+            error = null;
+            if (kind != OldBundleImageKind.Background)
+            {
+                // v1 object images (3-plane) and walk-behind masks are export-only for now; only the room
+                // background re-encodes (its GdiV1 tile re-quantization is implemented + validated lossless).
+                error = "v1 image import currently supports the room background only (object images and z-plane masks are export-only).";
+                return false;
+            }
+
+            var room = new ScummV1Room(df.RawContent);
+            if (room.WidthInChars <= 0 || room.HeightInChars <= 0) { error = "This room has no background image."; return false; }
+            if (!SizeMatches(png, room.Width, room.Height, out error)) return false;
+            if (!Indexed(png, out error)) return false;
+
+            bool isManiac = df.GameInfo != null && df.GameInfo.LoadedGame == ScummGame.ManiacMansion;
+            byte[,] matrix = IndexedImageHelper.GetIndexMatrix(png);
+            byte[] rebuilt = new ScummV1ImageEncoder(isManiac).EncodeBackground(room, matrix, out error);
+            if (rebuilt == null) return false; // an over-limit / unrepresentable edit, reported (lossy by format)
+
+            int roomSize = df.RawContent.Length >= 2 ? (df.RawContent[0] | (df.RawContent[1] << 8)) : df.RawContent.Length;
+            if (roomSize <= 0 || roomSize > df.RawContent.Length) roomSize = df.RawContent.Length;
+
+            // EncodeBackground appends the re-encoded maps after the room content. INSERT them at the room's
+            // END (editOffset = roomSize) so no room-internal offset (box @0x15 is a single byte, EXCD/ENCD,
+            // object tables) shifts - they all precede roomSize - which avoids the 1-byte-offset overflow a
+            // front-grow would cause. ApplyEdit grows the room-0 size word and relocates the costume / script /
+            // sound resources packed after the room (and their index offsets).
+            int mapsLen = rebuilt.Length - roomSize;
+            var mapsRegion = new byte[mapsLen];
+            System.Array.Copy(rebuilt, roomSize, mapsRegion, 0, mapsLen);
+            ScummV2Writer.ApplyEdit(df, index, roomNo, roomSize, 0, mapsRegion, 0);
+
+            // Re-point the three map-offset header words (+10 charMap / +12 picMap / +14 colorMap) at the
+            // inserted maps (the values the encoder computed); this is a size-neutral patch within the room.
+            System.Array.Copy(rebuilt, 10, df.RawContent, 10, 6);
+            return true;
         }
 
         // --- helpers ----------------------------------------------------------
