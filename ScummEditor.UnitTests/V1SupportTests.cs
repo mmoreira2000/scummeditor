@@ -1,4 +1,7 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
@@ -93,6 +96,82 @@ namespace ScummEditor.UnitTests
             Assert.Equal(expectedVersion, info.ScummVersion);
             Assert.Equal(expectedGame, info.LoadedGame);
             Assert.False(info.UsesClassicIndex);
+        }
+
+        // --- text (M1 disassembler v1 mode + M2 translation) -----------------------
+
+        /// <summary>
+        /// v1 text extraction reuses the v2 pipeline (object/verb/script layout is byte-identical) with the
+        /// disassembler in v1 mode (actorOps Color takes no extra byte). Clean object names + much dialogue
+        /// prove the v1 disassembler stays in sync; a desync (wrong Color byte count) would garble strings.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1, "key")]
+        [InlineData(GameLibrary.ZakV1, "door")]
+        public void V1TextExtractsCleanStrings(string relativePath, string expectedName)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+
+            var entries = ScummV2TextManager.Extract(game, GameTextCodecV12.Default());
+
+            Assert.True(entries.Count > 400, "expected many text entries, got " + entries.Count);
+            Assert.True(entries.Count(e => e.Kind == "objectName") > 80,
+                "expected many object names, got " + entries.Count(e => e.Kind == "objectName"));
+            Assert.True(entries.Count(e => e.Kind == "print" || e.Kind == "printEgo") > 150, "expected much dialogue");
+            Assert.Contains(entries, e => e.Kind == "objectName" && e.Text == expectedName);
+        }
+
+        /// <summary>
+        /// A v1 translation imports byte-safe: only the edited resources (and their shared-region siblings)
+        /// change, the entry count is preserved, and 90%+ of the edits land. Mirrors the v2 guarantee.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1TextImportIsByteSafe(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var codec = GameTextCodecV12.Default();
+
+            var baseEntries = ScummV2TextManager.Extract(game, codec);
+            var baseline = new Dictionary<string, string>();
+            foreach (GameTextEntry e in baseEntries) baseline[e.Id] = e.Text;
+
+            // Edit distinct, pure-ASCII, token-free names + dialogue (grow + shrink).
+            var edits = new Dictionary<string, string>();
+            var usedBase = new HashSet<string>();
+            int names = 0, talk = 0;
+            foreach (GameTextEntry e in baseEntries)
+            {
+                if (e.Text.Contains("{") || !System.Text.RegularExpressions.Regex.IsMatch(e.Text, "^[A-Za-z0-9 .,'!?]+$") || e.Text.Length < 4) continue;
+                if (!usedBase.Add(e.Text)) continue;
+                if (e.Kind == "objectName" && names < 20) { edits[e.Id] = e.Text + " X"; names++; }
+                else if ((e.Kind == "print" || e.Kind == "printEgo") && talk < 30) { edits[e.Id] = (talk % 2 == 0) ? e.Text + " [longer]" : "Short."; talk++; }
+            }
+            Skip.If(edits.Count == 0, "no editable strings found");
+
+            var editedBaseTexts = new HashSet<string>();
+            foreach (var kv in edits) editedBaseTexts.Add(baseline[kv.Key]);
+
+            ScummV2TextManager.Import(game, edits, codec);
+
+            var after = new Dictionary<string, string>();
+            var afterEntries = ScummV2TextManager.Extract(game, codec);
+            foreach (GameTextEntry e in afterEntries) after[e.Id] = e.Text;
+
+            foreach (var kv in baseline)
+            {
+                if (edits.ContainsKey(kv.Key)) continue;
+                string got; after.TryGetValue(kv.Key, out got);
+                if (got == kv.Value) continue;
+                if (editedBaseTexts.Contains(kv.Value)) continue;
+                Assert.Fail("text edit corrupted " + kv.Key + ": was '" + kv.Value + "' now '" + (got ?? "<gone>") + "'");
+            }
+            Assert.Equal(baseEntries.Count, afterEntries.Count);
+
+            int applied = 0;
+            foreach (var kv in edits) if (after.TryGetValue(kv.Key, out var g) && g == kv.Value) applied++;
+            Assert.True(applied >= edits.Count * 0.9, "too few edits applied: " + applied + "/" + edits.Count);
         }
 
         private static ScummGameData SkipOrLoad(string relativePath)

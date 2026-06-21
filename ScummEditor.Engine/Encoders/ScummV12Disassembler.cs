@@ -24,6 +24,7 @@ namespace ScummEditor.Engine.Encoders
         private byte[] _code;
         private int _pos;
         private byte _op; // current opcode byte; its bits select literal vs variable parameters
+        private bool _isV1; // v1 (Maniac/Zak classic) differs from v2 only in actorOps sub-op 2 (Color)
 
         private readonly List<Line> _lines = new List<Line>();
         private readonly HashSet<int> _jumpTargets = new HashSet<int>();
@@ -41,17 +42,28 @@ namespace ScummEditor.Engine.Encoders
 
         public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset)
         {
-            return Disassemble(code, startOffset, null);
+            return Disassemble(code, startOffset, null, false);
         }
 
         public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
         {
-            return new ScummV12Disassembler().RunDisassembly(code, startOffset, namedLabels);
+            return Disassemble(code, startOffset, namedLabels, false);
         }
 
-        protected ScummV6Disassembler.Result RunDisassembly(byte[] code, int startOffset, IDictionary<int, string> namedLabels)
+        /// <summary>
+        /// Disassembles v1 or v2 bytecode. The two share one opcode table; <paramref name="isV1"/> selects
+        /// the single stream-affecting difference (actorOps sub-op 2 "Color": v1 takes the colour from the
+        /// shared arg, v2 reads an extra colour byte first - descumm do_actorops_v12).
+        /// </summary>
+        public static ScummV6Disassembler.Result Disassemble(byte[] code, int startOffset, IDictionary<int, string> namedLabels, bool isV1)
+        {
+            return new ScummV12Disassembler().RunDisassembly(code, startOffset, namedLabels, isV1);
+        }
+
+        protected ScummV6Disassembler.Result RunDisassembly(byte[] code, int startOffset, IDictionary<int, string> namedLabels, bool isV1)
         {
             _namedLabels = namedLabels;
+            _isV1 = isV1;
             _code = code;
             _pos = startOffset;
 
@@ -490,7 +502,7 @@ namespace ScummEditor.Engine.Encoders
             switch (sub)
             {
                 case 1: part = "sound(" + arg + ")"; break;
-                case 2: part = "color(" + ReadByte() + ", " + arg + ")"; break; // v2 reads an extra byte before the arg
+                case 2: part = _isV1 ? "color(" + arg + ")" : "color(" + ReadByte() + ", " + arg + ")"; break; // v1: arg is the colour; v2 reads an extra colour byte first
                 case 3: part = "name(" + ReadStringV12("actorName") + ")"; break;
                 case 4: part = "costume(" + arg + ")"; break;
                 case 5: part = "talkColor(" + arg + ")"; break;
