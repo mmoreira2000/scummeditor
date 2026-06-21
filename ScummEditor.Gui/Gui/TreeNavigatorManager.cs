@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using ScummEditor.Gui;
 using ScummEditor.Gui.IndexFile;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
@@ -18,6 +20,13 @@ namespace ScummEditor.Gui
         private readonly CdAudioSouControl _cdAudioSouControl = new CdAudioSouControl();
         private readonly CharsetV3Control _charsetV3Control = new CharsetV3Control();
         private readonly ScummV3OldSoundControl _v3oldSoundControl = new ScummV3OldSoundControl();
+        private readonly OldBundleImageControl _oldBundleImageControl = new OldBundleImageControl();
+        private readonly OldBundleCostumeControl _oldBundleCostumeControl = new OldBundleCostumeControl();
+        private readonly OldBundleDirectoryControl _oldBundleDirectoryControl = new OldBundleDirectoryControl();
+        private readonly OldBundleRoomControl _oldBundleRoomControl = new OldBundleRoomControl();
+        private readonly OldBundleObjectControl _oldBundleObjectControl = new OldBundleObjectControl();
+        private readonly OldBundleScriptControl _oldBundleScriptControl = new OldBundleScriptControl();
+        private readonly V2ExeFontControl _v2ExeFontControl = new V2ExeFontControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -101,10 +110,7 @@ namespace ScummEditor.Gui
             }
             else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
             {
-                // The v3 old-bundle index is kept verbatim (no typed RNAM/MAXS/DROO blocks the v5/v6
-                // tree expects, and the index file is not a BlockBase the viewer can render). Show a
-                // labelled, inert node rather than crashing on the cast.
-                _treeView.Nodes.Add("IndexFile", "Index File (00.LFL, raw)");
+                CreateOldBundleIndexTree((ScummV3OldBundleIndexFile)GameData.IndexFile);
             }
             else if (GameData.IndexFile != null)
             {
@@ -114,9 +120,21 @@ namespace ScummEditor.Gui
             // One data node per container (v4 games are spread over several DISKnn.LEC disks).
             if (GameData.DataDisks != null && GameData.DataDisks.Count > 0)
             {
+                // v2 / v3 old-bundle rooms are raw NN.LFL files with no real block tags; they are reified
+                // into a synthetic BlockBase tree (OldBundleBlockBuilder) so the SAME block walker the
+                // other engines use renders them - the tree looks like v4-v6 (RO / HD / BM / OI / OC / ...).
+                var oldBundleIndex = GameData.IndexFile as ScummV3OldBundleIndexFile;
                 foreach (DataDisk disk in GameData.DataDisks)
                 {
-                    CreateScummDataFileTree(disk.Tree, System.IO.Path.GetFileName(disk.FilePath));
+                    var oldBundleRoom = disk.Tree as ScummV3OldBundleDataFile;
+                    if (oldBundleRoom != null && oldBundleIndex != null)
+                    {
+                        CreateOldBundleFileTree(oldBundleRoom, disk.FilePath);
+                    }
+                    else
+                    {
+                        CreateScummDataFileTree(disk.Tree, System.IO.Path.GetFileName(disk.FilePath));
+                    }
                 }
             }
             else if (GameData.DataFile != null)
@@ -126,38 +144,65 @@ namespace ScummEditor.Gui
 
             CreateFontFileNodes();
             CreateV3FontNodes();
-            CreateV3OldSoundNodes();
+            CreateV2ExeFontNode();
             CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
-        /// <summary>Root nodes for v3 old-bundle sounds (tagless WA+AD, located via the index SOUND dir).</summary>
-        private void CreateV3OldSoundNodes()
+        /// <summary>
+        /// Browsable index tree for a v2 / v3 old-bundle game: the four resource directories as synthetic
+        /// 0R / 0S / 0N / 0C blocks, mirroring how the v4 index exposes its directory blocks.
+        /// </summary>
+        private void CreateOldBundleIndexTree(ScummV3OldBundleIndexFile index)
         {
-            var index = GameData.IndexFile as ScummV3OldBundleIndexFile;
-            if (index == null || index.SoundDirectory == null || GameData.DataDisks == null) return;
-
-            var byRoom = new Dictionary<int, ScummV3OldBundleDataFile>();
-            foreach (DataDisk disk in GameData.DataDisks)
+            TreeNode indexNode = _treeView.Nodes.Add("IndexFile", "Index File (00.LFL)");
+            foreach (BlockBase block in OldBundleBlockBuilder.BuildIndexBlocks(index, GameData.LoadedGameInfo))
             {
-                var df = disk.Tree as ScummV3OldBundleDataFile;
-                if (df == null) continue;
-                int n;
-                if (int.TryParse(System.IO.Path.GetFileNameWithoutExtension(disk.FilePath), out n)) byRoom[n] = df;
+                CreateNode(block, indexNode);
             }
+        }
 
-            V3OldResourceDirectory dir = index.SoundDirectory;
-            for (int s = 0; s < dir.Count; s++)
+        /// <summary>
+        /// One file node per v2 / v3 old-bundle room (NN.LFL), reified into a synthetic BlockBase tree
+        /// (RO / HD / BM / OI / OC / EN / EX / LS, plus file-level SC / CO / SO) so the standard block
+        /// walker renders it like v4-v6. A parse fault degrades to a labelled inert child, not a failed load.
+        /// </summary>
+        private void CreateOldBundleFileTree(ScummV3OldBundleDataFile dataFile, string filePath)
+        {
+            int roomNo;
+            if (!int.TryParse(System.IO.Path.GetFileNameWithoutExtension(filePath), out roomNo)) roomNo = -1;
+
+            string label = System.IO.Path.GetFileName(filePath);
+            if (roomNo >= 0) label += " (Room " + roomNo + ")";
+            TreeNode fileNode = _treeView.Nodes.Add(label, label);
+
+            try
             {
-                int offset = dir.Offsets[s];
-                if (offset == 0xFFFF || offset == 0) continue;
-                ScummV3OldBundleDataFile df;
-                if (!byRoom.TryGetValue(dir.RoomNumbers[s], out df)) continue;
-
-                var sound = new ScummV3OldSound(df.RawContent, offset);
-                if (sound.AdLibOffset < 0) continue; // nothing playable/exportable
-                var node = _treeView.Nodes.Add("SoundV3", string.Format("Sound {0} (room {1}){2}", s, dir.RoomNumbers[s], sound.IsMusic ? " - music" : string.Empty));
-                node.Tag = new V3OldSoundRef { DataFile = df, Index = index, RoomNo = dir.RoomNumbers[s], Offset = offset };
+                OldBundleBlockBuilder.BuildFileBlocks(GameData, dataFile, roomNo);
+                WalkChildren(dataFile, fileNode);
             }
+            catch (Exception ex)
+            {
+                fileNode.Nodes.Add(new TreeNode("(could not parse room: " + ex.Message + ")"));
+            }
+        }
+
+        /// <summary>Root node for the v2 EXE-embedded font (MANIAC.EXE / ZAK.EXE); the V2ExeFont viewer handles it.</summary>
+        private void CreateV2ExeFontNode()
+        {
+            if (GameData.LoadedGameInfo == null || GameData.LoadedGameInfo.ScummVersion > 2) return;
+            string dataFile = GameData.LoadedGameInfo.DataFile;
+            if (string.IsNullOrEmpty(dataFile)) return;
+
+            string exePath = ScummV2ExeFontCodec.FindGameExe(System.IO.Path.GetDirectoryName(dataFile));
+            if (exePath == null) return;
+
+            // FindGameExe falls back to the first .exe in the folder; only show the node when that file
+            // really contains the v2 font signature, so an unrelated executable is not mislabelled as a font.
+            try { if (ScummV2ExeFont.Locate(System.IO.File.ReadAllBytes(exePath)) < 0) return; }
+            catch { return; }
+
+            var node = _treeView.Nodes.Add("FontExe", "Font (" + System.IO.Path.GetFileName(exePath) + ", in EXE)");
+            node.Tag = new V2ExeFontRef { ExePath = exePath };
         }
 
         /// <summary>Root nodes for the standalone v3 charset files (9N.LFL); the CharsetV3 viewer handles them.</summary>
@@ -230,7 +275,17 @@ namespace ScummEditor.Gui
         private TreeNode LoadNextBlock(BlockBase blockBase, TreeNode parentNode, int nodeIndex = -1)
         {
             TreeNode blockNode = CreateNode(blockBase, parentNode, nodeIndex);
+            WalkChildren(blockBase, blockNode);
+            return blockNode;
+        }
 
+        /// <summary>
+        /// Adds a block's children under <paramref name="blockNode"/>, grouping same-tag siblings into an
+        /// indexed series (e.g. "OC 000", "OC 001"). Used both by LoadNextBlock and by the old-bundle file
+        /// tree (whose file node walks its children directly, with no extra container block).
+        /// </summary>
+        private void WalkChildren(BlockBase blockBase, TreeNode blockNode)
+        {
             // For readability the v4 local scripts (LS) are shown nested under the local-script count
             // block (LC), which declares how many of them the room has (LC precedes the LS blocks in
             // the room). This only nests the tree NODES - LC and LS stay siblings in the block model,
@@ -265,8 +320,6 @@ namespace ScummEditor.Gui
                     }
                 }
             }
-
-            return blockNode;
         }
 
         private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
@@ -335,13 +388,22 @@ namespace ScummEditor.Gui
                 return;
             }
 
-            // v3 old-bundle sounds are tagless resources, not BlockBase; their own viewer plays/exports/imports them.
-            var v3oldSound = e.Node.Tag as V3OldSoundRef;
-            if (v3oldSound != null)
+            // v2 EXE-embedded font (MANIAC.EXE / ZAK.EXE), not part of the LFL data.
+            var v2ExeFont = e.Node.Tag as V2ExeFontRef;
+            if (v2ExeFont != null)
             {
-                _v3oldSoundControl.SetData(v3oldSound);
-                _displayPanel.Controls.Add(_v3oldSoundControl);
-                _v3oldSoundControl.Dock = DockStyle.Fill;
+                _v2ExeFontControl.SetData(v2ExeFont);
+                _displayPanel.Controls.Add(_v2ExeFontControl);
+                _v2ExeFontControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v2 / v3 old-bundle synthetic blocks: the tree is a real BlockBase tree (walked like v4-v6);
+            // route each leaf by its kind to the matching old-bundle viewer.
+            var oldBundleBlock = e.Node.Tag as OldBundleBlock;
+            if (oldBundleBlock != null)
+            {
+                ShowOldBundleBlock(oldBundleBlock);
                 return;
             }
 
@@ -363,6 +425,53 @@ namespace ScummEditor.Gui
                 _displayPanel.Controls.Add(_blockBaseControl);
                 _blockBaseControl.Dock = DockStyle.Fill;
             }
+        }
+
+        /// <summary>Routes a v2 / v3 old-bundle block to the matching viewer by its kind.</summary>
+        private void ShowOldBundleBlock(OldBundleBlock block)
+        {
+            switch (block.Kind)
+            {
+                case OldBundleNodeKind.Header:
+                    ShowOldBundleControl(_oldBundleRoomControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Image:
+                    ShowOldBundleControl(_oldBundleImageControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Object:
+                    ShowOldBundleControl(_oldBundleObjectControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Script:
+                    ShowOldBundleControl(_oldBundleScriptControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Directory:
+                    ShowOldBundleControl(_oldBundleDirectoryControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Costume:
+                    ShowOldBundleControl(_oldBundleCostumeControl, c => c.SetData(block));
+                    break;
+                case OldBundleNodeKind.Sound:
+                    var soundRef = new V3OldSoundRef
+                    {
+                        DataFile = block.DataFile,
+                        Index = GameData.IndexFile as ScummV3OldBundleIndexFile,
+                        RoomNo = block.RoomNo,
+                        Offset = block.Offset
+                    };
+                    ShowOldBundleControl(_v3oldSoundControl, c => c.SetData(soundRef));
+                    break;
+                default: // Room container and any other: show the generic block info.
+                    ShowOldBundleControl(_blockBaseControl, c => c.SetAndRefreshData(block));
+                    break;
+            }
+        }
+
+        /// <summary>Loads data into one of the shared old-bundle viewers and shows it docked-fill in the panel.</summary>
+        private void ShowOldBundleControl<T>(T control, Action<T> setData) where T : Control
+        {
+            setData(control);
+            _displayPanel.Controls.Add(control);
+            control.Dock = DockStyle.Fill;
         }
 
     }

@@ -24,6 +24,12 @@ namespace ScummEditor.UnitTests
         public const string Indy3Ega = "ScummV3/Indiana Jones and the Last Crusade - The Graphic Adventure (1989)/Floppy EGA v1.4";
         public const string LoomEga = "ScummV3/Loom (1990)/Floppy EGA v1.1";
 
+        // SCUMM v1/v2 (Maniac Mansion, Zak McKracken classic) - same XOR-0xFF GF_OLD_BUNDLE container
+        public const string ManiacV2 = "ScummV2/Maniac Mansion (1987)/Floppy Enhanced v1.01";
+        public const string ZakV2 = "ScummV2/Zak McKracken and the Alien Mindbenders (1988)/Floppy Enhanced";
+        public const string ManiacV1 = "ScummV1/Maniac Mansion (1987)/Floppy DOS";
+        public const string ZakV1 = "ScummV1/Zak McKracken and the Alien Mindbenders (1988)/Floppy v1.01";
+
         // SCUMM v4 (multi-disk floppy / Loom CD)
         public const string MonkeyIsland1FloppyVga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy VGA";
         public const string MonkeyIsland1FloppyEga = "ScummV4/Secret of Monkey Island, The (1990)/Floppy EGA";

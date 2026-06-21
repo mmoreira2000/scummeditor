@@ -156,9 +156,10 @@ namespace ScummEditor.Engine.Structures.DataFile
 
         /// <summary>
         /// Locates the z-plane (mask) regions embedded after the image strips. v4 has no ZPnn
-        /// sub-blocks: the z-planes follow the strip region (at base+smapLen) and are chained by a
-        /// leading LE16 "size to next z-plane" word, ending at a zero word. Returns each z-plane's
-        /// (start, length) within <see cref="Contents"/>.
+        /// sub-blocks: the z-planes follow the strip region (at base+smapLen). v4 GF_SMALL_HEADER
+        /// chains them by a leading LE16 "size to next z-plane" word, ending at a zero word; v3
+        /// GF_OLD256 reserves a single plane prefixed by a LE32 size word (0 == no plane). Returns
+        /// each z-plane's (start, length) within <see cref="Contents"/>.
         /// </summary>
         public List<(int Start, int Length)> GetZPlaneRegions(int numStrips, bool isEga)
         {
@@ -170,9 +171,30 @@ namespace ScummEditor.Engine.Structures.DataFile
 
             int baseIndex = StripTableStart;
             int smapLen = (int)ReadOriginalSmapLen(baseIndex, fourByte: !isEga);
-            int offsetTableSize = 2 + numStrips * 2;
             int zp = baseIndex + smapLen;
 
+            if (IsOld256ZPlane)
+            {
+                // GF_OLD256 (v3 "small") reserves exactly one walk-behind plane - ScummVM fixes
+                // _numZBuffer at 2 for all v3 (gfx.cpp:1039) and never walks a chain. The plane is
+                // prefixed by a LE32 size word that doubles as the presence flag: 0 means the image
+                // genuinely has no z-plane (gfx.cpp:2286).
+                int headerSize = 4 + numStrips * 2;
+                if (zp + headerSize > Contents.Length)
+                {
+                    return regions;
+                }
+                int size = (int)ReadUInt32At(zp);
+                if (size < headerSize || zp + size > Contents.Length)
+                {
+                    return regions; // size 0 (no plane) or a value that cannot be a real region
+                }
+                regions.Add((zp, size));
+                return regions;
+            }
+
+            // v4 GF_SMALL_HEADER: z-planes are chained by a leading LE16 "size to next" word.
+            int offsetTableSize = 2 + numStrips * 2;
             while (zp + offsetTableSize <= Contents.Length)
             {
                 int delta = ReadUInt16At(zp);
@@ -187,16 +209,17 @@ namespace ScummEditor.Engine.Structures.DataFile
         }
 
         /// <summary>
-        /// Parses one z-plane into its mask strips. The strip-offset table sits at zpStart+2 (after the
-        /// chain word), with width/8 LE16 offsets relative to zpStart; an offset of 0 marks an empty
-        /// (fully unmasked) strip.
+        /// Parses one z-plane into its mask strips. The strip-offset table sits at zpStart + header size
+        /// (2 for v4, 4 for v3 GF_OLD256), with width/8 LE16 offsets relative to zpStart; an offset of 0
+        /// marks an empty (fully unmasked) strip.
         /// </summary>
         public List<ZPlaneStripData> GetZPlaneStrips(int zpStart, int delta, int numStrips)
         {
+            int headerSize = ZPlaneHeaderSize;
             var strips = new List<ZPlaneStripData>(numStrips);
             for (int n = 0; n < numStrips; n++)
             {
-                int start = ReadUInt16At(zpStart + 2 + n * 2);
+                int start = ReadUInt16At(zpStart + headerSize + n * 2);
                 if (start == 0)
                 {
                     strips.Add(new ZPlaneStripData { OffSet = 0, ImageData = new byte[0] });
@@ -220,12 +243,13 @@ namespace ScummEditor.Engine.Structures.DataFile
         /// <summary>
         /// Replaces the z-plane at [zpStart, zpStart+oldLength) with newly encoded mask strips, keeping
         /// the image and any other z-planes unchanged. The rebuilt z-plane is
-        ///   [size-to-next:LE16][numStrips x offset:LE16][strip mask data...]
+        ///   [size:LE16 (v4) or LE32 (v3 GF_OLD256)][numStrips x offset:LE16][strip mask data...]
         /// with offset 0 for empty strips.
         /// </summary>
         public void RebuildZPlane(int zpStart, int oldLength, List<ZPlaneStripData> strips)
         {
-            int offsetTableSize = 2 + strips.Count * 2;
+            int headerSize = ZPlaneHeaderSize;
+            int offsetTableSize = headerSize + strips.Count * 2;
             var offsets = new int[strips.Count];
             int running = offsetTableSize;
             for (int n = 0; n < strips.Count; n++)
@@ -246,7 +270,16 @@ namespace ScummEditor.Engine.Structures.DataFile
             byte[] zPlaneBytes;
             using (var stream = new MemoryStream())
             {
-                WriteUInt16(stream, (ushort)newLength);
+                // The header carries the total z-plane size: a LE32 word for v3 GF_OLD256, a LE16
+                // "size to next" word for v4 GF_SMALL_HEADER.
+                if (headerSize == 4)
+                {
+                    WriteUInt32(stream, (uint)newLength);
+                }
+                else
+                {
+                    WriteUInt16(stream, (ushort)newLength);
+                }
                 for (int n = 0; n < strips.Count; n++)
                 {
                     WriteUInt16(stream, (ushort)offsets[n]);
@@ -272,6 +305,32 @@ namespace ScummEditor.Engine.Structures.DataFile
         private int ReadUInt16At(int index)
         {
             return Contents[index] | (Contents[index + 1] << 8);
+        }
+
+        private uint ReadUInt32At(int index)
+        {
+            return (uint)(Contents[index] | (Contents[index + 1] << 8)
+                         | (Contents[index + 2] << 16) | (Contents[index + 3] << 24));
+        }
+
+        /// <summary>
+        /// True for the v3 "small" GF_OLD256 games (Indy3 VGA, Zak/Loom FM-Towns), whose z-plane layout
+        /// differs from v4. Decided by the loaded ScummVersion, exactly like the FM-Towns codec branch in
+        /// <see cref="ScummEditor.Engine.Encoders.ScummV4ImageDecoder"/>.
+        /// </summary>
+        private bool IsOld256ZPlane
+        {
+            get { return GameInfo != null && GameInfo.ScummVersion == 3; }
+        }
+
+        /// <summary>
+        /// Bytes a z-plane reserves before its per-strip offset table. v4 GF_SMALL_HEADER prefixes each
+        /// z-plane with a LE16 "size to next" word, so the table starts 2 bytes in (ScummVM gfx.cpp:2617).
+        /// v3 GF_OLD256 widens that to a LE32 size word, so the table starts 4 bytes in (gfx.cpp:2615).
+        /// </summary>
+        private int ZPlaneHeaderSize
+        {
+            get { return IsOld256ZPlane ? 4 : 2; }
         }
 
         private uint ReadOriginalSmapLen(int baseIndex, bool fourByte)

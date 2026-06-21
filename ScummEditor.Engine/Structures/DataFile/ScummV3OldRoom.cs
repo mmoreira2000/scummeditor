@@ -38,9 +38,11 @@ namespace ScummEditor.Engine.Structures.DataFile
         public int BoxOffset { get { return ReadU16(0x15); } }
         public int ExitScriptOffset { get { return ReadU16(0x19); } }
         public int EntryScriptOffset { get { return ReadU16(0x1B); } }
-        public int NumObjects { get { return _data[20]; } }
-        public int NumSounds { get { return _data[23]; } }
-        public int NumScripts { get { return _data[24]; } }
+        // Bounds-guarded like the v2 sibling (ScummV2Room) so a truncated/corrupt room file yields 0
+        // counts instead of throwing IndexOutOfRangeException up the eager tree-build / game-load path.
+        public int NumObjects { get { return _data != null && _data.Length > 20 ? _data[20] : 0; } }
+        public int NumSounds { get { return _data != null && _data.Length > 23 ? _data[23] : 0; } }
+        public int NumScripts { get { return _data != null && _data.Length > 24 ? _data[24] : 0; } }
 
         /// <summary>OBIM (object image) offset for object index i (0-based), or 0 when out of range.</summary>
         public int ObjectImageOffset(int i)
@@ -81,6 +83,33 @@ namespace ScummEditor.Engine.Structures.DataFile
         {
             int p = ObjectCodeOffset(i) - 2 + 17;
             return (p >= 0 && p < _data.Length) ? (_data[p] & 0xF8) : 0;
+        }
+
+        /// <summary>
+        /// The smallest structural offset strictly greater than <paramref name="offset"/> (the room
+        /// size word @0, the background, box and script offsets, and every OBIM/OBCD), clamped to the
+        /// room resource size. Used to bound a region (e.g. the background z-plane that sits between the
+        /// background strips and the first object) without overrunning the next sub-resource.
+        /// </summary>
+        public int NextStructuralOffsetAbove(int offset)
+        {
+            int roomSize = ReadU16(0);
+            int best = (roomSize > 0 && roomSize <= _data.Length) ? roomSize : _data.Length;
+            Consider(ref best, offset, ImageOffset);
+            Consider(ref best, offset, BoxOffset);
+            Consider(ref best, offset, ExitScriptOffset);
+            Consider(ref best, offset, EntryScriptOffset);
+            for (int i = 0; i < NumObjects; i++)
+            {
+                Consider(ref best, offset, ObjectImageOffset(i));
+                Consider(ref best, offset, ObjectCodeOffset(i));
+            }
+            return best;
+        }
+
+        private static void Consider(ref int best, int offset, int candidate)
+        {
+            if (candidate > offset && candidate < best) best = candidate;
         }
 
         private int ReadU16(int p)

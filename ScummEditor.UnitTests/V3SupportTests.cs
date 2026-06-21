@@ -39,6 +39,35 @@ namespace ScummEditor.UnitTests
             Assert.Equal(oldBundle, info.UsesOldBundle);
         }
 
+        // A truncated / corrupt v3 old-bundle room file must not throw out of ScummV3OldRoom's count
+        // accessors (the GUI per-room browser reads them eagerly during game load). Regression for the
+        // unguarded _data[20]/_data[23]/_data[24] reads found in adversarial review.
+        [Theory]
+        [InlineData(0)]
+        [InlineData(1)]
+        [InlineData(15)]
+        [InlineData(20)]
+        public void ScummV3OldRoom_TruncatedData_CountsReturnZeroAndDoNotThrow(int length)
+        {
+            var room = new ScummV3OldRoom(new byte[length]);
+
+            Assert.Equal(0, room.NumObjects);
+            Assert.Equal(0, room.NumSounds);
+            Assert.Equal(0, room.NumScripts);
+            // The structural-offset walk also depends on the counts, so it must stay safe too.
+            Assert.True(room.NextStructuralOffsetAbove(0) >= 0);
+        }
+
+        [Fact]
+        public void ScummV3OldRoom_NullData_CountsReturnZeroAndDoNotThrow()
+        {
+            var room = new ScummV3OldRoom(null);
+
+            Assert.Equal(0, room.NumObjects);
+            Assert.Equal(0, room.NumSounds);
+            Assert.Equal(0, room.NumScripts);
+        }
+
         [SkippableTheory]
         [InlineData(GameLibrary.Indy3Vga)]
         [InlineData(GameLibrary.Indy3FmTowns)]
@@ -267,7 +296,8 @@ namespace ScummEditor.UnitTests
                 int slot = FirstPresentGlyph(charset);
                 Skip.If(slot < 0, "font has no glyphs to edit");
                 byte[,] pixels = ReadAtlas(png);
-                int cellX = (slot % 16) * 8, cellY = (slot / 16) * 8;
+                // The editable atlas has 1px gutters + grid lines; the glyph is the cell interior.
+                int cellX = (slot % 16) * 9 + 1, cellY = (slot / 16) * 9 + 1;
                 pixels[cellX, cellY] ^= 1; // flip the top-left pixel of that glyph
                 WriteAtlas(png, pixels, CharsetV3PngCodec.BuildEditPalette());
 

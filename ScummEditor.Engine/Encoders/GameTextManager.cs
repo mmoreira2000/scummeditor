@@ -110,6 +110,11 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Disassembles with the right engine for the game's SCUMM version.</summary>
         private static ScummV6Disassembler.Result Disassemble(BlockBase context, byte[] code, int start)
         {
+            if (context.GameInfo != null && context.GameInfo.ScummVersion <= 2)
+            {
+                // v1/v2 = the byte-oriented pre-v3 language (a wholly different opcode table).
+                return ScummV12Disassembler.Disassemble(code, start);
+            }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 3)
             {
                 // v3 = the v4 language with a few more opcode deltas (ScummV3Disassembler). The
@@ -243,10 +248,17 @@ namespace ScummEditor.Engine.Encoders
 
         internal static void WriteEntriesFile(List<GameTextEntry> entries, string path, GameTextCodec codec, string gameLabel)
         {
+            WriteEntriesFile(entries, path, codec.ToMapSpec(), gameLabel);
+        }
+
+        /// <summary>As above, but the "; charmap:" header carries a raw map spec (used by the v2 pipeline,
+        /// whose accent slots are ASCII punctuation the v3-v6 GameTextCodec would reject).</summary>
+        internal static void WriteEntriesFile(List<GameTextEntry> entries, string path, string charmapSpec, string gameLabel)
+        {
             var sb = new StringBuilder();
             sb.AppendLine("; ScummEditor game text export v1");
             sb.AppendLine("; game: " + gameLabel);
-            sb.AppendLine("; charmap: " + codec.ToMapSpec());
+            sb.AppendLine("; charmap: " + charmapSpec);
             sb.AppendLine("; total: " + entries.Count);
             sb.AppendLine(";");
             sb.AppendLine("; Edit only the text after \" = \". Do not change the IDs.");
@@ -417,6 +429,22 @@ namespace ScummEditor.Engine.Encoders
         internal static Dictionary<string, string> ParseTextFile(string path, GameTextImportReport report, out GameTextCodec codec)
         {
             codec = null;
+            string charmapSpec;
+            Dictionary<string, string> fileTexts = ParseTextFile(path, report, out charmapSpec);
+            if (fileTexts == null) return null;
+            try { codec = GameTextCodec.FromMapSpec(charmapSpec); }
+            catch (FormatException ex) { report.Errors.Add("charmap: " + ex.Message); return null; }
+            return fileTexts;
+        }
+
+        /// <summary>
+        /// As above, but returns the raw "; charmap:" spec text instead of building a GameTextCodec, so the
+        /// v2 pipeline can build a GameTextCodecV12 from it (its accent slots are ASCII punctuation the
+        /// v3-v6 codec rejects). Returns null (and records the error) when there is no "; charmap:" line.
+        /// </summary>
+        internal static Dictionary<string, string> ParseTextFile(string path, GameTextImportReport report, out string charmapSpec)
+        {
+            charmapSpec = null;
             string[] lines = File.ReadAllLines(path, Encoding.UTF8);
             var fileTexts = new Dictionary<string, string>();
 
@@ -427,10 +455,9 @@ namespace ScummEditor.Engine.Encoders
                 if (line[0] == ';')
                 {
                     string trimmed = line.Substring(1).TrimStart();
-                    if (codec == null && trimmed.StartsWith("charmap:"))
+                    if (charmapSpec == null && trimmed.StartsWith("charmap:"))
                     {
-                        try { codec = GameTextCodec.FromMapSpec(trimmed.Substring(8).Trim()); }
-                        catch (FormatException ex) { report.Errors.Add("line " + (n + 1) + ": " + ex.Message); }
+                        charmapSpec = trimmed.Substring(8).Trim();
                     }
                     continue;
                 }
@@ -454,7 +481,7 @@ namespace ScummEditor.Engine.Encoders
                 report.LinesParsed++;
             }
 
-            if (codec == null)
+            if (charmapSpec == null)
             {
                 report.Errors.Add("the file has no valid '; charmap: ...' header line - the import depends on it to rebuild the character mapping");
                 return null;

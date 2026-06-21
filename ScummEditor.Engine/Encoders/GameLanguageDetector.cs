@@ -82,10 +82,17 @@ namespace ScummEditor.Engine.Encoders
             try
             {
                 GameTextCodec codec = GameTextCodec.Default();
-                bool isV4 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 4;
-                entries = isV4
-                    ? GameTextManager.ExtractV4(game, codec)
-                    : GameTextManager.Extract(game.DataFile, codec);
+                int version = game.LoadedGameInfo != null ? game.LoadedGameInfo.ScummVersion : 0;
+                bool oldBundle = game.LoadedGameInfo != null && game.LoadedGameInfo.UsesOldBundle;
+
+                if (version <= 2)
+                    entries = ScummV2TextManager.Extract(game, GameTextCodecV12.Default()); // detection must see raw bytes, not a language-specific remap
+                else if (version == 3 && oldBundle)
+                    entries = ScummV3OldTextManager.Extract(game, codec);                       // Loom/Indy3 EGA
+                else if (version == 3 || version == 4)
+                    entries = GameTextManager.ExtractV4(game, codec);                            // GF_OLD256 + v4 block tree
+                else
+                    entries = GameTextManager.Extract(game.DataFile, codec);                     // v5/v6
             }
             catch (Exception)
             {

@@ -46,7 +46,11 @@ namespace ScummEditor.Gui
             // "GF_OLD256" rooms reuse the v4 block layout (one NN.LFL per room), so they take the v4 path.
             int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
             bool oldBundle = _scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.UsesOldBundle;
-            if (version == 3 && oldBundle)
+            if (version <= 2)
+            {
+                ExportV2(location); // Maniac Mansion, Zak McKracken (GdiV2 raw-room games)
+            }
+            else if (version == 3 && oldBundle)
             {
                 ExportV3Old(location); // raw-room EGA games (Loom EGA, Indy3 EGA)
             }
@@ -58,6 +62,17 @@ namespace ScummEditor.Gui
             {
                 ExportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-exports the EGA images and costume frames of a v2 game (Maniac Mansion, Zak McKracken).</summary>
+        private void ExportV2(string location)
+        {
+            int roomCount = _scummFile.DataDisks != null ? _scummFile.DataDisks.Count : 1;
+            Progress.Maximum = Math.Max(1, roomCount);
+            ShowProgress();
+
+            int exported = ScummV2Graphics.Export(_scummFile, location, BuildV4Options(), OnExportProgress, () => _cancelExport);
+            FinishExport(exported);
         }
 
         /// <summary>Batch-exports the EGA backgrounds + object images of a v3 old-bundle game.</summary>

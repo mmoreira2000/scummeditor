@@ -6,6 +6,9 @@ namespace ScummEditor.Engine.Structures
     {
         public int ScummVersion { get; set; }
         public ScummGame LoadedGame { get; set; }
+
+        /// <summary>The detected release language (from the index-file MD5 / content heuristic); Unknown if undetermined.</summary>
+        public ScummLanguage Language { get; set; } = ScummLanguage.Unknown;
         public bool Xored { get; set; }
         public int XorKey { get; set; }
 
@@ -29,6 +32,13 @@ namespace ScummEditor.Engine.Structures
         /// These do not use the BlockBase small/big header machinery at all.
         /// </summary>
         public bool UsesOldBundle { get; set; }
+
+        /// <summary>
+        /// Bytes per entry in the old-bundle 00.LFL global-object table: 4 for v3 (Loom/Indy3 EGA: 3-byte
+        /// class data + 1-byte owner/state) and 1 for v1/v2 (Maniac/Zak: owner/state only). The index
+        /// reader skips numGlobalObjects * this to reach the resource directories. Default 4 (v3old).
+        /// </summary>
+        public int GlobalObjectEntrySize { get; set; } = 4;
 
         /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
         public bool IsTalkie { get; set; }
