@@ -265,6 +265,58 @@ namespace ScummEditor.UnitTests
             Assert.True(frames > 50, "expected many decodable costume frames, got " + frames);
         }
 
+        // --- costume re-encode codec (M6) ------------------------------------------
+
+        /// <summary>
+        /// CostumeImageEncoderV1 is the exact inverse of the decoder: re-encoding a decoded frame and decoding
+        /// it again reproduces the pixels exactly (lossless C64 2-bit RLE). NOTE: full in-place costume
+        /// WRITE-BACK is deferred - v1's heuristic frame enumeration is not invariant to re-packing, so a
+        /// faithful resource rebuild needs the deterministic animCmds-driven CEL walk (a later effort).
+        /// Decode/export and this re-encode codec work today.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1CostumeReencodeIsLossless(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            Assert.NotNull(index);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            byte[] pal = CostumeImageDecoderV1.DefaultPalette(isManiac);
+            var decoder = new CostumeImageDecoderV1();
+            var encoder = new CostumeImageEncoderV1();
+
+            int tested = 0;
+            V3OldResourceDirectory dir = index.CostumeDirectory;
+            for (int c = 0; c < dir.Count && tested < 200; c++)
+            {
+                int off = dir.Offsets[c];
+                if (off == 0xFFFF || off == 0) continue;
+                byte[] roomData = RoomData(game, dir.RoomNumbers[c]);
+                if (roomData == null || off >= roomData.Length) continue;
+                var cost = new CostumeV3Old(roomData, off);
+                if (cost.Format != 0x57 || cost.Frames.Count == 0) continue;
+
+                foreach (CostumeImageData f in cost.Frames)
+                {
+                    using (Bitmap b1 = decoder.Decode(f, pal))
+                    {
+                        if (b1 == null) continue;
+                        byte[] reRle = encoder.Encode(b1, f.Width, f.Height);
+                        var f2 = new CostumeImageData { Width = f.Width, Height = f.Height, ImageData = reRle };
+                        using (Bitmap b2 = decoder.Decode(f2, pal))
+                        {
+                            Assert.NotNull(b2);
+                            Assert.True(BitmapsEqual(b1, b2), "v1 costume re-encode was not lossless");
+                            tested++;
+                        }
+                    }
+                }
+            }
+            Assert.True(tested > 30, "expected many frames re-encoded, got " + tested);
+        }
+
         // --- EXE-embedded font (M5) ------------------------------------------------
 
         /// <summary>
@@ -308,16 +360,28 @@ namespace ScummEditor.UnitTests
 
         private static byte[] RoomData(ScummGameData game, int roomNo)
         {
+            DataDisk disk = FindDisk(game, roomNo);
+            var df = disk == null ? null : disk.Tree as ScummV3OldBundleDataFile;
+            return df == null ? null : df.RawContent;
+        }
+
+        private static DataDisk FindDisk(ScummGameData game, int roomNo)
+        {
             foreach (DataDisk disk in game.DataDisks)
             {
                 int n;
-                if (int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out n) && n == roomNo)
-                {
-                    var df = disk.Tree as ScummV3OldBundleDataFile;
-                    return df == null ? null : df.RawContent;
-                }
+                if (int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out n) && n == roomNo) return disk;
             }
             return null;
+        }
+
+        private static bool BitmapsEqual(Bitmap a, Bitmap b)
+        {
+            if (a.Width != b.Width || a.Height != b.Height) return false;
+            for (int y = 0; y < a.Height; y++)
+                for (int x = 0; x < a.Width; x++)
+                    if (a.GetPixel(x, y).ToArgb() != b.GetPixel(x, y).ToArgb()) return false;
+            return true;
         }
 
         private static ScummGameData SkipOrLoad(string relativePath)
