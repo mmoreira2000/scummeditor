@@ -1,3 +1,17 @@
+3.5.0
+-----
+* SCUMM v1 support. Maniac Mansion and Zak McKracken in their original 1987/1988 DOS floppy "classic" form can now be opened, viewed and edited - the oldest games the editor handles, completing coverage from v1 to v6. As with every other version they are recognized from the content of their data files alone (never the game EXE): the classic 00.LFL index has its own magic and, unlike every later version, stores NO resource counts at all - they are hardcoded per game - which the editor now reproduces. Every container round-trips byte-for-byte.
+
+* v1 room and object images. v1 does not use the v2 picture format; it stores a room as a C64-style tilemap (a shared 256-tile set plus per-cell tile / colour / mask maps, each run-length compressed). Room backgrounds, object images and the walk-behind (z-plane) masks are all decoded and exported as lossless indexed PNGs in the correct per-game EGA colours.
+
+* v1 costumes. The v1 costume format (a 2-bit, 4-colour C64-style RLE, different from the v2 one) is decoded and each frame exports as a PNG. The four colours are an actor-dependent runtime choice, so a sensible preview palette is used.
+
+* v1 scripts and text translation. v1 shares the byte-oriented script language of v2 (with one small opcode difference the editor now handles), so object names, verb scripts, the entry/exit scripts and the global scripts all disassemble correctly and export/import for translation, with the tables and offsets remapped automatically - the same workflow as every other version. The v1 font lives inside the game EXE exactly as v2's does and is edited the same way (export/import the glyph atlas; the edit shows under the original DOS engine - ScummVM substitutes its own font).
+
+* v1 games appear in the resource browser as a full block tree with the same per-resource viewers as the v2-v6 games (rooms, backgrounds, objects, scripts, sounds, costumes and the index directories).
+
+* Known limitations. Importing edited v1 ROOM IMAGES and COSTUMES back is not yet available - both need a lossy re-encoding specific to v1's tile / 2-bit formats - so for v1 those are export/preview only for now; v1 text and the EXE font are fully editable. v1 sound is PC-speaker data with no music track to play, so it is listed and exported raw only. As with the v2/v3 games, an edit that changes the size of the index file changes its checksum, so ScummVM's automatic detection may need the new checksum (a size-neutral edit keeps it identical).
+
 3.0.0
 -----
 * SCUMM v2 support. Maniac Mansion and Zak McKracken (the enhanced floppy releases) can now be opened, viewed and edited with the same feature set as the v3-v6 games - completing coverage of every SCUMM version from v2 to v6. As with every other version, they are recognized from the content of their data files alone, never the game EXE. v2 reuses the same "old bundle" on-disk container as the v3 EGA games (a 00.LFL index plus XOR-encrypted, untagged room files that hold the rooms, scripts, sounds and costumes); the only structural difference is the one-byte-per-object room table, and every container round-trips byte-for-byte.
