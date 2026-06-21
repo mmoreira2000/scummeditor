@@ -265,6 +265,47 @@ namespace ScummEditor.UnitTests
             Assert.True(frames > 50, "expected many decodable costume frames, got " + frames);
         }
 
+        // --- EXE-embedded font (M5) ------------------------------------------------
+
+        /// <summary>
+        /// The v1 font lives inside MANIAC.EXE / ZAK.EXE in the same format as v2 (8x8 glyphs, located by the
+        /// box-glyph signature, RLE-decoded, edited in place). The existing ScummV2ExeFont codec handles it
+        /// unchanged - v1 is simply the all-literal case (CompressedLength 1016 vs v2's 1005), so every glyph
+        /// is editable. The font export/import menu already routes ScummVersion &lt;= 2 here. (ScummVM ignores
+        /// this font; an edit is verified natively in DOSBox.)
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ExeFontDecodesAndEditsInPlace(string relativePath)
+        {
+            string folder = GameLibrary.Folder(relativePath);
+            Skip.If(folder == null, "GameData folder not present: " + relativePath);
+            string exePath = ScummV2ExeFontCodec.FindGameExe(folder);
+            Skip.If(exePath == null, "no game EXE in: " + relativePath);
+
+            byte[] exe = File.ReadAllBytes(exePath);
+            string error;
+            ScummV2ExeFont font = ScummV2ExeFont.Read(exe, out error);
+
+            Assert.NotNull(font);
+            Assert.True(font.StreamStart > 0);
+            Assert.Equal(1016, font.CompressedLength); // v1 = all-literal (v2 Enhanced = 1005 with 4 RLE runs)
+            Assert.Equal(ScummV2ExeFont.GlyphCount * 8, font.GlyphBytes.Length);
+
+            byte[] sig = { 0x01, 0x03, 0x06, 0x0C, 0x18, 0x3E, 0x03, 0x00, 0x80, 0xC0, 0x60, 0x30, 0x18, 0x7C, 0xC0, 0x00 };
+            for (int i = 0; i < sig.Length; i++) Assert.Equal(sig[i], font.GlyphBytes[8 + i]); // glyphs 1+2
+
+            // All-literal: editing any non-signature glyph is accepted as a same-size in-place splice.
+            byte[] edited = (byte[])font.GlyphBytes.Clone();
+            edited[0x41 * 8] ^= 0xFF; // 'A'
+            string applyError;
+            bool ok = font.TryApplyEditedGlyphs(edited, out applyError);
+            Assert.True(ok, "a v1 glyph edit was refused: " + applyError);
+            Assert.Equal(exe.Length, font.ExeBytes.Length);
+            Assert.False(BytesEqual(exe, font.ExeBytes)); // the edit landed
+        }
+
         private static byte[] RoomData(ScummGameData game, int roomNo)
         {
             foreach (DataDisk disk in game.DataDisks)
