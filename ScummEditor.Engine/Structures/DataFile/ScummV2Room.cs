@@ -35,8 +35,9 @@ namespace ScummEditor.Engine.Structures.DataFile
 
         public byte[] Data { get { return _data; } }
 
-        public int Width { get { return ReadU16(4); } }
-        public int Height { get { return ReadU16(6); } }
+        // virtual: v1 stores width/height as single CHAR-unit bytes at +4/+5 (see ScummV1Room).
+        public virtual int Width { get { return ReadU16(4); } }
+        public virtual int Height { get { return ReadU16(6); } }
         public int ImageOffset { get { return ReadU16(0x0A); } }
         public int BoxOffset { get { return _data.Length > 0x15 ? _data[0x15] : 0; } }
         public int ExitScriptOffset { get { return ReadU16(0x18); } }
@@ -110,7 +111,7 @@ namespace ScummEditor.Engine.Structures.DataFile
             if (candidate > offset && candidate < best) best = candidate;
         }
 
-        private int ReadU16(int p)
+        protected int ReadU16(int p)
         {
             if (p < 0 || p + 1 >= _data.Length) return 0;
             return _data[p] | (_data[p + 1] << 8);

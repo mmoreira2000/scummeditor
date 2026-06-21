@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using ScummEditor.Engine.Encoders;
@@ -172,6 +173,49 @@ namespace ScummEditor.UnitTests
             int applied = 0;
             foreach (var kv in edits) if (after.TryGetValue(kv.Key, out var g) && g == kv.Value) applied++;
             Assert.True(applied >= edits.Count * 0.9, "too few edits applied: " + applied + "/" + edits.Count);
+        }
+
+        // --- images (M3 GdiV1 tilemap decode) --------------------------------------
+
+        /// <summary>
+        /// The v1 GdiV1 tilemap codec (charMap/picMap/colorMap + object 3-plane + walk-behind mask) decodes
+        /// every real room background and many object images to their declared dimensions without throwing
+        /// or desyncing - proving the from-scratch decodeV1Gfx + reconstruction stays in step with the data.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundsAndObjectsDecode(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int rooms = 0, objects = 0, masks = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars <= 0 || room.HeightInChars <= 0) continue;
+
+                using (Bitmap bg = decoder.DecodeBackground(room))
+                {
+                    if (bg != null)
+                    {
+                        Assert.Equal(room.Width, bg.Width);
+                        Assert.Equal(room.Height, bg.Height);
+                        rooms++;
+                    }
+                }
+                using (Bitmap mask = decoder.DecodeBackgroundZPlane(room)) { if (mask != null) masks++; }
+                for (int i = 0; i < room.NumObjects; i++)
+                    using (Bitmap o = decoder.DecodeObject(room, i)) { if (o != null) objects++; }
+            }
+
+            Assert.True(rooms > 20, "expected many decodable rooms, got " + rooms);
+            Assert.True(masks > 20, "expected many decodable walk-behind masks, got " + masks);
+            Assert.True(objects > 50, "expected many decodable object images, got " + objects);
         }
 
         private static ScummGameData SkipOrLoad(string relativePath)
