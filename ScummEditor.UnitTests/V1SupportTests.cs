@@ -317,6 +317,35 @@ namespace ScummEditor.UnitTests
             Assert.True(tested > 30, "expected many frames re-encoded, got " + tested);
         }
 
+        // --- sound (M7) ------------------------------------------------------------
+
+        /// <summary>
+        /// v1 sounds are PC-speaker data (Player_V2 WA chunks) - there is NO AdLib/MIDI to decode, so (like
+        /// v2) the editor offers raw export only, no playback. This confirms the sound resources the index
+        /// lists resolve to real positions inside their room files, so they can be located and exported raw.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1SoundResourcesAreLocatable(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            Assert.NotNull(index);
+            Assert.NotNull(index.SoundDirectory);
+
+            int located = 0;
+            V3OldResourceDirectory dir = index.SoundDirectory;
+            for (int s = 0; s < dir.Count; s++)
+            {
+                int off = dir.Offsets[s];
+                if (off == 0xFFFF || off == 0) continue;
+                byte[] roomData = RoomData(game, dir.RoomNumbers[s]);
+                if (roomData != null && off > 0 && off < roomData.Length) located++;
+            }
+            Assert.True(located > 20, "expected many locatable v1 sound resources, got " + located);
+        }
+
         // --- EXE-embedded font (M5) ------------------------------------------------
 
         /// <summary>
