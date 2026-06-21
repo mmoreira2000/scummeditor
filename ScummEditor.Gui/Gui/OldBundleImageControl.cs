@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
 using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Gui
@@ -59,7 +60,9 @@ namespace ScummEditor.Gui
 
             _picture.Image = image;
             _exportButton.Enabled = image != null;
-            _importButton.Enabled = image != null;
+            // v1 (GdiV1 tilemap) image import is deferred (lossy tile re-quantization); export only.
+            bool isV1 = block.GameInfo != null && block.GameInfo.ScummVersion == 1;
+            _importButton.Enabled = image != null && !isV1;
             _header.Text = image == null
                 ? what + " - could not decode"
                 : string.Format("{0}   ·   {1} x {2}", what, image.Width, image.Height);
@@ -80,6 +83,19 @@ namespace ScummEditor.Gui
         private static Bitmap Decode(OldBundleBlock b)
         {
             byte[] raw = b.DataFile.RawContent;
+            if (b.GameInfo != null && b.GameInfo.ScummVersion == 1)
+            {
+                // v1 (Maniac/Zak classic) uses the GdiV1 tilemap codec, not the v2 vertical RLE.
+                var room = new ScummV1Room(raw);
+                var dec = new ScummV1ImageDecoder(b.GameInfo.LoadedGame == ScummGame.ManiacMansion);
+                switch (b.ImageKind)
+                {
+                    case OldBundleImageKind.Background: return dec.DecodeBackground(room);
+                    case OldBundleImageKind.Object: return dec.DecodeObject(room, b.ObjectIndex);
+                    case OldBundleImageKind.BackgroundZPlane: return dec.DecodeBackgroundZPlane(room);
+                    default: return null; // v1 has no per-object z-plane
+                }
+            }
             if (b.IsV2)
             {
                 var room = new ScummV2Room(raw);

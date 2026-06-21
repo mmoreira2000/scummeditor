@@ -3,6 +3,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Forms;
 using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Gui
@@ -97,10 +98,15 @@ namespace ScummEditor.Gui
 
             try
             {
-                Bitmap frame = new CostumeImageDecoderV4().Decode(_costume.Frames[_frameList.SelectedIndex], 16, _ega, false);
+                // v1 costumes (format 0x57) are a 4-colour C64 RLE; v2/v3-old (0x58) are the 16-colour codec.
+                bool isV1 = _block.GameInfo != null && _block.GameInfo.ScummVersion == 1;
+                Bitmap frame = isV1
+                    ? new CostumeImageDecoderV1().Decode(_costume.Frames[_frameList.SelectedIndex],
+                        CostumeImageDecoderV1.DefaultPalette(_block.GameInfo.LoadedGame == ScummGame.ManiacMansion))
+                    : new CostumeImageDecoderV4().Decode(_costume.Frames[_frameList.SelectedIndex], 16, _ega, false);
                 _picture.Image = frame;
                 _exportButton.Enabled = frame != null;
-                _importButton.Enabled = frame != null;
+                _importButton.Enabled = frame != null && !isV1; // v1 0x57 costume write-back is deferred; export only
                 _header.Text = frame == null
                     ? string.Format("Costume {0} (room {1})   ·   frame {2} - could not decode", _block.ResourceIndex, _block.RoomNo, _frameList.SelectedIndex)
                     : string.Format("Costume {0} (room {1})   ·   frame {2} of {3}   ·   {4} x {5}",

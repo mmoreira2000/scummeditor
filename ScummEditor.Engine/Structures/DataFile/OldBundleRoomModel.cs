@@ -45,6 +45,7 @@ namespace ScummEditor.Engine.Structures.DataFile
     {
         public int RoomNo;
         public bool IsV2;
+        public bool IsV1;   // v1 classic (Maniac/Zak DOS): same room layout as v2 but the GdiV1 image codec
         public bool IsIndy3;
         public int Width;
         public int Height;

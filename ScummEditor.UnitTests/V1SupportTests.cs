@@ -317,6 +317,50 @@ namespace ScummEditor.UnitTests
             Assert.True(tested > 30, "expected many frames re-encoded, got " + tested);
         }
 
+        // --- GUI room model (M8) ---------------------------------------------------
+
+        /// <summary>
+        /// The GUI block tree's data source (OldBundleNavigator.BuildRoomModel) builds a correct v1 room
+        /// model: it is flagged v1, has real dimensions and a decodable background, lists named objects, and
+        /// its scripts disassemble to the end with the v1 disassembler - so v1 renders in the editor like v2/v3.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1RoomModelBuildsForTheGuiTree(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+
+            int roomsWithBackground = 0, objectsWithName = 0, scriptsTried = 0, scriptsToEnd = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+
+                OldBundleRoomModel model = OldBundleNavigator.BuildRoomModel(game, df, roomNo);
+                Assert.True(model.IsV1);
+                Assert.True(model.IsV2); // v1 is also <= 2
+
+                if (model.HasBackground && model.Width > 0 && model.Height > 0) roomsWithBackground++;
+                foreach (OldBundleObjectInfo o in model.Objects)
+                    if (!string.IsNullOrEmpty(o.Name)) objectsWithName++;
+                foreach (OldBundleCodeRange s in model.Scripts)
+                {
+                    if (s.End <= s.Start) continue;
+                    var r = OldBundleNavigator.DisassembleRange(df.RawContent, s.Start, s.End, model.IsV2, model.IsIndy3, model.IsV1);
+                    scriptsTried++;
+                    if (r != null && r.DecodedToEnd) scriptsToEnd++;
+                }
+            }
+
+            Assert.True(roomsWithBackground > 20, "expected many v1 rooms with a decodable background, got " + roomsWithBackground);
+            Assert.True(objectsWithName > 50, "expected many named v1 objects, got " + objectsWithName);
+            Assert.True(scriptsTried > 0 && scriptsToEnd >= scriptsTried * 0.85,
+                "too many v1 scripts failed to decode to end: " + scriptsToEnd + "/" + scriptsTried);
+        }
+
         // --- sound (M7) ------------------------------------------------------------
 
         /// <summary>

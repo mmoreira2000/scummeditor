@@ -24,7 +24,7 @@ namespace ScummEditor.Gui
             if (block == null) { _code.Clear(); return; }
 
             byte[] data = block.DataFile != null ? block.DataFile.RawContent : null;
-            ScummV6Disassembler.Result result = OldBundleNavigator.DisassembleRange(data, block.Start, block.End, block.IsV2, block.IsIndy3);
+            ScummV6Disassembler.Result result = OldBundleNavigator.DisassembleRange(data, block.Start, block.End, block.IsV2, block.IsIndy3, block.GameInfo != null && block.GameInfo.ScummVersion == 1);
 
             int length = block.End - block.Start;
             string title = string.IsNullOrEmpty(block.Title) ? block.BlockType : block.Title;
