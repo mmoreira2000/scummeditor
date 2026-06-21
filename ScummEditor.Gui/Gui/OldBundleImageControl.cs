@@ -60,11 +60,10 @@ namespace ScummEditor.Gui
 
             _picture.Image = image;
             _exportButton.Enabled = image != null;
-            // v1 (GdiV1 tilemap): only the room BACKGROUND re-encodes; object images and z-plane masks are
-            // export-only for now (their tile/3-plane re-encode is not implemented). v2/v3 import all kinds.
-            bool isV1 = block.GameInfo != null && block.GameInfo.ScummVersion == 1;
-            bool importable = !isV1 || block.ImageKind == OldBundleImageKind.Background;
-            _importButton.Enabled = image != null && importable;
+            // v1 (GdiV1 tilemap) now re-encodes all four kinds (background, object image, and the background /
+            // object walk-behind masks), each preserving the shared charMap / maskChar so other images keep
+            // decoding. Whatever decodes can be imported back.
+            _importButton.Enabled = image != null;
             _header.Text = image == null
                 ? what + " - could not decode"
                 : string.Format("{0}   ·   {1} x {2}", what, image.Width, image.Height);
@@ -95,7 +94,8 @@ namespace ScummEditor.Gui
                     case OldBundleImageKind.Background: return dec.DecodeBackground(room);
                     case OldBundleImageKind.Object: return dec.DecodeObject(room, b.ObjectIndex);
                     case OldBundleImageKind.BackgroundZPlane: return dec.DecodeBackgroundZPlane(room);
-                    default: return null; // v1 has no per-object z-plane
+                    case OldBundleImageKind.ObjectZPlane: return dec.DecodeObjectZPlane(room, b.ObjectIndex);
+                    default: return null;
                 }
             }
             if (b.IsV2)
@@ -107,7 +107,8 @@ namespace ScummEditor.Gui
                     case OldBundleImageKind.Background: return dec.DecodeBackground(room);
                     case OldBundleImageKind.Object: return dec.DecodeObject(room, b.ObjectIndex);
                     case OldBundleImageKind.BackgroundZPlane: return dec.DecodeBackgroundZPlane(room);
-                    default: return null; // v2 has no per-object z-plane
+                    case OldBundleImageKind.ObjectZPlane: return dec.DecodeObjectZPlane(room, b.ObjectIndex);
+                    default: return null;
                 }
             }
             else

@@ -51,6 +51,7 @@ namespace ScummEditor.Engine.Encoders
             model.NumObjects = room.NumObjects; model.NumSounds = room.NumSounds; model.NumScripts = room.NumScripts;
 
             Func<int, bool> hasObjectImage;
+            Func<int, bool> hasObjectZPlane;
             if (isV1)
             {
                 var room1 = (ScummV1Room)room;
@@ -58,6 +59,7 @@ namespace ScummEditor.Engine.Encoders
                 using (var bg = dec.DecodeBackground(room1)) model.HasBackground = bg != null;
                 using (var zp = dec.DecodeBackgroundZPlane(room1)) model.HasBackgroundZPlane = zp != null;
                 hasObjectImage = i => { using (var b = dec.DecodeObject(room1, i)) { return b != null; } };
+                hasObjectZPlane = i => { using (var z = dec.DecodeObjectZPlane(room1, i)) { return z != null; } };
             }
             else
             {
@@ -65,6 +67,7 @@ namespace ScummEditor.Engine.Encoders
                 using (var bg = dec.DecodeBackground(room)) model.HasBackground = bg != null;
                 using (var zp = dec.DecodeBackgroundZPlane(room)) model.HasBackgroundZPlane = zp != null;
                 hasObjectImage = i => { using (var b = dec.DecodeObject(room, i)) { return b != null; } };
+                hasObjectZPlane = i => { using (var z = dec.DecodeObjectZPlane(room, i)) { return z != null; } };
             }
 
             List<int> boundaries = CollectBoundariesV2(data, room);
@@ -84,6 +87,7 @@ namespace ScummEditor.Engine.Encoders
                     Height = room.ObjectHeight(i)
                 };
                 info.HasImage = hasObjectImage(i);
+                info.HasZPlane = hasObjectZPlane(i);
 
                 int nameRel = room.ObjectNameRelativeOffset(i);
                 if (objptr > 0 && nameRel != 0)

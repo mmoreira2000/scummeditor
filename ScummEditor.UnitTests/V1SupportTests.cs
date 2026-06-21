@@ -301,6 +301,268 @@ namespace ScummEditor.UnitTests
             Assert.True(tested > 0, "no v1 background could be round-tripped");
         }
 
+        /// <summary>
+        /// Full v1 OBJECT-image WRITE-BACK round-trip: re-importing a decoded object image (a 3-plane tile map
+        /// sharing the room charMap) reproduces it pixel-for-pixel. Proves the tile/colour plane re-encode is
+        /// lossless and the mask plane is preserved.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ObjectImageImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+
+                for (int i = 0; i < room.NumObjects; i++) // round-trip the first decodable object in this room
+                {
+                    Bitmap before = decoder.DecodeObject(room, i);
+                    if (before == null) continue;
+
+                    string err;
+                    bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Object, i, before, out err);
+                    Assert.True(ok, "v1 object import failed (room " + roomNo + " obj " + i + "): " + err);
+                    using (Bitmap after = decoder.DecodeObject(new ScummV1Room(df.RawContent), i))
+                    {
+                        Assert.NotNull(after);
+                        Assert.True(BitmapsEqual(before, after), "v1 object image not pixel-identical after import (room " + roomNo + " obj " + i + ")");
+                    }
+                    before.Dispose();
+                    tested++;
+                    break;
+                }
+            }
+            Assert.True(tested > 20, "expected many v1 object images round-tripped, got " + tested);
+        }
+
+        /// <summary>
+        /// Full v1 walk-behind (z-plane) WRITE-BACK round-trip for BOTH the background mask (maskMap/maskChar)
+        /// and the per-object mask (object map plane 2): re-importing a decoded mask reproduces it pixel-for-pixel.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ZPlaneImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int bgMasks = 0, objMasks = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+
+                Bitmap bgBefore = decoder.DecodeBackgroundZPlane(room);
+                if (bgBefore != null)
+                {
+                    string err;
+                    bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.BackgroundZPlane, 0, bgBefore, out err);
+                    Assert.True(ok, "v1 background z-plane import failed (room " + roomNo + "): " + err);
+                    using (Bitmap after = decoder.DecodeBackgroundZPlane(new ScummV1Room(df.RawContent)))
+                    {
+                        Assert.NotNull(after);
+                        Assert.True(BitmapsEqual(bgBefore, after), "v1 background mask not pixel-identical after import (room " + roomNo + ")");
+                    }
+                    bgBefore.Dispose();
+                    bgMasks++;
+                }
+
+                var room2 = new ScummV1Room(df.RawContent);
+                for (int i = 0; i < room2.NumObjects; i++) // first decodable object mask in this room
+                {
+                    Bitmap before = decoder.DecodeObjectZPlane(room2, i);
+                    if (before == null) continue;
+
+                    string err;
+                    bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.ObjectZPlane, i, before, out err);
+                    Assert.True(ok, "v1 object z-plane import failed (room " + roomNo + " obj " + i + "): " + err);
+                    using (Bitmap after = decoder.DecodeObjectZPlane(new ScummV1Room(df.RawContent), i))
+                    {
+                        Assert.NotNull(after);
+                        Assert.True(BitmapsEqual(before, after), "v1 object mask not pixel-identical after import (room " + roomNo + " obj " + i + ")");
+                    }
+                    before.Dispose();
+                    objMasks++;
+                    break;
+                }
+            }
+            Assert.True(bgMasks > 20, "expected many v1 background masks round-tripped, got " + bgMasks);
+            Assert.True(objMasks > 0, "expected at least one v1 object mask round-tripped, got " + objMasks);
+        }
+
+        /// <summary>
+        /// REGRESSION (the shared-charMap bug): importing a room BACKGROUND must leave EVERY object image in
+        /// that room pixel-identical. v1 backgrounds and object images share one 256-tile charMap; an earlier
+        /// encoder renumbered it from scratch, silently corrupting every object in any edited room.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundImportPreservesObjectImages(string relativePath)
+        {
+            AssertImportPreservesOtherImages(relativePath, OldBundleImageKind.Background, -1);
+        }
+
+        /// <summary>
+        /// Importing ONE object image must leave the background and every OTHER object image pixel-identical
+        /// (the shared charMap is preserved; new tiles only fill free slots).
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ObjectImportPreservesOtherImages(string relativePath)
+        {
+            AssertImportPreservesOtherImages(relativePath, OldBundleImageKind.Object, 0);
+        }
+
+        /// <summary>
+        /// Importing a walk-behind MASK must leave every colour image (background + object images) pixel-identical
+        /// - the maskChar grows by appending, never overwriting tiles other images reference.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1MaskImportPreservesColourImages(string relativePath)
+        {
+            AssertImportPreservesOtherImages(relativePath, OldBundleImageKind.BackgroundZPlane, -1);
+        }
+
+        /// <summary>
+        /// Imports one image of <paramref name="editedKind"/> (no-op: its own decoded pixels) into the first
+        /// room that has both a background and object images, then asserts the background and ALL object images
+        /// the edit did not target are still pixel-identical (shared charMap / maskChar untouched).
+        /// </summary>
+        private static void AssertImportPreservesOtherImages(string relativePath, OldBundleImageKind editedKind, int editedObject)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int roomsChecked = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+
+                // The edit target must exist; if we edit an object, edit the first decodable one.
+                int targetObject = editedObject;
+                if (editedKind == OldBundleImageKind.Object)
+                {
+                    targetObject = -1;
+                    for (int i = 0; i < room.NumObjects; i++)
+                        using (Bitmap b = decoder.DecodeObject(room, i)) { if (b != null) { targetObject = i; break; } }
+                    if (targetObject < 0) continue;
+                }
+
+                // Snapshot the background and every object image we are NOT editing.
+                Bitmap bg = decoder.DecodeBackground(room);
+                var objBefore = new Dictionary<int, Bitmap>();
+                for (int i = 0; i < room.NumObjects; i++)
+                {
+                    if (editedKind == OldBundleImageKind.Object && i == targetObject) continue;
+                    Bitmap o = decoder.DecodeObject(room, i);
+                    if (o != null) objBefore[i] = o;
+                }
+                if (bg == null || objBefore.Count == 0) { bg?.Dispose(); foreach (var o in objBefore.Values) o.Dispose(); continue; }
+
+                Bitmap source =
+                    editedKind == OldBundleImageKind.Background ? decoder.DecodeBackground(room) :
+                    editedKind == OldBundleImageKind.BackgroundZPlane ? decoder.DecodeBackgroundZPlane(room) :
+                    decoder.DecodeObject(room, targetObject);
+                if (source == null) { bg.Dispose(); foreach (var o in objBefore.Values) o.Dispose(); continue; }
+
+                string err;
+                bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, editedKind, targetObject, source, out err);
+                Assert.True(ok, "v1 import failed (room " + roomNo + ", " + editedKind + "): " + err);
+                source.Dispose();
+
+                var room2 = new ScummV1Room(df.RawContent);
+                if (editedKind != OldBundleImageKind.Background)
+                    using (Bitmap bgAfter = decoder.DecodeBackground(room2))
+                        Assert.True(BitmapsEqual(bg, bgAfter), "background changed by a " + editedKind + " import (room " + roomNo + ")");
+                foreach (var kv in objBefore)
+                    using (Bitmap oAfter = decoder.DecodeObject(room2, kv.Key))
+                    {
+                        Assert.NotNull(oAfter);
+                        Assert.True(BitmapsEqual(kv.Value, oAfter), "object " + kv.Key + " changed by a " + editedKind + " import (room " + roomNo + ")");
+                    }
+
+                bg.Dispose();
+                foreach (var o in objBefore.Values) o.Dispose();
+                roomsChecked++;
+                if (roomsChecked >= 6) break;
+            }
+            Assert.True(roomsChecked > 0, "no v1 room with a background and object images was found to check preservation");
+        }
+
+        /// <summary>
+        /// A REAL v1 background edit persists: painting an 8x8 cell with a representable room colour, re-encoding
+        /// and re-decoding shows exactly that change (and nothing else). Proves new-tile allocation into a free
+        /// charMap slot actually writes through, not just the no-op identity path.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundEditPersists(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+            var encoder = new ScummV1ImageEncoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (tested >= 3) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars <= 0 || room.HeightInChars <= 0) continue;
+                byte[,] m = decoder.BackgroundMatrix(room);
+                if (m == null) continue;
+
+                // Paint the top-left 8x8 cell with the colour already at (0,0): always representable, and it
+                // collapses that cell to a single uniform tile.
+                byte paint = m[0, 0];
+                for (int x = 0; x < 8; x++)
+                    for (int y = 0; y < 8; y++)
+                        m[x, y] = paint;
+
+                string err;
+                byte[] rebuilt = encoder.EncodeBackground(room, m, out err);
+                Assert.True(rebuilt != null, "edit re-encode failed: " + err);
+
+                byte[,] back = decoder.BackgroundMatrix(new ScummV1Room(rebuilt));
+                Assert.NotNull(back);
+                for (int x = 0; x < 8; x++)
+                    for (int y = 0; y < 8; y++)
+                        Assert.True(back[x, y] == paint, "v1 background edit did not persist at (" + x + "," + y + ")");
+                tested++;
+            }
+            Assert.True(tested > 0, "no v1 room available for an edit-persist check");
+        }
+
         private static bool MatricesEqual(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;
@@ -628,6 +890,123 @@ namespace ScummEditor.UnitTests
             if (a.Length != b.Length) return false;
             for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
             return true;
+        }
+
+        /// <summary>
+        /// REGRESSION (charMap tile-steal): editing ONE background cell must not disturb any OTHER cell. The
+        /// edited cell allocates a fresh shared-charMap tile; that allocation must never overwrite a slot a
+        /// still-unchanged cell references. (Found by adversarial review: the encoder allocated before locking
+        /// the tiles unchanged cells reuse, so editing an early cell silently corrupted later ones.)
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1EditingOneCellDoesNotCorruptOthers(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+            var encoder = new ScummV1ImageEncoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (tested >= 5) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars < 2 || room.HeightInChars < 2) continue;
+                byte[,] m1 = decoder.BackgroundMatrix(room);
+                if (m1 == null) continue;
+
+                int w = room.Width, h = room.Height;
+                int r0 = RenderRemap(isManiac, room.Color(0));
+                int r1 = RenderRemap(isManiac, room.Color(1));
+
+                // Repaint ONLY the first 8x8 cell with a per-pair r0/r1 checkerboard (representable, almost
+                // certainly a tile not already present -> forces a fresh charMap allocation).
+                var edited = (byte[,])m1.Clone();
+                for (int x = 0; x < 8; x++)
+                    for (int y = 0; y < 8; y++)
+                        edited[x, y] = (byte)((((x / 2) + y) & 1) == 0 ? r0 : r1);
+
+                string err;
+                byte[] rebuilt = encoder.EncodeBackground(room, edited, out err);
+                if (rebuilt == null) continue; // this room's charMap is already full - a legit format limit, not corruption
+
+                byte[,] m2 = decoder.BackgroundMatrix(new ScummV1Room(rebuilt));
+                Assert.NotNull(m2);
+                for (int x = 0; x < w; x++)
+                    for (int y = 0; y < h; y++)
+                    {
+                        if (x < 8 && y < 8) continue; // the deliberately edited cell
+                        Assert.True(m2[x, y] == m1[x, y],
+                            "editing one cell corrupted pixel (" + x + "," + y + ") elsewhere in the background");
+                    }
+                tested++;
+            }
+            Assert.True(tested > 0, "no v1 room available for a tile-steal check");
+        }
+
+        /// <summary>
+        /// The v1 object importer rejects EXACTLY what the decoder rejects: an imageless object whose OBIM
+        /// aliases some object's code (OBCD) block. The GUI already gates Import on a non-null decode, but a
+        /// direct / batch caller must not be able to splice a garbage image over a code block. A rejected
+        /// import must also leave the data file untouched.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ObjectImportRejectsImagelessObjects(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int checkedCount = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (checkedCount >= 10) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+
+                for (int i = 0; i < room.NumObjects && checkedCount < 10; i++)
+                {
+                    int obim = room.ObjectImageOffset(i);
+                    int w = room.ObjectWidth(i), h = room.ObjectHeight(i);
+                    if (obim <= 0 || w <= 0 || h <= 0) continue;
+                    bool aliasesObcd = false;
+                    for (int k = 0; k < room.NumObjects; k++)
+                        if (room.ObjectCodeOffset(k) == obim) aliasesObcd = true;
+                    if (!aliasesObcd) continue; // only the imageless (OBCD-aliasing) objects
+
+                    using (var o = decoder.DecodeObject(room, i)) Assert.Null(o); // decoder rejects it
+
+                    byte[] before = (byte[])df.RawContent.Clone();
+                    using (var png = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format8bppIndexed))
+                    {
+                        string err;
+                        bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Object, i, png, out err);
+                        Assert.False(ok, "importer accepted an imageless (OBCD-aliasing) object (room " + roomNo + " obj " + i + ")");
+                    }
+                    Assert.True(BytesEqual(before, df.RawContent), "a rejected import must not mutate the data file");
+                    checkedCount++;
+                }
+            }
+            Assert.True(checkedCount > 0, "no imageless (OBCD-aliasing) object found to check");
+        }
+
+        /// <summary>The decoder's render-remap (EGA colour the room colour index renders to), for building representable test pixels.</summary>
+        private static int RenderRemap(bool isManiac, int colorIndex)
+        {
+            byte[] map = isManiac
+                ? new byte[] { 0x00, 0x0F, 0x04, 0x03, 0x05, 0x02, 0x01, 0x0E, 0x0C, 0x06, 0x0C, 0x08, 0x07, 0x0A, 0x09, 0x08 }
+                : new byte[] { 0x00, 0x0F, 0x04, 0x03, 0x05, 0x02, 0x01, 0x0E, 0x0C, 0x06, 0x0D, 0x08, 0x07, 0x0A, 0x09, 0x07 };
+            return map[colorIndex & 0x0F];
         }
     }
 }

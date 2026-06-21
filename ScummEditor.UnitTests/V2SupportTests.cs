@@ -280,6 +280,67 @@ namespace ScummEditor.UnitTests
         }
 
         /// <summary>
+        /// v2 OBJECTS also carry a walk-behind (z-plane) mask, stored after the object graphics in the OBIM
+        /// exactly as the background mask follows IM00 (ScummVM GdiV2::prepareDrawBitmap decodes the z-plane
+        /// for objects too). This decodes an object mask, edits one bit, re-encodes via the importer's path and
+        /// confirms the edit persists while the object GRAPHICS stay byte-for-byte untouched.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV2)]
+        [InlineData(GameLibrary.ZakV2)]
+        public void V2ObjectZPlaneDecodesAndImportRoundTrips(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            var decoder = new ScummV2ImageDecoder();
+
+            int objects = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                int roomNo;
+                if (df == null || !int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV2Room(df.RawContent);
+
+                for (int i = 0; i < room.NumObjects; i++)
+                {
+                    using (Bitmap z = decoder.DecodeObjectZPlane(room, i)) { if (z == null) continue; }
+
+                    int w = room.ObjectWidth(i), h = room.ObjectHeight(i);
+                    int obim = room.ObjectImageOffset(i);
+                    int gfxLen = ScummV2ImageDecoder.GraphicsRleLength(df.RawContent, obim, w, h);
+                    int objEnd = room.NextStructuralOffsetAbove(obim);
+                    byte[,] gfxBefore = ScummV2ImageDecoder.DecodeRle(df.RawContent, obim, w, h);
+                    byte[,] mask = ScummV2ImageDecoder.DecodeMaskRle(df.RawContent, obim + gfxLen, w, h);
+                    Assert.NotNull(mask);
+
+                    byte newBit = (byte)(mask[0, 0] ^ 1);
+                    mask[0, 0] = newBit;
+                    byte[] newRegion = ScummV2ImageEncoder.EncodeImageWithMask(df.RawContent, obim, w, h, mask);
+                    ScummV2Writer.ApplyEdit(df, index, roomNo, obim, objEnd - obim, newRegion, -1);
+
+                    var room2 = new ScummV2Room(df.RawContent);
+                    int obim2 = room2.ObjectImageOffset(i);
+                    int gfxLen2 = ScummV2ImageDecoder.GraphicsRleLength(df.RawContent, obim2, w, h);
+                    byte[,] mask2 = ScummV2ImageDecoder.DecodeMaskRle(df.RawContent, obim2 + gfxLen2, w, h);
+                    Assert.NotNull(mask2);
+                    Assert.Equal(newBit, mask2[0, 0]); // the object mask edit persisted
+
+                    byte[,] gfxAfter = ScummV2ImageDecoder.DecodeRle(df.RawContent, obim2, w, h);
+                    Assert.NotNull(gfxAfter);
+                    for (int x = 0; x < w; x++)
+                        for (int y = 0; y < h; y++)
+                            Assert.Equal(gfxBefore[x, y], gfxAfter[x, y]); // graphics untouched by a mask edit
+
+                    objects++;
+                    break; // one object per room keeps the resource from accumulating appended regions
+                }
+                if (objects >= 8) break;
+            }
+            Assert.True(objects > 0, "no v2 object with a decodable walk-behind mask was found");
+        }
+
+        /// <summary>
         /// A v2 text edit that grows past a 1-byte verb/name offset's range must be reported, not crash the
         /// whole import: ScummV2Writer.ApplyEdit is transactional (a rejected edit leaves the file untouched)
         /// and ScummV2TextManager catches it per-string. The rest of the import still applies and the game

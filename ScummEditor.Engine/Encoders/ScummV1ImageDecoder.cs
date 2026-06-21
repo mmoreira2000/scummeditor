@@ -69,6 +69,16 @@ namespace ScummEditor.Engine.Encoders
         /// <summary>Decodes object image <paramref name="objectIndex"/> (a 3-plane combined stream at its OBIM), or null.</summary>
         public Bitmap DecodeObject(ScummV1Room room, int objectIndex)
         {
+            byte[,] matrix = ObjectMatrix(room, objectIndex);
+            return matrix == null ? null : ToBitmap(matrix);
+        }
+
+        /// <summary>
+        /// Decodes object image <paramref name="objectIndex"/> to its [width,height] matrix of render-remapped
+        /// EGA indices (the inverse target of ScummV1ImageEncoder.EncodeObject), or null when it has no image.
+        /// </summary>
+        public byte[,] ObjectMatrix(ScummV1Room room, int objectIndex)
+        {
             if (room == null) return null;
             int obim = room.ObjectImageOffset(objectIndex);
             int wpx = room.ObjectWidth(objectIndex), hpx = room.ObjectHeight(objectIndex);
@@ -98,7 +108,7 @@ namespace ScummEditor.Engine.Encoders
                     DrawTile(matrix, charMap, tile, colors, strip * 8, y * 8);
                 }
             }
-            return ToBitmap(matrix);
+            return matrix;
         }
 
         /// <summary>
@@ -127,6 +137,55 @@ namespace ScummEditor.Engine.Encoders
                 for (int y = 0; y < h; y++)
                 {
                     int midx = maskMap[y + strip * h] * 8;
+                    for (int i = 0; i < 8; i++)
+                    {
+                        if (midx + i >= maskChar.Length) break;
+                        int c = maskChar[midx + i] ^ 0xFF;
+                        int py = y * 8 + i;
+                        for (int b = 0; b < 8; b++)
+                            matrix[strip * 8 + b, py] = (byte)((c >> (7 - b)) & 1);
+                    }
+                }
+            }
+            return IndexedImageHelper.FromIndexMatrix(matrix, new[] { Color.Black, Color.White }, -1);
+        }
+
+        /// <summary>
+        /// Decodes object <paramref name="objectIndex"/>'s walk-behind (z-plane) mask to a black/white bitmap
+        /// (white = masked). The mask is plane 2 of the object's 3-plane map (objectMap[(y+2h)*w+strip]),
+        /// indexing the SAME room maskChar table the background mask uses (ScummVM GdiV1::drawStripV1Mask,
+        /// _objectMode branch). v1 mask bytes are stored inverted (^0xFF). Null when absent.
+        /// </summary>
+        public Bitmap DecodeObjectZPlane(ScummV1Room room, int objectIndex)
+        {
+            if (room == null) return null;
+            int obim = room.ObjectImageOffset(objectIndex);
+            int wpx = room.ObjectWidth(objectIndex), hpx = room.ObjectHeight(objectIndex);
+            if (obim <= 0 || obim >= room.Data.Length || wpx <= 0 || hpx <= 0) return null;
+
+            // An imageless object leaves its OBIM pointing at a code (OBCD) block; do not decode that.
+            for (int k = 0; k < room.NumObjects; k++)
+                if (room.ObjectCodeOffset(k) == obim) return null;
+
+            int w = wpx / 8, h = hpx / 8;
+            if (w <= 0 || h <= 0) return null;
+
+            int maskPtr = room.MaskDataOffset;
+            if (maskPtr <= 0 || maskPtr + 2 > room.Data.Length) return null;
+            int storedLen = room.Data[maskPtr] | (room.Data[maskPtr + 1] << 8);
+            int maskCharLen = storedLen - 8; // the stored length word is always 8 too big (ScummVM bug #3458)
+            if (maskCharLen <= 0) return null;
+
+            byte[] maskChar = DecodeV1Gfx(room.Data, maskPtr + 2, maskCharLen);
+            byte[] objectMap = DecodeV1Gfx(room.Data, obim, w * h * 3);
+            if (maskChar == null || objectMap == null) return null;
+
+            var matrix = new byte[wpx, hpx];
+            for (int strip = 0; strip < w; strip++)
+            {
+                for (int y = 0; y < h; y++)
+                {
+                    int midx = objectMap[(y + 2 * h) * w + strip] * 8; // plane 2 (mask), row-major
                     for (int i = 0; i < 8; i++)
                     {
                         if (midx + i >= maskChar.Length) break;
