@@ -49,6 +49,31 @@ namespace ScummEditor.Engine.Encoders
             dataFile.ReparseChunks();
         }
 
+        /// <summary>
+        /// Replaces the ENTIRE room resource ([0, sizeWord@0)) of an old-bundle file with an already
+        /// self-consistent <paramref name="newRoom"/> (its own internal offsets + size word are correct), then
+        /// relocates the index entries of the costume / script / sound sub-resources packed after the room by
+        /// the size change. Unlike ApplyEdit, it does NOT run FixUpRoomResource - the caller (the v1 compact
+        /// room rebuilder) has already laid out the room's internal offsets, so re-shifting them would corrupt it.
+        /// </summary>
+        public static void ReplaceRoomResource(ScummV3OldBundleDataFile dataFile, ScummV3OldBundleIndexFile index,
+            int roomNo, byte[] newRoom)
+        {
+            byte[] old = dataFile.RawContent;
+            int oldRoomSize = ReadU16(old, 0);
+            if (oldRoomSize <= 0 || oldRoomSize > old.Length) oldRoomSize = old.Length;
+            int delta = newRoom.Length - oldRoomSize;
+
+            var result = new byte[old.Length + delta];
+            System.Array.Copy(newRoom, 0, result, 0, newRoom.Length);
+            System.Array.Copy(old, oldRoomSize, result, newRoom.Length, old.Length - oldRoomSize);
+
+            dataFile.RawContent = result;
+            // The room stays at file offset 0; only the sub-resources after it (offset >= oldRoomSize) move.
+            FixUpIndex(index, roomNo, oldRoomSize - 1, delta);
+            dataFile.ReparseChunks();
+        }
+
         private static void FixUpRoomResource(byte[] buf, int editOffset, int delta, bool growRoomSize)
         {
             int numObjects = buf.Length > 20 ? buf[20] : 0;

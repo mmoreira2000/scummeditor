@@ -137,6 +137,50 @@ namespace ScummEditor.UnitTests
             Assert.True(tested, "no multi-frame v1 costume found to test");
         }
 
+        /// <summary>
+        /// REGRESSION (the room-bloat bug): a v1 background import must keep the room COMPACT, not balloon it.
+        /// The original write-back appended uncompressed maps and left the originals as dead bytes, ~doubling
+        /// the room (e.g. 8290 -> 13824) so the real v1 engine (the DOS interpreter + ScummVM) black-screened.
+        /// The compact rewrite re-encodes the maps in place (compressed), so an edit grows the room only a
+        /// little. This asserts the room stays well within its original size.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1BackgroundImportStaysCompact(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (tested >= 8) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+                if (room.WidthInChars <= 0 || room.HeightInChars <= 0) continue;
+
+                int origSize = df.RawContent[0] | (df.RawContent[1] << 8);
+                Bitmap bg = decoder.DecodeBackground(room);
+                if (bg == null) continue;
+                string err;
+                bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Background, 0, bg, out err);
+                bg.Dispose();
+                Assert.True(ok, "v1 background import failed (room " + roomNo + "): " + err);
+
+                int newSize = df.RawContent[0] | (df.RawContent[1] << 8);
+                Assert.True(newSize <= origSize + 1024,
+                    "v1 room bloated after a background import: " + origSize + " -> " + newSize + " (room " + roomNo + ")");
+                tested++;
+            }
+            Assert.True(tested > 0, "no v1 room available for a bloat check");
+        }
+
         private static string FreshTempDir(string name)
         {
             string dir = Path.Combine(Path.GetTempPath(), name);

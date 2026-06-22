@@ -115,12 +115,11 @@ namespace ScummEditor.Engine.Encoders
                 colorMap[cell] = (byte)(c3 < 0 ? 0 : c3);
             }
 
-            int roomSize = RoomSize(room);
-            var outp = CopyRoom(room, roomSize);
-            if (charMapChanged) WriteU16Patch(outp, 10, AppendRegion(outp, RawEncode(charMap)));
-            WriteU16Patch(outp, 12, AppendRegion(outp, RawEncode(picMap)));
-            WriteU16Patch(outp, 14, AppendRegion(outp, RawEncode(colorMap)));
-            return Finish(outp, out error);
+            // Rebuild the room COMPACTLY (the 5 maps re-encoded in place, compressed). The mask maps are
+            // unchanged by a background edit, so keep the originals.
+            byte[] origMaskMap = ScummV1ImageDecoder.DecodeV1Gfx(room.Data, room.MaskMapOffset, w * h) ?? new byte[w * h];
+            byte[] origMaskChar = LoadMaskChar(room).ToArray();
+            return AssembleCompactRoom(room, charMap, picMap, colorMap, origMaskMap, origMaskChar, out error);
         }
 
         // --- object image -----------------------------------------------------
@@ -232,11 +231,11 @@ namespace ScummEditor.Engine.Encoders
                 }
             }
 
-            int roomSize = RoomSize(room);
-            var outp = CopyRoom(room, roomSize);
-            WriteU16Patch(outp, 16, AppendRegion(outp, RawEncode(maskMap)));
-            WriteU16Patch(outp, 18, AppendRegion(outp, BuildMaskData(maskChar)));
-            return Finish(outp, out error);
+            // Rebuild the room COMPACTLY. The colour maps are unchanged by a mask edit, so keep the originals.
+            byte[] origChar = LoadCharMap(room);
+            byte[] origPic = ScummV1ImageDecoder.DecodeV1Gfx(room.Data, room.PicMapOffset, w * h) ?? new byte[w * h];
+            byte[] origColor = ScummV1ImageDecoder.DecodeV1Gfx(room.Data, room.ColorMapOffset, w * h) ?? new byte[w * h];
+            return AssembleCompactRoom(room, origChar, origPic, origColor, maskMap, maskChar.ToArray(), out error);
         }
 
         // --- object walk-behind (z-plane) mask --------------------------------
@@ -278,7 +277,7 @@ namespace ScummEditor.Engine.Encoders
 
             int roomSize = RoomSize(room);
             var outp = CopyRoom(room, roomSize);
-            WriteU16Patch(outp, 18, AppendRegion(outp, BuildMaskData(maskChar)));
+            WriteU16Patch(outp, 18, AppendRegion(outp, BuildMaskData(maskChar.ToArray())));
             WriteU16Patch(outp, 28 + objectIndex * 2, AppendRegion(outp, RawEncode(newMap)));
             return Finish(outp, out error);
         }
@@ -491,15 +490,189 @@ namespace ScummEditor.Engine.Encoders
         }
 
         /// <summary>The maskData block: a u16 length (the decoded maskChar length + 8 - ScummVM bug #3458) then the RLE.</summary>
-        private static byte[] BuildMaskData(List<byte> maskChar)
+        private static byte[] BuildMaskData(byte[] maskChar)
         {
-            byte[] rle = RawEncode(maskChar.ToArray());
+            byte[] rle = CompressV1Gfx(maskChar);
             var outp = new byte[2 + rle.Length];
-            int stored = maskChar.Count + 8;
+            int stored = maskChar.Length + 8;
             outp[0] = (byte)(stored & 0xFF);
             outp[1] = (byte)((stored >> 8) & 0xFF);
             Array.Copy(rle, 0, outp, 2, rle.Length);
             return outp;
+        }
+
+        // --- compact room assembly (the real-engine-safe write-back) -----------
+
+        /// <summary>
+        /// Rebuilds the whole room resource COMPACTLY with the 5 maps re-encoded (charMap, picMap, colorMap,
+        /// maskMap compressed + the maskData block). v1 stores the 5 maps as one contiguous block right after
+        /// the box and before the object images/code, so this REPLACES that block in place (no appended dead
+        /// bytes, real RLE compression) and shifts every object/script offset after it - keeping the room about
+        /// its original size, which the real v1 engine (the DOS interpreter + ScummVM) requires. The box and
+        /// everything before the maps is untouched (so the 1-byte box offset never moves). Returns null with an
+        /// error if the room's layout is not the expected contiguous-maps form (then the edit is refused, not
+        /// corrupted). The caller splices the result with ScummV2Writer.ReplaceRoomResource.
+        /// </summary>
+        private byte[] AssembleCompactRoom(ScummV1Room room, byte[] charMap, byte[] picMap, byte[] colorMap,
+            byte[] maskMap, byte[] maskChar, out string error)
+        {
+            error = null;
+            int roomSize = RoomSize(room);
+            int mapStart = room.CharMapOffset;
+            int charOff0 = room.CharMapOffset, picOff0 = room.PicMapOffset, colorOff0 = room.ColorMapOffset;
+            int maskMapOff0 = room.MaskMapOffset, maskDataOff0 = room.MaskDataOffset;
+
+            // Require the standard contiguous-maps layout (charMap first, all five present).
+            if (mapStart <= 0 || picOff0 <= 0 || colorOff0 <= 0 || maskMapOff0 <= 0 || maskDataOff0 <= 0)
+            { error = "This room's map layout is non-standard; its image cannot be re-imported safely."; return null; }
+            int maxMap = Math.Max(Math.Max(Math.Max(charOff0, picOff0), Math.Max(colorOff0, maskMapOff0)), maskDataOff0);
+
+            // The first object/script offset after the maps marks the end of the map block; verify nothing
+            // structural is interleaved inside the map block.
+            int mapEnd = roomSize;
+            foreach (int s in StructuralOffsets(room))
+            {
+                if (s > maxMap && s < mapEnd) mapEnd = s;
+                if (s > mapStart && s <= maxMap)
+                { error = "This room interleaves objects with the maps; its image cannot be re-imported safely."; return null; }
+            }
+            if (mapEnd <= maxMap || mapEnd > roomSize)
+            { error = "Could not locate the end of the room's map block."; return null; }
+
+            byte[] cChar = CompressV1Gfx(charMap);
+            byte[] cPic = CompressV1Gfx(picMap);
+            byte[] cColor = CompressV1Gfx(colorMap);
+            byte[] cMaskMap = CompressV1Gfx(maskMap);
+            byte[] maskData = BuildMaskData(maskChar);
+
+            int charNew = mapStart;
+            int picNew = charNew + cChar.Length;
+            int colorNew = picNew + cPic.Length;
+            int maskMapNew = colorNew + cColor.Length;
+            int maskDataNew = maskMapNew + cMaskMap.Length;
+            int blockLen = cChar.Length + cPic.Length + cColor.Length + cMaskMap.Length + maskData.Length;
+            int delta = blockLen - (mapEnd - mapStart);
+
+            var nr = new byte[roomSize + delta];
+            if (nr.Length > 0xFFFF) { error = "The re-encoded room exceeds the 64 KB room-resource limit."; return null; }
+            Array.Copy(room.Data, 0, nr, 0, mapStart);
+            int p = mapStart;
+            Array.Copy(cChar, 0, nr, p, cChar.Length); p += cChar.Length;
+            Array.Copy(cPic, 0, nr, p, cPic.Length); p += cPic.Length;
+            Array.Copy(cColor, 0, nr, p, cColor.Length); p += cColor.Length;
+            Array.Copy(cMaskMap, 0, nr, p, cMaskMap.Length); p += cMaskMap.Length;
+            Array.Copy(maskData, 0, nr, p, maskData.Length); p += maskData.Length;
+            Array.Copy(room.Data, mapEnd, nr, p, roomSize - mapEnd);
+
+            // The 5 map offset fields get their new in-block positions; everything that lived after the map
+            // block (EXCD, ENCD, OBIM/OBCD tables) shifts by delta. The box (before the maps) is untouched.
+            WriteU16Buf(nr, 10, charNew); WriteU16Buf(nr, 12, picNew); WriteU16Buf(nr, 14, colorNew);
+            WriteU16Buf(nr, 16, maskMapNew); WriteU16Buf(nr, 18, maskDataNew);
+            ShiftFieldIfAtOrAfter(nr, 0x18, mapEnd, delta); // EXCD
+            ShiftFieldIfAtOrAfter(nr, 0x1A, mapEnd, delta); // ENCD
+            int numObj = nr.Length > 20 ? nr[20] : 0;
+            for (int i = 0; i < numObj; i++)
+            {
+                ShiftFieldIfAtOrAfter(nr, 28 + i * 2, mapEnd, delta);            // OBIM[i]
+                ShiftFieldIfAtOrAfter(nr, 28 + numObj * 2 + i * 2, mapEnd, delta); // OBCD[i]
+            }
+            WriteU16Buf(nr, 0, nr.Length); // room size word
+            return nr;
+        }
+
+        private static System.Collections.Generic.IEnumerable<int> StructuralOffsets(ScummV1Room room)
+        {
+            yield return room.ExitScriptOffset;
+            yield return room.EntryScriptOffset;
+            for (int i = 0; i < room.NumObjects; i++)
+            {
+                yield return room.ObjectImageOffset(i);
+                yield return room.ObjectCodeOffset(i);
+            }
+        }
+
+        private static void ShiftFieldIfAtOrAfter(byte[] buf, int pos, int threshold, int delta)
+        {
+            if (pos + 1 >= buf.Length) return;
+            int v = buf[pos] | (buf[pos + 1] << 8);
+            if (v >= threshold) WriteU16Buf(buf, pos, v + delta);
+        }
+
+        private static void WriteU16Buf(byte[] buf, int pos, int value)
+        {
+            buf[pos] = (byte)(value & 0xFF);
+            buf[pos + 1] = (byte)((value >> 8) & 0xFF);
+        }
+
+        /// <summary>
+        /// Compresses a buffer into the decodeV1Gfx RLE the engine reads: a 4-byte common-colour header
+        /// (the 4 most frequent bytes), then runs - 0x80|(idx&lt;&lt;5)|(n-1) for up to 32 of a common colour,
+        /// 0x40|(n-1) + colour for up to 64 of any single colour, and a raw copy (n-1)+bytes for up to 64
+        /// varied bytes. Far smaller than the raw-only encoding (it collapses the long repeated runs in the
+        /// tile/colour maps), so an edited room stays about its original size. Decodes back identically.
+        /// </summary>
+        private static byte[] CompressV1Gfx(byte[] data)
+        {
+            var outp = new List<byte>(data.Length / 2 + 8);
+            var freq = new int[256];
+            for (int i = 0; i < data.Length; i++) freq[data[i]]++;
+            var common = new byte[4];
+            var commonIndex = new Dictionary<byte, int>();
+            for (int k = 0; k < 4; k++)
+            {
+                int best = -1, bi = 0;
+                for (int b = 0; b < 256; b++) if (freq[b] > best) { best = freq[b]; bi = b; }
+                common[k] = (byte)bi;
+                freq[bi] = -1;
+                if (!commonIndex.ContainsKey((byte)bi)) commonIndex[(byte)bi] = k;
+            }
+            outp.Add(common[0]); outp.Add(common[1]); outp.Add(common[2]); outp.Add(common[3]);
+
+            var raw = new List<byte>();
+            int p = 0;
+            while (p < data.Length)
+            {
+                byte b = data[p];
+                int run = 1;
+                while (p + run < data.Length && data[p + run] == b) run++;
+
+                int ci;
+                if (commonIndex.TryGetValue(b, out ci))
+                {
+                    FlushRaw(outp, raw);
+                    int rem = run;
+                    while (rem > 0) { int c = Math.Min(32, rem); outp.Add((byte)(0x80 | (ci << 5) | (c - 1))); rem -= c; }
+                    p += run;
+                }
+                else if (run >= 3)
+                {
+                    FlushRaw(outp, raw);
+                    int rem = run;
+                    while (rem > 0) { int c = Math.Min(64, rem); outp.Add((byte)(0x40 | (c - 1))); outp.Add(b); rem -= c; }
+                    p += run;
+                }
+                else
+                {
+                    raw.Add(b);
+                    p++;
+                    if (raw.Count >= 64) FlushRaw(outp, raw);
+                }
+            }
+            FlushRaw(outp, raw);
+            return outp.ToArray();
+        }
+
+        private static void FlushRaw(List<byte> outp, List<byte> raw)
+        {
+            int i = 0;
+            while (i < raw.Count)
+            {
+                int c = Math.Min(64, raw.Count - i);
+                outp.Add((byte)(c - 1)); // raw-copy run (top two bits 0)
+                for (int j = 0; j < c; j++) outp.Add(raw[i + j]);
+                i += c;
+            }
+            raw.Clear();
         }
 
         private static int RoomSize(ScummV1Room room)

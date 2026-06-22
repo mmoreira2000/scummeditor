@@ -302,21 +302,21 @@ namespace ScummEditor.UnitTests
         }
 
         /// <summary>
-        /// Full v1 OBJECT-image WRITE-BACK round-trip: re-importing a decoded object image (a 3-plane tile map
-        /// sharing the room charMap) reproduces it pixel-for-pixel. Proves the tile/colour plane re-encode is
-        /// lossless and the mask plane is preserved.
+        /// v1 OBJECT-image import is EXPORT-ONLY for now: the importer refuses it with a clear message (its
+        /// compact write-back is pending - the OBIM lives after the contiguous map block) and must NOT mutate
+        /// the data file. Decode/export still works. (Background + mask import are the compact, validated paths.)
         /// </summary>
         [SkippableTheory]
         [InlineData(GameLibrary.ManiacV1)]
         [InlineData(GameLibrary.ZakV1)]
-        public void V1ObjectImageImportRoundTrips(string relativePath)
+        public void V1ObjectImageImportIsExportOnly(string relativePath)
         {
             ScummGameData game = SkipOrLoad(relativePath);
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
             bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
             var decoder = new ScummV1ImageDecoder(isManiac);
 
-            int tested = 0;
+            int checkedCount = 0;
             foreach (DataDisk disk in game.DataDisks)
             {
                 var df = disk.Tree as ScummV3OldBundleDataFile;
@@ -325,30 +325,29 @@ namespace ScummEditor.UnitTests
                 if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
                 var room = new ScummV1Room(df.RawContent);
 
-                for (int i = 0; i < room.NumObjects; i++) // round-trip the first decodable object in this room
+                for (int i = 0; i < room.NumObjects; i++)
                 {
                     Bitmap before = decoder.DecodeObject(room, i);
                     if (before == null) continue;
 
+                    byte[] snapshot = (byte[])df.RawContent.Clone();
                     string err;
                     bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Object, i, before, out err);
-                    Assert.True(ok, "v1 object import failed (room " + roomNo + " obj " + i + "): " + err);
-                    using (Bitmap after = decoder.DecodeObject(new ScummV1Room(df.RawContent), i))
-                    {
-                        Assert.NotNull(after);
-                        Assert.True(BitmapsEqual(before, after), "v1 object image not pixel-identical after import (room " + roomNo + " obj " + i + ")");
-                    }
                     before.Dispose();
-                    tested++;
+
+                    Assert.False(ok, "v1 object-image import is meant to be export-only for now (room " + roomNo + " obj " + i + ")");
+                    Assert.Contains("export-only", err);
+                    Assert.Equal(snapshot, df.RawContent); // a refused import must not mutate the room
+                    checkedCount++;
                     break;
                 }
             }
-            Assert.True(tested > 20, "expected many v1 object images round-tripped, got " + tested);
+            Assert.True(checkedCount > 20, "expected many decodable v1 object images to check, got " + checkedCount);
         }
 
         /// <summary>
-        /// Full v1 walk-behind (z-plane) WRITE-BACK round-trip for BOTH the background mask (maskMap/maskChar)
-        /// and the per-object mask (object map plane 2): re-importing a decoded mask reproduces it pixel-for-pixel.
+        /// v1 background walk-behind (z-plane) mask import round-trips pixel-for-pixel (the compact map-block
+        /// rewrite re-encodes maskMap/maskChar in place). The per-object mask import is export-only for now.
         /// </summary>
         [SkippableTheory]
         [InlineData(GameLibrary.ManiacV1)]
@@ -385,26 +384,24 @@ namespace ScummEditor.UnitTests
                 }
 
                 var room2 = new ScummV1Room(df.RawContent);
-                for (int i = 0; i < room2.NumObjects; i++) // first decodable object mask in this room
+                for (int i = 0; i < room2.NumObjects; i++) // object z-plane import is export-only for now
                 {
                     Bitmap before = decoder.DecodeObjectZPlane(room2, i);
                     if (before == null) continue;
 
+                    byte[] snapshot = (byte[])df.RawContent.Clone();
                     string err;
                     bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.ObjectZPlane, i, before, out err);
-                    Assert.True(ok, "v1 object z-plane import failed (room " + roomNo + " obj " + i + "): " + err);
-                    using (Bitmap after = decoder.DecodeObjectZPlane(new ScummV1Room(df.RawContent), i))
-                    {
-                        Assert.NotNull(after);
-                        Assert.True(BitmapsEqual(before, after), "v1 object mask not pixel-identical after import (room " + roomNo + " obj " + i + ")");
-                    }
                     before.Dispose();
+                    Assert.False(ok, "v1 object z-plane import is meant to be export-only for now (room " + roomNo + " obj " + i + ")");
+                    Assert.Contains("export-only", err);
+                    Assert.Equal(snapshot, df.RawContent); // a refused import must not mutate the room
                     objMasks++;
                     break;
                 }
             }
             Assert.True(bgMasks > 20, "expected many v1 background masks round-tripped, got " + bgMasks);
-            Assert.True(objMasks > 0, "expected at least one v1 object mask round-tripped, got " + objMasks);
+            Assert.True(objMasks > 0, "expected at least one v1 object mask to check, got " + objMasks);
         }
 
         /// <summary>
@@ -418,18 +415,6 @@ namespace ScummEditor.UnitTests
         public void V1BackgroundImportPreservesObjectImages(string relativePath)
         {
             AssertImportPreservesOtherImages(relativePath, OldBundleImageKind.Background, -1);
-        }
-
-        /// <summary>
-        /// Importing ONE object image must leave the background and every OTHER object image pixel-identical
-        /// (the shared charMap is preserved; new tiles only fill free slots).
-        /// </summary>
-        [SkippableTheory]
-        [InlineData(GameLibrary.ManiacV1)]
-        [InlineData(GameLibrary.ZakV1)]
-        public void V1ObjectImportPreservesOtherImages(string relativePath)
-        {
-            AssertImportPreservesOtherImages(relativePath, OldBundleImageKind.Object, 0);
         }
 
         /// <summary>
