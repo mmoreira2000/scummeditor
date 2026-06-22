@@ -112,8 +112,11 @@ namespace ScummEditor.Engine.Encoders
         {
             if (context.GameInfo != null && context.GameInfo.ScummVersion <= 2)
             {
-                // v1/v2 = the byte-oriented pre-v3 language (a wholly different opcode table).
-                return ScummV12Disassembler.Disassemble(code, start);
+                // v1/v2 = the byte-oriented pre-v3 language (a wholly different opcode table). v1 differs
+                // from v2 only in actorOps Color (no extra byte); pass isV1 so the rebuild's verify re-scan
+                // stays in sync with the initial scan (else they diverge and the edit is wrongly rejected).
+                bool isV1 = context.GameInfo.ScummVersion == 1;
+                return ScummV12Disassembler.Disassemble(code, start, null, isV1);
             }
             if (context.GameInfo != null && context.GameInfo.ScummVersion == 3)
             {
@@ -895,7 +898,7 @@ namespace ScummEditor.Engine.Encoders
                 while (i < content.Length)
                 {
                     byte b = content[i];
-                    if (b == 0xFF || b == 0xFE)
+                    if (b == 0xFF || (b == 0xFE && codec.FeEscape))
                     {
                         // skip escape (and its argument) so control bytes are not treated as glyphs
                         if (i + 1 >= content.Length) break;

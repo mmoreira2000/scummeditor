@@ -40,6 +40,14 @@ namespace ScummEditor.Engine.Structures
         /// </summary>
         public int GlobalObjectEntrySize { get; set; } = 4;
 
+        /// <summary>
+        /// True for the SCUMM v1 "classic" games (Maniac/Zak DOS floppy, index magic 0x0A31): the 00.LFL
+        /// index stores NO resource counts and NO global-object-count word - they are hardcoded per game -
+        /// and each directory is a bare [roomno bytes][uint16 offsets] with no count prefix. The v2/v3old
+        /// "enhanced" index (magic 0x0100) stores all of them. Drives ScummV3OldBundleIndexFile's classic parse.
+        /// </summary>
+        public bool UsesClassicIndex { get; set; }
+
         /// <summary>True when the release ships recorded speech (the CD / talkie edition).</summary>
         public bool IsTalkie { get; set; }
 

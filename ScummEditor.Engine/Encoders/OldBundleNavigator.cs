@@ -27,26 +27,49 @@ namespace ScummEditor.Engine.Encoders
         public static OldBundleRoomModel BuildRoomModel(ScummGameData game, ScummV3OldBundleDataFile df, int roomNo)
         {
             bool isV2 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion <= 2;
+            bool isV1 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 1;
             bool isIndy3 = game.LoadedGameInfo != null && game.LoadedGameInfo.LoadedGame == ScummGame.IndianaJones3;
+            bool isManiac = game.LoadedGameInfo != null && game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
 
-            var model = new OldBundleRoomModel { RoomNo = roomNo, IsV2 = isV2, IsIndy3 = isIndy3 };
+            var model = new OldBundleRoomModel { RoomNo = roomNo, IsV2 = isV2, IsV1 = isV1, IsIndy3 = isIndy3 };
             byte[] data = df != null ? df.RawContent : null;
             if (data == null) return model;
 
-            if (isV2) BuildV2(model, data, index, roomNo);
+            if (isV2) BuildV2(model, data, index, roomNo, isV1, isManiac);
             else BuildV3(model, data, index, roomNo);
             return model;
         }
 
-        private static void BuildV2(OldBundleRoomModel model, byte[] data, ScummV3OldBundleIndexFile index, int roomNo)
+        private static void BuildV2(OldBundleRoomModel model, byte[] data, ScummV3OldBundleIndexFile index, int roomNo, bool isV1, bool isManiac)
         {
-            var room = new ScummV2Room(data);
-            var dec = new ScummV2ImageDecoder();
+            // v1 (Maniac/Zak classic) and v2 (Enhanced) share the room object/script/verb layout; only the
+            // image codec differs (v1 = GdiV1 tilemap, v2 = GdiV2 vertical RLE) and v1 reads width/height as
+            // CHAR-unit bytes. A ScummV1Room is-a ScummV2Room, so the object/script accessors are reused.
+            ScummV2Room room = isV1 ? new ScummV1Room(data) : new ScummV2Room(data);
             model.Width = room.Width; model.Height = room.Height;
             model.NumObjects = room.NumObjects; model.NumSounds = room.NumSounds; model.NumScripts = room.NumScripts;
-            using (var bg = dec.DecodeBackground(room)) model.HasBackground = bg != null;
-            using (var zp = dec.DecodeBackgroundZPlane(room)) model.HasBackgroundZPlane = zp != null;
+
+            Func<int, bool> hasObjectImage;
+            Func<int, bool> hasObjectZPlane;
+            if (isV1)
+            {
+                var room1 = (ScummV1Room)room;
+                var dec = new ScummV1ImageDecoder(isManiac);
+                using (var bg = dec.DecodeBackground(room1)) model.HasBackground = bg != null;
+                using (var zp = dec.DecodeBackgroundZPlane(room1)) model.HasBackgroundZPlane = zp != null;
+                hasObjectImage = i => { using (var b = dec.DecodeObject(room1, i)) { return b != null; } };
+                hasObjectZPlane = i => { using (var z = dec.DecodeObjectZPlane(room1, i)) { return z != null; } };
+            }
+            else
+            {
+                var dec = new ScummV2ImageDecoder();
+                using (var bg = dec.DecodeBackground(room)) model.HasBackground = bg != null;
+                using (var zp = dec.DecodeBackgroundZPlane(room)) model.HasBackgroundZPlane = zp != null;
+                hasObjectImage = i => { using (var b = dec.DecodeObject(room, i)) { return b != null; } };
+                hasObjectZPlane = i => { using (var z = dec.DecodeObjectZPlane(room, i)) { return z != null; } };
+            }
+
             List<int> boundaries = CollectBoundariesV2(data, room);
 
             for (int i = 0; i < room.NumObjects; i++)
@@ -63,7 +86,8 @@ namespace ScummEditor.Engine.Encoders
                     Width = room.ObjectWidth(i),
                     Height = room.ObjectHeight(i)
                 };
-                using (var bmp = dec.DecodeObject(room, i)) info.HasImage = bmp != null;
+                info.HasImage = hasObjectImage(i);
+                info.HasZPlane = hasObjectZPlane(i);
 
                 int nameRel = room.ObjectNameRelativeOffset(i);
                 if (objptr > 0 && nameRel != 0)
@@ -252,13 +276,15 @@ namespace ScummEditor.Engine.Encoders
         /// BytesDecoded). Returns null when the range is empty/invalid. The right engine is chosen by
         /// version (v1/v2 byte language vs v3 old-bundle). Display formatting is the GUI's job.
         /// </summary>
-        public static ScummV6Disassembler.Result DisassembleRange(byte[] data, int start, int end, bool isV2, bool isIndy3)
+        public static ScummV6Disassembler.Result DisassembleRange(byte[] data, int start, int end, bool isV2, bool isIndy3, bool isV1)
         {
             if (data == null || start < 0 || end <= start || end > data.Length) return null;
             var slice = new byte[end - start];
             Array.Copy(data, start, slice, 0, slice.Length);
+            // v1 and v2 both use the byte-oriented ScummV12 language; isV1 selects the one stream-affecting
+            // difference (actorOps Color reads no extra byte on v1). v3 old-bundle uses ScummV3Disassembler.
             return isV2
-                ? ScummV12Disassembler.Disassemble(slice, 0)
+                ? ScummV12Disassembler.Disassemble(slice, 0, null, isV1)
                 : ScummV3Disassembler.Disassemble(slice, 0, null, isIndy3, true);
         }
 

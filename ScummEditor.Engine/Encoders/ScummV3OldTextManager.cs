@@ -51,6 +51,7 @@ namespace ScummEditor.Engine.Encoders
 
         public static List<GameTextEntry> Extract(ScummGameData game, GameTextCodec codec)
         {
+            codec.FeEscape = true; // v3 old-bundle: 0xFE is a string escape (matches ScummV3Disassembler IsOldBundle)
             var entries = new List<GameTextEntry>();
             bool isIndy3 = game.LoadedGameInfo != null && game.LoadedGameInfo.LoadedGame == ScummGame.IndianaJones3;
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
@@ -82,6 +83,7 @@ namespace ScummEditor.Engine.Encoders
         /// </summary>
         public static GameTextImportReport ImportNames(ScummGameData game, System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec)
         {
+            codec.FeEscape = true; // v3 old-bundle: 0xFE is a string escape
             var report = new GameTextImportReport();
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
             var matched = new HashSet<string>();
@@ -182,6 +184,7 @@ namespace ScummEditor.Engine.Encoders
         /// </summary>
         public static GameTextImportReport Import(ScummGameData game, System.Collections.Generic.Dictionary<string, string> idToText, GameTextCodec codec)
         {
+            codec.FeEscape = true; // v3 old-bundle: 0xFE is a string escape
             var report = new GameTextImportReport();
             bool isIndy3 = game.LoadedGameInfo != null && game.LoadedGameInfo.LoadedGame == ScummGame.IndianaJones3;
             var index = game.IndexFile as ScummV3OldBundleIndexFile;

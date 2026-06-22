@@ -68,7 +68,7 @@ namespace ScummEditor.Gui
                     sb.AppendLine("===== " + v.Label + " =====");
                     if (v.End > v.Start)
                     {
-                        ScummV6Disassembler.Result r = OldBundleNavigator.DisassembleRange(data, v.Start, v.End, block.IsV2, block.IsIndy3);
+                        ScummV6Disassembler.Result r = OldBundleNavigator.DisassembleRange(data, v.Start, v.End, block.IsV2, block.IsIndy3, block.GameInfo != null && block.GameInfo.ScummVersion == 1);
                         sb.AppendLine(OldBundleControlHelpers.FormatListing(null, r));
                     }
                     else

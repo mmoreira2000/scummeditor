@@ -43,12 +43,16 @@ namespace ScummEditor.Engine.Encoders
                     using (Bitmap zplane = decoder.DecodeBackgroundZPlane(room))
                         if (zplane != null) { Save(zplane, folder, string.Format("Room#{0} ZPlane#0.png", roomNo)); count++; }
                 }
-                if (options.Objects)
+                if (options.Objects || options.ObjectZPlanes)
                 {
                     for (int j = 0; j < room.NumObjects; j++)
                     {
-                        using (Bitmap obj = decoder.DecodeObject(room, j))
-                            if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j)); count++; }
+                        if (options.Objects)
+                            using (Bitmap obj = decoder.DecodeObject(room, j))
+                                if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j)); count++; }
+                        if (options.ObjectZPlanes)
+                            using (Bitmap objZ = decoder.DecodeObjectZPlane(room, j))
+                                if (objZ != null) { Save(objZ, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j)); count++; }
                     }
                 }
                 if (onProgress != null) onProgress(idx + 1, roomNumbers.Count);
@@ -234,41 +238,84 @@ namespace ScummEditor.Engine.Encoders
             catch (Exception ex) { report.Errors.Add(string.Format("Room#{0}: {1}", roomNo, ex.Message)); }
         }
 
-        /// <summary>Collects object-image edits (v2 objects carry no walk-behind mask).</summary>
+        /// <summary>
+        /// Collects each object's combined image + walk-behind mask edit. Like the background, a v2 object
+        /// keeps its graphics and its z-plane mask in ONE region (graphics then mask), so an edited object
+        /// image and an edited object z-plane for the same object are merged into a single edit.
+        /// </summary>
         private static void CollectObjectEdits(ScummV3OldBundleDataFile df, string folder, int roomNo,
             List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
         {
             var room = new ScummV2Room(df.RawContent);
             for (int j = 0; j < room.NumObjects; j++)
             {
-                string path = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j));
-                if (!File.Exists(path)) continue;
+                string imgPath = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j));
+                string maskPath = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j));
+                bool hasImg = File.Exists(imgPath), hasMask = File.Exists(maskPath);
+                if (!hasImg && !hasMask) continue;
                 if (!ScummV2ImageDecoder.ObjectOwnsImage(room, j)) continue; // imageless / non-primary multi-state: never splice
+
                 int obim = room.ObjectImageOffset(j);
                 int w = room.ObjectWidth(j), h = room.ObjectHeight(j);
-                byte[,] orig = ScummV2ImageDecoder.DecodeRle(df.RawContent, obim, w, h);
-                if (orig == null) continue;
+                byte[,] origMatrix = ScummV2ImageDecoder.DecodeRle(df.RawContent, obim, w, h);
+                if (origMatrix == null) continue;
                 int objEnd = room.NextStructuralOffsetAbove(obim);
+                int gfxLen = ScummV2ImageDecoder.GraphicsRleLength(df.RawContent, obim, w, h);
+                int maskStart = obim + gfxLen;
+                bool objHasMask = maskStart < objEnd && maskStart < df.RawContent.Length;
+                byte[,] origMask = objHasMask ? ScummV2ImageDecoder.DecodeMaskRle(df.RawContent, maskStart, w, h) : null;
 
                 try
                 {
-                    using (var bmp = (Bitmap)Image.FromFile(path))
+                    byte[,] newMatrix = origMatrix;
+                    bool imgChanged = false;
+                    if (hasImg)
                     {
-                        if (bmp.Width != w || bmp.Height != h)
+                        using (var bmp = (Bitmap)Image.FromFile(imgPath))
                         {
-                            report.Errors.Add(string.Format("Room#{0} Obj#{1}: the image must be {2}x{3}, but it is {4}x{5}.", roomNo, j, w, h, bmp.Width, bmp.Height));
-                            continue;
+                            if (bmp.Width != w || bmp.Height != h)
+                                report.Errors.Add(string.Format("Room#{0} Obj#{1}: the image must be {2}x{3}, but it is {4}x{5}.", roomNo, j, w, h, bmp.Width, bmp.Height));
+                            else if (!IndexedImageHelper.IsIndexed(bmp))
+                                report.Errors.Add(string.Format("Room#{0} Obj#{1}: {2}", roomNo, j, NotIndexedMessage));
+                            else
+                            {
+                                byte[,] m = IndexedImageHelper.GetIndexMatrix(bmp);
+                                if (!MatrixEqual(m, origMatrix)) { newMatrix = m; imgChanged = true; }
+                            }
                         }
-                        if (!IndexedImageHelper.IsIndexed(bmp))
-                        {
-                            report.Errors.Add(string.Format("Room#{0} Obj#{1}: {2}", roomNo, j, NotIndexedMessage));
-                            continue;
-                        }
-                        byte[,] m = IndexedImageHelper.GetIndexMatrix(bmp);
-                        if (MatrixEqual(m, orig)) continue; // unchanged
-                        byte[] newRegion = ScummV2ImageEncoder.EncodeImage(df.RawContent, obim, objEnd, w, h, m);
-                        edits.Add(new ImageEdit { Offset = obim, OldLen = objEnd - obim, NewBytes = newRegion, SizeWordOffset = -1 });
                     }
+
+                    byte[,] newMask = origMask;
+                    bool maskChanged = false;
+                    if (hasMask && objHasMask)
+                    {
+                        using (var bmp = (Bitmap)Image.FromFile(maskPath))
+                        {
+                            if (bmp.Width != w || bmp.Height != h)
+                                report.Errors.Add(string.Format("Room#{0} Obj#{1} ZP#0: the mask must be {2}x{3}, but it is {4}x{5}.", roomNo, j, w, h, bmp.Width, bmp.Height));
+                            else
+                            {
+                                byte[,] mm = MaskMatrixFromBitmap(bmp);
+                                if (origMask == null || !MatrixEqual(mm, origMask)) { newMask = mm; maskChanged = true; }
+                            }
+                        }
+                    }
+                    else if (hasMask)
+                    {
+                        report.Errors.Add(string.Format("Room#{0} Obj#{1} ZP#0: this object has no walk-behind mask to import into.", roomNo, j));
+                    }
+
+                    if (!imgChanged && !maskChanged) continue;
+
+                    byte[] newRegion;
+                    if (imgChanged && maskChanged)
+                        newRegion = ScummV2ImageEncoder.EncodeImageAndMask(newMatrix, newMask, w, h);
+                    else if (maskChanged)
+                        newRegion = ScummV2ImageEncoder.EncodeImageWithMask(df.RawContent, obim, w, h, newMask);
+                    else
+                        newRegion = ScummV2ImageEncoder.EncodeImage(df.RawContent, obim, objEnd, w, h, newMatrix);
+
+                    edits.Add(new ImageEdit { Offset = obim, OldLen = objEnd - obim, NewBytes = newRegion, SizeWordOffset = -1 });
                 }
                 catch (Exception ex) { report.Errors.Add(string.Format("Room#{0} Obj#{1}: {2}", roomNo, j, ex.Message)); }
             }

@@ -87,6 +87,59 @@ namespace ScummEditor.Gui
             }
         }
 
+        private void exportMetricsButton_Click(object sender, EventArgs e)
+        {
+            if (_charset == null) return;
+
+            var dlg = new SaveFileDialog
+            {
+                Filter = "Glyph metrics (*.txt)|*.txt",
+                FileName = "charset-xy.txt"
+            };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                File.WriteAllText(dlg.FileName, FontMetricsCodec.Export(_charset));
+                MessageBox.Show(this,
+                    "Per-glyph X/Y draw offsets exported to:\n" + dlg.FileName +
+                    "\n\nEdit the two numbers after each index and re-import to adjust glyph spacing/kerning " +
+                    "without redrawing the bitmaps.",
+                    "Export X/Y", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Export failed: " + ex.Message, "Export X/Y",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void importMetricsButton_Click(object sender, EventArgs e)
+        {
+            if (_charset == null) return;
+
+            var dlg = new OpenFileDialog { Filter = "Glyph metrics (*.txt)|*.txt" };
+            if (dlg.ShowDialog(this) != DialogResult.OK) return;
+
+            try
+            {
+                System.Collections.Generic.List<string> errors;
+                int changed = FontMetricsCodec.Import(_charset, File.ReadAllText(dlg.FileName), out errors);
+                SetAndRefreshData(_charset); // refresh header and atlas
+
+                string msg = changed + " glyph X/Y offset(s) updated.";
+                if (errors.Count > 0)
+                    msg += "\n\n" + errors.Count + " line(s) skipped:\n" + string.Join("\n", errors.ToArray());
+                MessageBox.Show(this, msg, "Import X/Y", MessageBoxButtons.OK,
+                    errors.Count > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, "Import failed: " + ex.Message, "Import X/Y",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
         private static string GuidePathFor(string pngPath)
         {
             return Path.Combine(Path.GetDirectoryName(pngPath) ?? string.Empty,

@@ -46,6 +46,12 @@ namespace ScummEditor.Engine.Structures.IndexFile
 
         private void ParseDirectories()
         {
+            if (GameInfo != null && GameInfo.UsesClassicIndex)
+            {
+                ParseClassicDirectories();
+                return;
+            }
+
             try
             {
                 int p = 2; // skip magic 0x0100
@@ -84,6 +90,65 @@ namespace ScummEditor.Engine.Structures.IndexFile
             }
 
             return new V3OldResourceDirectory(roomNumbers, offsets, offsetArrayPosition);
+        }
+
+        /// <summary>
+        /// Parses the SCUMM v1 "classic" index (magic 0x0A31). Unlike the v2/v3old index it stores NO
+        /// counts and NO global-object-count word - they are hardcoded per game - and each directory is a
+        /// bare [count roomno bytes][count uint16 offsets] with no leading count byte (see ScummVM
+        /// ScummEngine_v2::readClassicIndexFile). The total size is exactly 2 + numObjects + sum(count*3).
+        /// </summary>
+        private void ParseClassicDirectories()
+        {
+            try
+            {
+                int numObjects = ClassicGlobalObjectCount();
+                int[] counts = ClassicDirectoryCounts(); // {rooms, costumes, scripts, sounds}
+
+                int p = 2;          // skip the magic word (0x0A31)
+                p += numObjects;    // global-object table: 1 byte/object, no count word
+
+                RoomDirectory = ReadClassicDirectory(RawContent, ref p, counts[0]);
+                CostumeDirectory = ReadClassicDirectory(RawContent, ref p, counts[1]);
+                ScriptDirectory = ReadClassicDirectory(RawContent, ref p, counts[2]);
+                SoundDirectory = ReadClassicDirectory(RawContent, ref p, counts[3]);
+            }
+            catch (System.IndexOutOfRangeException)
+            {
+                // Leave the typed overlay null on a malformed index; RawContent still round-trips.
+            }
+        }
+
+        private static V3OldResourceDirectory ReadClassicDirectory(byte[] data, ref int p, int count)
+        {
+            var roomNumbers = new byte[count];
+            System.Array.Copy(data, p, roomNumbers, 0, count);
+            p += count;
+
+            int offsetArrayPosition = p;
+            var offsets = new int[count];
+            for (int i = 0; i < count; i++)
+            {
+                offsets[i] = data[p] | (data[p + 1] << 8);
+                p += 2;
+            }
+
+            return new V3OldResourceDirectory(roomNumbers, offsets, offsetArrayPosition);
+        }
+
+        /// <summary>Hardcoded v1 global-object count (the file carries no count word). ScummVM readClassicIndexFile.</summary>
+        private int ClassicGlobalObjectCount()
+        {
+            return GameInfo != null && GameInfo.LoadedGame == ScummGame.ManiacMansion ? 800 : 775;
+        }
+
+        /// <summary>Hardcoded v1 {rooms, costumes, scripts, sounds} counts per game (DOS floppy). ScummVM readClassicIndexFile.</summary>
+        private int[] ClassicDirectoryCounts()
+        {
+            // Maniac DOS: 55/35/200/100 (index size 1972). Zak DOS: 61/37/155/120 (index size 1896).
+            return GameInfo != null && GameInfo.LoadedGame == ScummGame.ManiacMansion
+                ? new[] { 55, 35, 200, 100 }
+                : new[] { 61, 37, 155, 120 };
         }
     }
 

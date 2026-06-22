@@ -24,11 +24,19 @@ namespace ScummEditor.Gui
             if (block == null || block.DataFile == null || block.DataFile.RawContent == null) return;
 
             byte[] data = block.DataFile.RawContent;
+            bool isV1 = block.GameInfo != null && block.GameInfo.ScummVersion == 1;
             _grid.Rows.Add("Room", block.RoomNo);
-            _grid.Rows.Add("Container", block.IsV2 ? "v2 (Maniac / Zak)" : "v3 old-bundle (Loom / Indy3 EGA)");
+            _grid.Rows.Add("Container", isV1 ? "v1 (Maniac / Zak classic)"
+                : block.IsV2 ? "v2 (Maniac / Zak)" : "v3 old-bundle (Loom / Indy3 EGA)");
             _grid.Rows.Add("File size", data.Length + " bytes");
 
-            if (block.IsV2)
+            if (isV1)
+            {
+                var room = new ScummV1Room(data);
+                AddRoomRows(room.Width, room.Height, room.NumObjects, room.NumSounds, room.NumScripts,
+                    room.CharMapOffset, room.BoxOffset, room.EntryScriptOffset, room.ExitScriptOffset);
+            }
+            else if (block.IsV2)
             {
                 var room = new ScummV2Room(data);
                 AddRoomRows(room.Width, room.Height, room.NumObjects, room.NumSounds, room.NumScripts,

@@ -19,6 +19,8 @@ namespace ScummEditor.Gui
             this.buttons = new System.Windows.Forms.Panel();
             this.exportPngButton = new System.Windows.Forms.Button();
             this.importPngButton = new System.Windows.Forms.Button();
+            this.exportMetricsButton = new System.Windows.Forms.Button();
+            this.importMetricsButton = new System.Windows.Forms.Button();
             this.header = new System.Windows.Forms.Label();
             this.Contents.SuspendLayout();
             this.scroll.SuspendLayout();
@@ -44,6 +46,8 @@ namespace ScummEditor.Gui
             //
             this.buttons.Controls.Add(this.exportPngButton);
             this.buttons.Controls.Add(this.importPngButton);
+            this.buttons.Controls.Add(this.exportMetricsButton);
+            this.buttons.Controls.Add(this.importMetricsButton);
             this.buttons.Dock = System.Windows.Forms.DockStyle.Top;
             this.buttons.Height = 31;
             this.buttons.Name = "buttons";
@@ -68,6 +72,26 @@ namespace ScummEditor.Gui
             this.importPngButton.Text = "Import PNG...";
             this.importPngButton.UseVisualStyleBackColor = true;
             this.importPngButton.Click += new System.EventHandler(this.importPngButton_Click);
+            //
+            // exportMetricsButton
+            //
+            this.exportMetricsButton.Location = new System.Drawing.Point(255, 3);
+            this.exportMetricsButton.Name = "exportMetricsButton";
+            this.exportMetricsButton.Size = new System.Drawing.Size(120, 25);
+            this.exportMetricsButton.TabIndex = 2;
+            this.exportMetricsButton.Text = "Export X/Y...";
+            this.exportMetricsButton.UseVisualStyleBackColor = true;
+            this.exportMetricsButton.Click += new System.EventHandler(this.exportMetricsButton_Click);
+            //
+            // importMetricsButton
+            //
+            this.importMetricsButton.Location = new System.Drawing.Point(381, 3);
+            this.importMetricsButton.Name = "importMetricsButton";
+            this.importMetricsButton.Size = new System.Drawing.Size(120, 25);
+            this.importMetricsButton.TabIndex = 3;
+            this.importMetricsButton.Text = "Import X/Y...";
+            this.importMetricsButton.UseVisualStyleBackColor = true;
+            this.importMetricsButton.Click += new System.EventHandler(this.importMetricsButton_Click);
             //
             // scroll
             //
@@ -106,6 +130,8 @@ namespace ScummEditor.Gui
         private System.Windows.Forms.Panel buttons;
         private System.Windows.Forms.Button exportPngButton;
         private System.Windows.Forms.Button importPngButton;
+        private System.Windows.Forms.Button exportMetricsButton;
+        private System.Windows.Forms.Button importMetricsButton;
         private System.Windows.Forms.Label header;
     }
 }

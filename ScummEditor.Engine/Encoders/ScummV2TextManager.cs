@@ -22,6 +22,7 @@ namespace ScummEditor.Engine.Encoders
         {
             var entries = new List<GameTextEntry>();
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isV1 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 1; // v1 actorOps Color reads no extra byte
 
             foreach (DataDisk disk in game.DataDisks)
             {
@@ -33,9 +34,9 @@ namespace ScummEditor.Engine.Encoders
                 string lf = roomNo.ToString("D3");
                 var room = new ScummV2Room(data);
 
-                AddObjectsAndVerbCode(entries, data, room, lf, codec);
-                AddRoomScripts(entries, data, room, lf, codec);
-                AddGlobalScripts(entries, data, index, roomNo, lf, codec);
+                AddObjectsAndVerbCode(entries, data, room, lf, codec, isV1);
+                AddRoomScripts(entries, data, room, lf, codec, isV1);
+                AddGlobalScripts(entries, data, index, roomNo, lf, codec, isV1);
             }
 
             return entries;
@@ -43,7 +44,7 @@ namespace ScummEditor.Engine.Encoders
 
         // --- object names + object verb code -----------------------------------
 
-        private static void AddObjectsAndVerbCode(List<GameTextEntry> entries, byte[] data, ScummV2Room room, string lf, GameTextCodecV12 codec)
+        private static void AddObjectsAndVerbCode(List<GameTextEntry> entries, byte[] data, ScummV2Room room, string lf, GameTextCodecV12 codec, bool isV1)
         {
             List<int> boundaries = CollectBoundaries(data, room);
             for (int i = 0; i < room.NumObjects; i++)
@@ -84,27 +85,27 @@ namespace ScummEditor.Engine.Encoders
                 {
                     int start = verbOffsets[v];
                     int end = v + 1 < verbOffsets.Count ? verbOffsets[v + 1] : objEnd;
-                    AddBytecodeStrings(entries, data, start, end, oid + ".v" + v.ToString("D2"), codec);
+                    AddBytecodeStrings(entries, data, start, end, oid + ".v" + v.ToString("D2"), codec, isV1);
                 }
             }
         }
 
         // --- room exit/entry scripts -------------------------------------------
 
-        private static void AddRoomScripts(List<GameTextEntry> entries, byte[] data, ScummV2Room room, string lf, GameTextCodecV12 codec)
+        private static void AddRoomScripts(List<GameTextEntry> entries, byte[] data, ScummV2Room room, string lf, GameTextCodecV12 codec, bool isV1)
         {
             List<int> boundaries = CollectBoundaries(data, room);
             int excd = room.ExitScriptOffset;
             int encd = room.EntryScriptOffset;
             if (excd > 0 && excd < data.Length)
-                AddBytecodeStrings(entries, data, excd, NextBoundaryAbove(boundaries, excd, data.Length), lf + ".EXCD", codec);
+                AddBytecodeStrings(entries, data, excd, NextBoundaryAbove(boundaries, excd, data.Length), lf + ".EXCD", codec, isV1);
             if (encd > 0 && encd < data.Length)
-                AddBytecodeStrings(entries, data, encd, NextBoundaryAbove(boundaries, encd, data.Length), lf + ".ENCD", codec);
+                AddBytecodeStrings(entries, data, encd, NextBoundaryAbove(boundaries, encd, data.Length), lf + ".ENCD", codec, isV1);
         }
 
         // --- global scripts (index SCRIPT directory) ---------------------------
 
-        private static void AddGlobalScripts(List<GameTextEntry> entries, byte[] data, ScummV3OldBundleIndexFile index, int roomNo, string lf, GameTextCodecV12 codec)
+        private static void AddGlobalScripts(List<GameTextEntry> entries, byte[] data, ScummV3OldBundleIndexFile index, int roomNo, string lf, GameTextCodecV12 codec, bool isV1)
         {
             if (index == null || index.ScriptDirectory == null) return;
             V3OldResourceDirectory dir = index.ScriptDirectory;
@@ -114,7 +115,7 @@ namespace ScummEditor.Engine.Encoders
                 int off = dir.Offsets[s];
                 if (off == 0xFFFF || off == 0 || off + 4 > data.Length) continue;
                 int end = ScriptEnd(data, off, NextResourceOffsetInRoom(index, roomNo, off, data.Length));
-                AddBytecodeStrings(entries, data, off + 4, end, lf + ".SC" + s.ToString("D3"), codec);
+                AddBytecodeStrings(entries, data, off + 4, end, lf + ".SC" + s.ToString("D3"), codec, isV1);
             }
         }
 
@@ -166,6 +167,7 @@ namespace ScummEditor.Engine.Encoders
         {
             var report = new GameTextImportReport();
             var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isV1 = game.LoadedGameInfo != null && game.LoadedGameInfo.ScummVersion == 1; // v1 actorOps Color reads no extra byte
 
             foreach (DataDisk disk in game.DataDisks)
             {
@@ -179,8 +181,8 @@ namespace ScummEditor.Engine.Encoders
 
                 var edits = new List<Edit>();
                 CollectObjectEdits(data, room, lf, idToText, codec, edits, report);
-                CollectRoomScriptEdits(df, data, room, lf, idToText, codec, edits, report);
-                CollectGlobalScriptEdits(df, data, index, roomNo, lf, idToText, codec, edits, report);
+                CollectRoomScriptEdits(df, data, room, lf, idToText, codec, edits, report, isV1);
+                CollectGlobalScriptEdits(df, data, index, roomNo, lf, idToText, codec, edits, report, isV1);
 
                 ApplyEdits(df, index, roomNo, edits, report);
             }
@@ -213,7 +215,7 @@ namespace ScummEditor.Engine.Encoders
         }
 
         private static void CollectRoomScriptEdits(ScummV3OldBundleDataFile df, byte[] data, ScummV2Room room, string lf,
-            Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report)
+            Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report, bool isV1)
         {
             List<int> boundaries = CollectBoundaries(data, room);
 
@@ -238,20 +240,20 @@ namespace ScummEditor.Engine.Encoders
                 {
                     int start = verbOffsets[v];
                     int end = v + 1 < verbOffsets.Count ? verbOffsets[v + 1] : objEnd;
-                    AddBytecodeEdit(df, data, start, end, -1, oid + ".v" + v.ToString("D2"), idToText, codec, edits, report);
+                    AddBytecodeEdit(df, data, start, end, -1, oid + ".v" + v.ToString("D2"), idToText, codec, edits, report, isV1);
                 }
             }
 
             // exit / entry scripts
             int excd = room.ExitScriptOffset, encd = room.EntryScriptOffset;
             if (excd > 0 && excd < data.Length)
-                AddBytecodeEdit(df, data, excd, NextBoundaryAbove(boundaries, excd, data.Length), -1, lf + ".EXCD", idToText, codec, edits, report);
+                AddBytecodeEdit(df, data, excd, NextBoundaryAbove(boundaries, excd, data.Length), -1, lf + ".EXCD", idToText, codec, edits, report, isV1);
             if (encd > 0 && encd < data.Length)
-                AddBytecodeEdit(df, data, encd, NextBoundaryAbove(boundaries, encd, data.Length), -1, lf + ".ENCD", idToText, codec, edits, report);
+                AddBytecodeEdit(df, data, encd, NextBoundaryAbove(boundaries, encd, data.Length), -1, lf + ".ENCD", idToText, codec, edits, report, isV1);
         }
 
         private static void CollectGlobalScriptEdits(ScummV3OldBundleDataFile df, byte[] data, ScummV3OldBundleIndexFile index,
-            int roomNo, string lf, Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report)
+            int roomNo, string lf, Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report, bool isV1)
         {
             if (index == null || index.ScriptDirectory == null) return;
             V3OldResourceDirectory dir = index.ScriptDirectory;
@@ -261,18 +263,18 @@ namespace ScummEditor.Engine.Encoders
                 int off = dir.Offsets[s];
                 if (off == 0xFFFF || off == 0 || off + 4 > data.Length) continue;
                 int end = ScriptEnd(data, off, NextResourceOffsetInRoom(index, roomNo, off, data.Length));
-                AddBytecodeEdit(df, data, off + 4, end, off, lf + ".SC" + s.ToString("D3"), idToText, codec, edits, report);
+                AddBytecodeEdit(df, data, off + 4, end, off, lf + ".SC" + s.ToString("D3"), idToText, codec, edits, report, isV1);
             }
         }
 
         /// <summary>Disassembles a bytecode slice, rebuilds it if any of its strings are edited, and records the slice edit.</summary>
         private static void AddBytecodeEdit(ScummV3OldBundleDataFile df, byte[] data, int start, int end, int sizeWordOffset,
-            string idPrefix, Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report)
+            string idPrefix, Dictionary<string, string> idToText, GameTextCodecV12 codec, List<Edit> edits, GameTextImportReport report, bool isV1)
         {
             if (start < 0 || end <= start || end > data.Length) return;
             var slice = new byte[end - start];
             Array.Copy(data, start, slice, 0, slice.Length);
-            ScummV6Disassembler.Result scan = ScummV12Disassembler.Disassemble(slice, 0);
+            ScummV6Disassembler.Result scan = ScummV12Disassembler.Disassemble(slice, 0, null, isV1);
 
             var replacements = new Dictionary<int, byte[]>();
             for (int k = 0; k < scan.Strings.Count; k++)
@@ -338,12 +340,12 @@ namespace ScummEditor.Engine.Encoders
         // --- shared -------------------------------------------------------------
 
         /// <summary>Disassembles a bytecode slice [start,end) and adds every translatable inline string.</summary>
-        private static void AddBytecodeStrings(List<GameTextEntry> entries, byte[] data, int start, int end, string id, GameTextCodecV12 codec)
+        private static void AddBytecodeStrings(List<GameTextEntry> entries, byte[] data, int start, int end, string id, GameTextCodecV12 codec, bool isV1)
         {
             if (start < 0 || end <= start || end > data.Length) return;
             var slice = new byte[end - start];
             Array.Copy(data, start, slice, 0, slice.Length);
-            ScummV6Disassembler.Result scan = ScummV12Disassembler.Disassemble(slice, 0);
+            ScummV6Disassembler.Result scan = ScummV12Disassembler.Disassemble(slice, 0, null, isV1);
             for (int k = 0; k < scan.Strings.Count; k++)
             {
                 ScummV6Disassembler.StringRef sref = scan.Strings[k];

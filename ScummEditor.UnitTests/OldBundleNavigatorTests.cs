@@ -48,7 +48,7 @@ namespace ScummEditor.UnitTests
                             rel + " room " + roomNo + " obj " + obj.Index + " verb '" + v.Label + "' window invalid");
                         if (v.End <= v.Start) continue; // shared/empty body
                         codeTried++;
-                        var vr = OldBundleNavigator.DisassembleRange(df.RawContent, v.Start, v.End, model.IsV2, model.IsIndy3);
+                        var vr = OldBundleNavigator.DisassembleRange(df.RawContent, v.Start, v.End, model.IsV2, model.IsIndy3, model.IsV1);
                         if (vr != null && !string.IsNullOrEmpty(vr.Listing)) codeWithListing++;
                     }
                 }
@@ -58,7 +58,7 @@ namespace ScummEditor.UnitTests
                     totalScripts++;
                     Assert.True(r.Start >= 0 && r.End > r.Start && r.End <= df.RawContent.Length,
                         rel + " room " + roomNo + " script '" + r.Label + "' window invalid");
-                    var result = OldBundleNavigator.DisassembleRange(df.RawContent, r.Start, r.End, model.IsV2, model.IsIndy3);
+                    var result = OldBundleNavigator.DisassembleRange(df.RawContent, r.Start, r.End, model.IsV2, model.IsIndy3, model.IsV1);
                     Assert.NotNull(result);
                     codeTried++;
                     if (!string.IsNullOrEmpty(result.Listing)) codeWithListing++;
@@ -80,9 +80,9 @@ namespace ScummEditor.UnitTests
             var df = game.DataDisks[0].Tree as ScummV3OldBundleDataFile;
             Assert.NotNull(df);
 
-            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, 10, 10, false, false));   // empty
-            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, -1, 5, false, false));     // negative start
-            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, 0, df.RawContent.Length + 1, false, false)); // past end
+            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, 10, 10, false, false, false));   // empty
+            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, -1, 5, false, false, false));     // negative start
+            Assert.Null(OldBundleNavigator.DisassembleRange(df.RawContent, 0, df.RawContent.Length + 1, false, false, false)); // past end
         }
     }
 }

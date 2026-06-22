@@ -86,6 +86,10 @@ namespace ScummEditor.Engine.Structures.DataFile
             int colorBytes = (Format == 0x57) ? 0 : 1;
             for (int i = 0; i < colorBytes; i++) Palette.Add(_data[_base + 6 + i]);
 
+            // v1 (Maniac/Zak classic, 0x57) differs: the frame table is at base+8 and its CEL offsets are
+            // relative to limbBase (base+4), the CEL header is 6 bytes, and pixels are a C64 2-bit RLE.
+            if (Format == 0x57) { ParseV1(); return; }
+
             // 16 frame-table offsets at base+9 (base-relative).
             int frameTablePos = _base + 9;
             var frameOffsets = new int[16];
@@ -148,6 +152,129 @@ namespace ScummEditor.Engine.Structures.DataFile
         }
 
         /// <summary>
+        /// Parses a v1 (format 0x57) costume. The 16 frame-table offsets are at base+8 and their CEL offsets
+        /// are relative to limbBase = base+4 (not base); each CEL is a 6-byte header (widthBytes, height,
+        /// relX*8, -relY, moveX*8, -moveY) followed by a C64 2-bit RLE. CELs are enumerated by WALKING THE
+        /// ANIMATION command stream (mirrors ScummVM costumeDecodeData) so only CELs the costume can actually
+        /// draw are listed - a deterministic, re-pack-invariant set (a bare frame-table scan would surface
+        /// dead slots as phantom frames after an import re-pack). CelBaseOffsets are limbBase-relative.
+        /// </summary>
+        private void ParseV1()
+        {
+            int limbBase = _base + 4;
+            if (_base + 26 > _data.Length) return; // header + frameOffsets (base+8) + start of dataOffsets (base+24)
+
+            int numAnim = _data[_base + 4];
+            int animCmds = limbBase + ReadU16(_base + 6); // the per-limb command stream
+            int frameOffsetsTbl = _base + 8;              // 16 uint16 frame-table offsets, limbBase-relative
+            int dataOffsetsTbl = _base + 24;              // 16 uint16 per-animation offsets, limbBase-relative
+
+            // Enumerate CELs DETERMINISTICALLY by walking the animation definitions (mirrors ScummVM
+            // costumeDecodeData): for every animation, the 1-byte limb mask selects limbs, each limb gives a
+            // start index + length into the command stream, and each non-command code indexes that limb's
+            // frame table to a CEL. This reads only the (re-pack-invariant) anim / frame-table structure, never
+            // CEL-data bytes, so the frame set is stable across an import re-pack - no phantom frames.
+            var celOffsets = new SortedSet<int>();
+            for (int a = 0; a <= numAnim; a++)
+            {
+                int dpos = dataOffsetsTbl + a * 2;
+                if (dpos + 2 > _data.Length) break;
+                int animOff = ReadU16(dpos);
+                if (animOff == 0) continue;
+                int r = limbBase + animOff;
+                if (r < 0 || r >= _data.Length) continue;
+                int mask = _data[r] << 8; r++;
+                for (int i = 0; i < 16 && (mask & 0xFFFF) != 0; i++, mask <<= 1)
+                {
+                    if ((mask & 0x8000) == 0) continue;
+                    if (r >= _data.Length) break;
+                    int j = _data[r++];
+                    if (j == 0xFF) continue; // sentinel: this limb has no command (no extra byte follows)
+                    if (r >= _data.Length) break;
+                    int len = _data[r++] & 0x7F;
+                    int frameTbl = limbBase + ReadU16(frameOffsetsTbl + i * 2);
+                    for (int k = j; k <= j + len; k++)
+                    {
+                        int cmdPos = animCmds + k;
+                        if (cmdPos < 0 || cmdPos >= _data.Length) break;
+                        int code = _data[cmdPos] & 0x7F;
+                        if (code == 0x79 || code == 0x7A || code == 0x7B) continue; // start/stop/no-draw commands
+                        int entryPos = frameTbl + code * 2;
+                        if (entryPos < 0 || entryPos + 2 > _data.Length) continue;
+                        int celOffset = ReadU16(entryPos);
+                        if (celOffset > 0 && IsSaneCelV1(limbBase + celOffset))
+                        {
+                            celOffsets.Add(celOffset);
+                            CelOffsetEntryPositions.Add(entryPos);
+                        }
+                    }
+                }
+            }
+
+            var sorted = celOffsets.ToList();
+            CelBaseOffsets = sorted;
+            if (sorted.Count > 0) CelDataStart = limbBase + sorted[0];
+            for (int i = 0; i < sorted.Count; i++)
+            {
+                int start = limbBase + sorted[i]; // CEL header in roomData
+                int widthBytes = _data[start];
+                int height = _data[start + 1];
+                int dataStart = start + 6;
+                int rleLen = C64RleLength(_data, dataStart, widthBytes, height, ResourceEnd);
+                if (rleLen < 0) continue;
+
+                var data = new byte[rleLen];
+                Array.Copy(_data, dataStart, data, 0, rleLen);
+
+                Frames.Add(new CostumeImageData
+                {
+                    Width = (ushort)(widthBytes * 8),
+                    Height = (ushort)height,
+                    RelX = (short)((sbyte)_data[start + 2] * 8),
+                    RelY = (short)(-(sbyte)_data[start + 3]),
+                    MoveX = (short)((sbyte)_data[start + 4] * 8),
+                    MoveY = (short)(-(sbyte)_data[start + 5]),
+                    ImageData = data
+                });
+            }
+        }
+
+        /// <summary>True when a 0x57 CEL header + its C64 RLE are well-formed and decode within the resource.</summary>
+        private bool IsSaneCelV1(int rawIndex)
+        {
+            if (rawIndex < 0 || rawIndex + 6 > _data.Length) return false;
+            int widthBytes = _data[rawIndex];
+            int height = _data[rawIndex + 1];
+            if (widthBytes <= 0 || widthBytes > 64 || height <= 0 || height > 200) return false;
+            return C64RleLength(_data, rawIndex + 6, widthBytes, height, ResourceEnd) >= 0;
+        }
+
+        /// <summary>
+        /// Number of bytes the C64 2-bit costume RLE at <paramref name="offset"/> consumes to produce exactly
+        /// widthBytes*height sample bytes, or -1 if it runs past <paramref name="maxEnd"/> (malformed / not a CEL).
+        /// </summary>
+        private static int C64RleLength(byte[] data, int offset, int widthBytes, int height, int maxEnd)
+        {
+            int total = widthBytes * height;
+            if (total <= 0 || offset < 0) return -1;
+            int p = offset, idx = 0;
+            while (idx < total)
+            {
+                if (p >= maxEnd) return -1;
+                byte len = data[p++];
+                bool rep = (len & 0x80) != 0;
+                int n = len & 0x7F;
+                if (rep) { if (p >= maxEnd) return -1; p++; }
+                for (int k = 0; k < n && idx < total; k++)
+                {
+                    if (!rep) { if (p >= maxEnd) return -1; p++; }
+                    idx++;
+                }
+            }
+            return p - offset;
+        }
+
+        /// <summary>
         /// Rebuilds the whole costume resource with one frame's RLE replaced, mirroring
         /// CostumeV4.ReplaceFrameImage but with base-relative offsets. Everything before the first CEL
         /// (header, palette, frame/limb tables) is preserved; the CEL region is rebuilt (each CEL keeps
@@ -162,15 +289,21 @@ namespace ScummEditor.Engine.Structures.DataFile
                 throw new Exceptions.ImageEncodeException("This costume's frame table could not be parsed, so it cannot be edited.");
             }
 
+            // v1 (0x57) CELs have a 6-byte header and limbBase(=base+4)-relative offsets; v2/v3-old
+            // (0x58/0x59) have a 12-byte header and base-relative offsets.
+            int headerSize = (Format == 0x57) ? 6 : 12;
+            int offsetBaseDelta = (Format == 0x57) ? 4 : 0;
+
             int celDataStartRel = CelDataStart - _base; // base-relative start of the CEL region
             var region = new System.IO.MemoryStream();
             var newOffsetByOld = new Dictionary<int, int>();
             for (int i = 0; i < Frames.Count; i++)
             {
                 int oldBaseOffset = CelBaseOffsets[i];
-                int celHeaderPos = _base + oldBaseOffset;
-                newOffsetByOld[oldBaseOffset] = celDataStartRel + (int)region.Length;
-                region.Write(_data, celHeaderPos, 12); // CEL header verbatim (size unchanged)
+                int celHeaderPos = _base + offsetBaseDelta + oldBaseOffset;
+                // record the new CEL position in the SAME convention the frame-table entries use
+                newOffsetByOld[oldBaseOffset] = celDataStartRel + (int)region.Length - offsetBaseDelta;
+                region.Write(_data, celHeaderPos, headerSize); // CEL header verbatim (size unchanged)
                 byte[] data;
                 if (!replacements.TryGetValue(i, out data)) data = Frames[i].ImageData;
                 region.Write(data, 0, data.Length);

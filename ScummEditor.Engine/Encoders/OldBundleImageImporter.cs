@@ -1,5 +1,6 @@
 using System;
 using System.Drawing;
+using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
 
@@ -27,6 +28,10 @@ namespace ScummEditor.Engine.Encoders
 
             try
             {
+                // v1 (Maniac/Zak classic, GdiV1 tilemap) shares the isV2=true old-bundle container but needs
+                // its own re-encoder; detect it from the data file's version.
+                if (dataFile.GameInfo != null && dataFile.GameInfo.ScummVersion == 1)
+                    return ImportV1(dataFile, index, roomNo, kind, objectIndex, png, out error);
                 return isV2
                     ? ImportV2(dataFile, index, roomNo, kind, objectIndex, png, out error)
                     : ImportV3(dataFile, index, roomNo, kind, objectIndex, png, out error);
@@ -150,10 +155,86 @@ namespace ScummEditor.Engine.Encoders
                     return true;
                 }
                 case OldBundleImageKind.ObjectZPlane:
-                    error = "v2 objects have no walk-behind mask."; return false;
+                {
+                    if (!ScummV2ImageDecoder.ObjectOwnsImage(room, objectIndex)) { error = "This object does not own its image and cannot be masked safely."; return false; }
+                    int obim = room.ObjectImageOffset(objectIndex);
+                    int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
+                    if (!SizeMatches(png, w, h, out error)) return false;
+                    // The object's walk-behind mask follows its graphics in the OBIM (same layout as IM00).
+                    int gfxLen = ScummV2ImageDecoder.GraphicsRleLength(data, obim, w, h);
+                    int maskStart = obim + gfxLen;
+                    int objEnd = room.NextStructuralOffsetAbove(obim);
+                    if (maskStart >= objEnd || maskStart >= data.Length) { error = "This object has no walk-behind mask to import into."; return false; }
+                    byte[,] maskMatrix = MaskMatrixFromBitmap(png);
+                    byte[] newRegion = ScummV2ImageEncoder.EncodeImageWithMask(data, obim, w, h, maskMatrix);
+                    ScummV2Writer.ApplyEdit(df, index, roomNo, obim, objEnd - obim, newRegion, -1);
+                    return true;
+                }
                 default:
                     error = "Unsupported image kind."; return false;
             }
+        }
+
+        // --- v1 (Maniac / Zak classic, GdiV1 tilemap) -------------------------
+
+        private static bool ImportV1(ScummV3OldBundleDataFile df, ScummV3OldBundleIndexFile index, int roomNo,
+            OldBundleImageKind kind, int objectIndex, Bitmap png, out string error)
+        {
+            error = null;
+            var room = new ScummV1Room(df.RawContent);
+            bool isManiac = df.GameInfo != null && df.GameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var enc = new ScummV1ImageEncoder(isManiac);
+            byte[] rebuilt;
+
+            switch (kind)
+            {
+                case OldBundleImageKind.Background:
+                    if (room.WidthInChars <= 0 || room.HeightInChars <= 0) { error = "This room has no background image."; return false; }
+                    if (!SizeMatches(png, room.Width, room.Height, out error)) return false;
+                    if (!Indexed(png, out error)) return false;
+                    rebuilt = enc.EncodeBackground(room, IndexedImageHelper.GetIndexMatrix(png), out error);
+                    break;
+                case OldBundleImageKind.Object:
+                {
+                    int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
+                    if (w <= 0 || h <= 0) { error = "This object has no image."; return false; }
+                    if (!SizeMatches(png, w, h, out error)) return false;
+                    if (!Indexed(png, out error)) return false;
+                    rebuilt = enc.EncodeObject(room, objectIndex, IndexedImageHelper.GetIndexMatrix(png), out error);
+                    break;
+                }
+                case OldBundleImageKind.BackgroundZPlane:
+                    if (room.WidthInChars <= 0 || room.HeightInChars <= 0) { error = "This room has no background to mask."; return false; }
+                    if (!SizeMatches(png, room.Width, room.Height, out error)) return false;
+                    rebuilt = enc.EncodeBackgroundZPlane(room, MaskMatrixFromBitmap(png), out error);
+                    break;
+                case OldBundleImageKind.ObjectZPlane:
+                {
+                    int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
+                    if (w <= 0 || h <= 0) { error = "This object has no image to mask."; return false; }
+                    if (!SizeMatches(png, w, h, out error)) return false;
+                    rebuilt = enc.EncodeObjectZPlane(room, objectIndex, MaskMatrixFromBitmap(png), out error);
+                    break;
+                }
+                default:
+                    error = "Unsupported image kind."; return false;
+            }
+            if (rebuilt == null) return false; // an over-limit / unrepresentable edit, reported (lossy by format)
+
+            // Every v1 encoder APPENDS its re-encoded maps after the room content and re-points the affected
+            // header / OBIM offset words inside [0, roomSize). INSERT the appended tail at the room's END
+            // (editOffset = roomSize, oldLen = 0) so no room-internal offset (box @0x15 is a single byte,
+            // EXCD/ENCD, object tables) shifts - they all precede roomSize - then overwrite [0, roomSize) with
+            // the encoder's re-pointed header. ApplyEdit (sizeWordOffset = 0) grows the room-0 size word and
+            // relocates the costume / script / sound resources packed after the room (and their index offsets).
+            int roomSize = df.RawContent.Length >= 2 ? (df.RawContent[0] | (df.RawContent[1] << 8)) : df.RawContent.Length;
+            if (roomSize <= 0 || roomSize > df.RawContent.Length) roomSize = df.RawContent.Length;
+            int mapsLen = rebuilt.Length - roomSize;
+            var mapsRegion = new byte[mapsLen];
+            System.Array.Copy(rebuilt, roomSize, mapsRegion, 0, mapsLen);
+            ScummV2Writer.ApplyEdit(df, index, roomNo, roomSize, 0, mapsRegion, 0);
+            System.Array.Copy(rebuilt, 0, df.RawContent, 0, roomSize);
+            return true;
         }
 
         // --- helpers ----------------------------------------------------------

@@ -117,6 +117,26 @@ namespace ScummEditor.Engine.Encoders
             return IndexedImageHelper.FromIndexMatrix(mask, new[] { Color.Black, Color.White }, -1);
         }
 
+        /// <summary>
+        /// Decodes object <paramref name="objectIndex"/>'s walk-behind (z-plane) mask, which follows the
+        /// object's graphics inside its OBIM region exactly as the background mask follows IM00 (ScummVM
+        /// GdiV2::prepareDrawBitmap decodes the z-plane for objects too). White = masked. Null when the object
+        /// has no owned image or no mask region.
+        /// </summary>
+        public Bitmap DecodeObjectZPlane(ScummV2Room room, int objectIndex)
+        {
+            if (!ObjectOwnsImage(room, objectIndex)) return null;
+            int obim = room.ObjectImageOffset(objectIndex);
+            int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
+            int gfxLen = GraphicsRleLength(room.Data, obim, w, h);
+            int maskStart = obim + gfxLen;
+            int objEnd = room.NextStructuralOffsetAbove(obim);
+            if (maskStart >= objEnd || maskStart >= room.Data.Length) return null;
+            byte[,] mask = DecodeMaskRle(room.Data, maskStart, w, h);
+            if (mask == null) return null;
+            return IndexedImageHelper.FromIndexMatrix(mask, new[] { Color.Black, Color.White }, -1);
+        }
+
         /// <summary>The GdiV2 mask RLE -> a [width,height] matrix of 0/1 (1 = mask bit set). Null on a malformed stream.</summary>
         public static byte[,] DecodeMaskRle(byte[] code, int offset, int width, int height)
         {

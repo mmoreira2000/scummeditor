@@ -59,7 +59,11 @@ namespace ScummEditor.Gui
             // the v4 block layout, so they take the v4 path.
             int version = _scummFile.LoadedGameInfo != null ? _scummFile.LoadedGameInfo.ScummVersion : 0;
             bool oldBundle = _scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.UsesOldBundle;
-            if (version <= 2)
+            if (version == 1)
+            {
+                ImportV1(location); // Maniac Mansion / Zak McKracken classic (GdiV1 tilemap - NOT the v2 codec)
+            }
+            else if (version == 2)
             {
                 ImportV2(location); // Maniac Mansion, Zak McKracken (GdiV2 raw-room games)
             }
@@ -75,6 +79,14 @@ namespace ScummEditor.Gui
             {
                 ImportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-imports edited GdiV1 tilemap images, z-planes and 0x57 costume frames into a v1 game.</summary>
+        private void ImportV1(string location)
+        {
+            ShowProgress(location);
+            ScummV4GraphicsBatch.ImportReport report = ScummV1Graphics.Import(_scummFile, location, OnImportProgress);
+            ShowImportResult(report.Imported, report.Found, report.Errors);
         }
 
         /// <summary>Batch-imports edited EGA backgrounds, object images, z-planes and costume frames into a v2 game.</summary>
