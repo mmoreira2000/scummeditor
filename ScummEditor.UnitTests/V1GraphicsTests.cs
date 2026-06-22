@@ -181,6 +181,51 @@ namespace ScummEditor.UnitTests
             Assert.True(tested > 0, "no v1 room available for a bloat check");
         }
 
+        /// <summary>
+        /// REGRESSION (the room-bloat bug, object path): importing an object image must also keep the room
+        /// compact. Objects share the charMap/maskChar and can even share one OBIM stream, so the full-room
+        /// rebuild re-encodes them in place - an edit must not balloon the room any more than a background one.
+        /// </summary>
+        [SkippableTheory]
+        [InlineData(GameLibrary.ManiacV1)]
+        [InlineData(GameLibrary.ZakV1)]
+        public void V1ObjectImportStaysCompact(string relativePath)
+        {
+            ScummGameData game = SkipOrLoad(relativePath);
+            var index = game.IndexFile as ScummV3OldBundleIndexFile;
+            bool isManiac = game.LoadedGameInfo.LoadedGame == ScummGame.ManiacMansion;
+            var decoder = new ScummV1ImageDecoder(isManiac);
+
+            int tested = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                if (tested >= 8) break;
+                var df = disk.Tree as ScummV3OldBundleDataFile;
+                if (df == null) continue;
+                int roomNo;
+                if (!int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
+                var room = new ScummV1Room(df.RawContent);
+
+                for (int i = 0; i < room.NumObjects; i++)
+                {
+                    Bitmap obj = decoder.DecodeObject(room, i);
+                    if (obj == null) continue;
+                    int origSize = df.RawContent[0] | (df.RawContent[1] << 8);
+                    string err;
+                    bool ok = OldBundleImageImporter.Import(df, index, roomNo, true, OldBundleImageKind.Object, i, obj, out err);
+                    obj.Dispose();
+                    Assert.True(ok, "v1 object import failed (room " + roomNo + " obj " + i + "): " + err);
+
+                    int newSize = df.RawContent[0] | (df.RawContent[1] << 8);
+                    Assert.True(newSize <= origSize + 2048,
+                        "v1 room bloated after an object import: " + origSize + " -> " + newSize + " (room " + roomNo + " obj " + i + ")");
+                    tested++;
+                    break;
+                }
+            }
+            Assert.True(tested > 0, "no v1 object available for a bloat check");
+        }
+
         private static string FreshTempDir(string name)
         {
             string dir = Path.Combine(Path.GetTempPath(), name);

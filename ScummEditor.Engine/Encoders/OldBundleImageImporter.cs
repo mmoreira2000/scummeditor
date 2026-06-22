@@ -186,12 +186,11 @@ namespace ScummEditor.Engine.Encoders
             var enc = new ScummV1ImageEncoder(isManiac);
             byte[] newRoom;
 
-            // The v1 encoder rebuilds the WHOLE room COMPACTLY (the 5 maps re-encoded in place, compressed) so
-            // the result stays about its original size - the real v1 engine (the DOS interpreter and ScummVM)
-            // cannot run a room that grew. Only the room's 5-map block changes (background pixels or the
-            // walk-behind mask), so background + background z-plane go through this; object-image / object
-            // z-plane import is temporarily disabled (its OBIM lives after the map block and needs the same
-            // compact rewrite - export still works).
+            // The v1 encoder rebuilds the WHOLE room COMPACTLY (every region re-laid back to back with real RLE
+            // compression, all offsets re-pointed) so the result stays about its original size - the real v1
+            // engine (the DOS interpreter and ScummVM) cannot run a room that ballooned. All four kinds go
+            // through this: background and object images edit the shared charMap; the masks edit the shared
+            // maskChar; an over-limit / unrepresentable edit is rejected (newRoom == null) rather than corrupted.
             switch (kind)
             {
                 case OldBundleImageKind.Background:
@@ -206,9 +205,22 @@ namespace ScummEditor.Engine.Encoders
                     newRoom = enc.EncodeBackgroundZPlane(room, MaskMatrixFromBitmap(png), out error);
                     break;
                 case OldBundleImageKind.Object:
+                {
+                    int ow = room.ObjectWidth(objectIndex), oh = room.ObjectHeight(objectIndex);
+                    if (ow <= 0 || oh <= 0) { error = "This object has no image."; return false; }
+                    if (!SizeMatches(png, ow, oh, out error)) return false;
+                    if (!Indexed(png, out error)) return false;
+                    newRoom = enc.EncodeObject(room, objectIndex, IndexedImageHelper.GetIndexMatrix(png), out error);
+                    break;
+                }
                 case OldBundleImageKind.ObjectZPlane:
-                    error = "v1 object-image / object z-plane import is export-only for now (the compact write-back is being finished); the room background and its walk-behind mask import normally.";
-                    return false;
+                {
+                    int ow = room.ObjectWidth(objectIndex), oh = room.ObjectHeight(objectIndex);
+                    if (ow <= 0 || oh <= 0) { error = "This object has no image to mask."; return false; }
+                    if (!SizeMatches(png, ow, oh, out error)) return false;
+                    newRoom = enc.EncodeObjectZPlane(room, objectIndex, MaskMatrixFromBitmap(png), out error);
+                    break;
+                }
                 default:
                     error = "Unsupported image kind."; return false;
             }
