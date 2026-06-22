@@ -1,3 +1,17 @@
+3.6.0
+-----
+* Fix (important): batch-exporting a v1 game (Maniac Mansion / Zak McKracken in their original 1987/1988 form) produced corrupted images and costume frames. The batch path decoded the v1 C64-style tilemap with the v2 picture codec; v1 now has its own batch export/import that uses the correct codec, matching what the per-resource viewers already did. The exported PNGs are pixel-identical to the single-resource export, and an unmodified export re-imports as a clean no-op.
+
+* Fix: Japanese (and other Far-Eastern) text in the v4-v6 games could be corrupted on export/import. The byte 0xFE is a string-control escape only in the v3 EGA games (Loom, Indiana Jones 3) - in v4-v6 it is ordinary text (a legal Shift-JIS trailing byte). The text codec now treats 0xFE as an escape only where it actually is one, so Japanese releases round-trip exactly.
+
+* New: per-glyph X/Y offset editing for fonts (the equivalent of scummtr's FontXY). The viewer's new 'Export X/Y' / 'Import X/Y' buttons write the per-character draw offsets to a small text file you can edit and re-import - so you can adjust a glyph's position or kerning (for example to make a translated accent sit right) without redrawing its bitmap. Character width/height still come from the PNG atlas; this only moves the glyph.
+
+* v2 object walk-behind (z-plane) masks are now included in the BATCH export/import, not only the per-resource viewer - so a translation that touches object masks can be processed in one pass like every other version.
+
+* Engine-wide validation: the whole game library, including every edition under 'Other Languages' (French, German, Italian, Spanish, Japanese, Hebrew, Brazilian, FM-Towns), was loaded and had every image and costume frame decoded with no failures; the costume codec gained a pixel-lossless round-trip test for the v4/v5/v6 games.
+
+* Known limitation unchanged: as before, an edit that changes the size of the index file changes its checksum, so ScummVM's automatic detection may need the new checksum (a size-neutral edit keeps it identical).
+
 3.5.1
 -----
 * Editing v1 and v2 images back in is now complete. Importing edited v1 OBJECT images and walk-behind (z-plane) masks is now supported, alongside the room backgrounds and costumes that were already importable in 3.5.0; v1 per-object masks - which the original DOS engine does keep, one per object - are now decoded, exported and imported as well. v1 stores the room background and every object image against one shared tile set, so the importer preserves that set and only adds the tiles an edit needs, leaving every other image in the room untouched. An edit that cannot fit v1's format (more than 256 distinct tiles, or more than four colours in a cell) is still rejected with a clear message rather than silently corrupted.
