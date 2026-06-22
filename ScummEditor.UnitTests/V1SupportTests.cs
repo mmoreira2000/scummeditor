@@ -303,8 +303,8 @@ namespace ScummEditor.UnitTests
 
         /// <summary>
         /// Full v1 OBJECT-image WRITE-BACK round-trip: re-importing a decoded object image (a 3-plane tile map
-        /// sharing the room charMap) reproduces it pixel-for-pixel. Proves the tile/colour plane re-encode is
-        /// lossless and the mask plane is preserved.
+        /// sharing the room charMap) reproduces it pixel-for-pixel. Proves the compact full-room rebuild
+        /// re-encodes the object's tile/colour planes losslessly and preserves the mask plane.
         /// </summary>
         [SkippableTheory]
         [InlineData(GameLibrary.ManiacV1)]

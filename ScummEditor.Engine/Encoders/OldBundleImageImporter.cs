@@ -184,56 +184,51 @@ namespace ScummEditor.Engine.Encoders
             var room = new ScummV1Room(df.RawContent);
             bool isManiac = df.GameInfo != null && df.GameInfo.LoadedGame == ScummGame.ManiacMansion;
             var enc = new ScummV1ImageEncoder(isManiac);
-            byte[] rebuilt;
+            byte[] newRoom;
 
+            // The v1 encoder rebuilds the WHOLE room COMPACTLY (every region re-laid back to back with real RLE
+            // compression, all offsets re-pointed) so the result stays about its original size - the real v1
+            // engine (the DOS interpreter and ScummVM) cannot run a room that ballooned. All four kinds go
+            // through this: background and object images edit the shared charMap; the masks edit the shared
+            // maskChar; an over-limit / unrepresentable edit is rejected (newRoom == null) rather than corrupted.
             switch (kind)
             {
                 case OldBundleImageKind.Background:
                     if (room.WidthInChars <= 0 || room.HeightInChars <= 0) { error = "This room has no background image."; return false; }
                     if (!SizeMatches(png, room.Width, room.Height, out error)) return false;
                     if (!Indexed(png, out error)) return false;
-                    rebuilt = enc.EncodeBackground(room, IndexedImageHelper.GetIndexMatrix(png), out error);
+                    newRoom = enc.EncodeBackground(room, IndexedImageHelper.GetIndexMatrix(png), out error);
                     break;
-                case OldBundleImageKind.Object:
-                {
-                    int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
-                    if (w <= 0 || h <= 0) { error = "This object has no image."; return false; }
-                    if (!SizeMatches(png, w, h, out error)) return false;
-                    if (!Indexed(png, out error)) return false;
-                    rebuilt = enc.EncodeObject(room, objectIndex, IndexedImageHelper.GetIndexMatrix(png), out error);
-                    break;
-                }
                 case OldBundleImageKind.BackgroundZPlane:
                     if (room.WidthInChars <= 0 || room.HeightInChars <= 0) { error = "This room has no background to mask."; return false; }
                     if (!SizeMatches(png, room.Width, room.Height, out error)) return false;
-                    rebuilt = enc.EncodeBackgroundZPlane(room, MaskMatrixFromBitmap(png), out error);
+                    newRoom = enc.EncodeBackgroundZPlane(room, MaskMatrixFromBitmap(png), out error);
                     break;
+                case OldBundleImageKind.Object:
+                {
+                    int ow = room.ObjectWidth(objectIndex), oh = room.ObjectHeight(objectIndex);
+                    if (ow <= 0 || oh <= 0) { error = "This object has no image."; return false; }
+                    if (!SizeMatches(png, ow, oh, out error)) return false;
+                    if (!Indexed(png, out error)) return false;
+                    newRoom = enc.EncodeObject(room, objectIndex, IndexedImageHelper.GetIndexMatrix(png), out error);
+                    break;
+                }
                 case OldBundleImageKind.ObjectZPlane:
                 {
-                    int w = room.ObjectWidth(objectIndex), h = room.ObjectHeight(objectIndex);
-                    if (w <= 0 || h <= 0) { error = "This object has no image to mask."; return false; }
-                    if (!SizeMatches(png, w, h, out error)) return false;
-                    rebuilt = enc.EncodeObjectZPlane(room, objectIndex, MaskMatrixFromBitmap(png), out error);
+                    int ow = room.ObjectWidth(objectIndex), oh = room.ObjectHeight(objectIndex);
+                    if (ow <= 0 || oh <= 0) { error = "This object has no image to mask."; return false; }
+                    if (!SizeMatches(png, ow, oh, out error)) return false;
+                    newRoom = enc.EncodeObjectZPlane(room, objectIndex, MaskMatrixFromBitmap(png), out error);
                     break;
                 }
                 default:
                     error = "Unsupported image kind."; return false;
             }
-            if (rebuilt == null) return false; // an over-limit / unrepresentable edit, reported (lossy by format)
+            if (newRoom == null) return false; // over-limit / unrepresentable / non-standard layout, already reported
 
-            // Every v1 encoder APPENDS its re-encoded maps after the room content and re-points the affected
-            // header / OBIM offset words inside [0, roomSize). INSERT the appended tail at the room's END
-            // (editOffset = roomSize, oldLen = 0) so no room-internal offset (box @0x15 is a single byte,
-            // EXCD/ENCD, object tables) shifts - they all precede roomSize - then overwrite [0, roomSize) with
-            // the encoder's re-pointed header. ApplyEdit (sizeWordOffset = 0) grows the room-0 size word and
-            // relocates the costume / script / sound resources packed after the room (and their index offsets).
-            int roomSize = df.RawContent.Length >= 2 ? (df.RawContent[0] | (df.RawContent[1] << 8)) : df.RawContent.Length;
-            if (roomSize <= 0 || roomSize > df.RawContent.Length) roomSize = df.RawContent.Length;
-            int mapsLen = rebuilt.Length - roomSize;
-            var mapsRegion = new byte[mapsLen];
-            System.Array.Copy(rebuilt, roomSize, mapsRegion, 0, mapsLen);
-            ScummV2Writer.ApplyEdit(df, index, roomNo, roomSize, 0, mapsRegion, 0);
-            System.Array.Copy(rebuilt, 0, df.RawContent, 0, roomSize);
+            // newRoom is a fully self-consistent, compact room resource; splice it in for the old one and
+            // relocate the costume / script / sound sub-resources packed after it in the NN.LFL.
+            ScummV2Writer.ReplaceRoomResource(df, index, roomNo, newRoom);
             return true;
         }
 
