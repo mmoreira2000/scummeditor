@@ -1,6 +1,7 @@
 using System.Drawing;
 using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures.DataFile;
 using Xunit;
 
 namespace ScummEditor.UnitTests
@@ -40,6 +41,48 @@ namespace ScummEditor.UnitTests
             {
                 var encoder = new CostumeImageEncoderV4();
                 Assert.Throws<ImageEncodeException>(() => encoder.Encode(truecolor, 16));
+            }
+        }
+
+        /// <summary>
+        /// The v4 costume codec (reused for v2/v3/v4 at 16 colours and v5/v6 at 16/32) is pixel-lossless:
+        /// encode -> decode reproduces the exact palette indices, for both the 4/4-bit (16) and 5/3-bit (32)
+        /// bit-stream packings. Guards against RLE / bit-packing regressions the size-only tests miss.
+        /// </summary>
+        [Theory]
+        [InlineData(16)]
+        [InlineData(32)]
+        public void EncodeDecodeRoundTripIsLossless(int paletteSize)
+        {
+            var palette = new Color[paletteSize];
+            for (int i = 0; i < paletteSize; i++)
+            {
+                int v = (i * 255) / (paletteSize - 1); // distinct greys, so the index is recoverable
+                palette[i] = Color.FromArgb(v, v, v);
+            }
+
+            int w = 16, h = 24;
+            var indices = new byte[w, h];
+            for (int x = 0; x < w; x++)
+                for (int y = 0; y < h; y++)
+                    indices[x, y] = (byte)((x + (y / 4)) % paletteSize); // vertical runs exercise the column-major RLE
+
+            using (Bitmap src = IndexedImageHelper.FromIndexMatrix(indices, palette, -1))
+            {
+                byte[] rle = new CostumeImageEncoderV4().Encode(src, paletteSize);
+                var data = new CostumeImageData { Width = (ushort)w, Height = (ushort)h, ImageData = rle };
+
+                using (Bitmap back = new CostumeImageDecoderV4().Decode(data, paletteSize, palette, false))
+                {
+                    Assert.NotNull(back);
+                    Assert.Equal(w, back.Width);
+                    Assert.Equal(h, back.Height);
+                    byte[,] a = IndexedImageHelper.GetIndexMatrix(src);
+                    byte[,] b = IndexedImageHelper.GetIndexMatrix(back);
+                    for (int x = 0; x < w; x++)
+                        for (int y = 0; y < h; y++)
+                            Assert.True(a[x, y] == b[x, y], "costume codec not lossless at (" + x + "," + y + ")");
+                }
             }
         }
 

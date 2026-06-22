@@ -32,6 +32,15 @@ namespace ScummEditor.Engine.Encoders
         private readonly Dictionary<byte, char> _byteToChar = new Dictionary<byte, char>();
         private readonly Dictionary<char, byte> _charToByte = new Dictionary<char, byte>();
 
+        /// <summary>
+        /// Whether 0xFE introduces a string escape (like 0xFF). This is true ONLY for v3 old-bundle games
+        /// (Loom EGA, Indy3 EGA), matching ScummV3Disassembler's IsOldBundle rule. For v3-small / v4 / v5 / v6
+        /// 0xFE is ordinary content - it is a legal SJIS trail byte / CJK newline glyph in Japanese releases -
+        /// so treating it as an escape there desynced the codec from the disassembler and corrupted the text.
+        /// Defaults to false (the safe v4-v6 behaviour); the v3-old text manager sets it true.
+        /// </summary>
+        public bool FeEscape { get; set; }
+
         // FF/FE escape codes without an argument; all the others carry a 16-bit LE argument.
         private static readonly int[] NoArgCodes = { 1, 2, 3, 8 };
 
@@ -152,7 +161,7 @@ namespace ScummEditor.Engine.Encoders
             {
                 byte b = buf[i];
 
-                if ((b == 0xFF || b == 0xFE) && i + 1 < end)
+                if ((b == 0xFF || (b == 0xFE && FeEscape)) && i + 1 < end)
                 {
                     byte code = buf[i + 1];
                     string prefix = b == 0xFE ? "fe-" : "";
@@ -257,7 +266,13 @@ namespace ScummEditor.Engine.Encoders
 
             byte prefix = 0xFF;
             string body = token;
-            if (body.StartsWith("fe-")) { prefix = 0xFE; body = body.Substring(3); }
+            if (body.StartsWith("fe-"))
+            {
+                // 0xFE is only an escape for v3 old-bundle; in v4-v6 it is ordinary content, so a {fe-...}
+                // token there would round-trip to a different byte sequence. Reject it instead.
+                if (!FeEscape) { error = "the {fe-...} escape is only valid in v3 old-bundle games: {" + token + "}"; return false; }
+                prefix = 0xFE; body = body.Substring(3);
+            }
 
             string name = body;
             string argText = null;

@@ -898,7 +898,7 @@ namespace ScummEditor.Engine.Encoders
                 while (i < content.Length)
                 {
                     byte b = content[i];
-                    if (b == 0xFF || b == 0xFE)
+                    if (b == 0xFF || (b == 0xFE && codec.FeEscape))
                     {
                         // skip escape (and its argument) so control bytes are not treated as glyphs
                         if (i + 1 >= content.Length) break;
