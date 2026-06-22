@@ -23,8 +23,9 @@ namespace ScummEditor.Engine.Encoders
       - The PNG is 8bpp indexed and each pixel byte is the raw glyph pixel value
         (0 = transparent, 1..2^bpp-1 = ink), exactly like the room-image export pipeline.
         The file must stay in indexed mode when edited.
-      - A companion guide PNG (same size) shows the grid, the hex slot ids, the origin
-        marks and the current glyphs, to be used as a reference layer in Photoshop.
+      - A companion guide PNG (same size) shows the grid, the hex slot ids, a box around
+        each present glyph at its x/y offset (the footprint the FontXY metrics control)
+        and the current glyphs, to be used as a reference layer in Photoshop.
 
     Import safety: a cell whose pixels are identical to what export produces for the
     current font keeps the original glyph bytes verbatim (so blank-but-present glyphs like
@@ -189,10 +190,6 @@ namespace ScummEditor.Engine.Encoders
                     int cx = (slot % Columns) * cellW;
                     int cy = (slot / Columns) * cellH;
 
-                    // origin marks: the glyph origin is at (marginX, marginY) in each cell
-                    gfx.DrawLine(originPen, cx + marginX, cy + marginY - 3, cx + marginX, cy + marginY + 3);
-                    gfx.DrawLine(originPen, cx + marginX - 3, cy + marginY, cx + marginX + 3, cy + marginY);
-
                     // current glyph, as editing context
                     if (slot < charset.Glyphs.Count)
                     {
@@ -205,6 +202,13 @@ namespace ScummEditor.Engine.Encoders
                                     if (values[x, y] != 0)
                                         gfx.FillRectangle(glyphBrush,
                                             cx + marginX + glyph.XOffset + x, cy + marginY + glyph.YOffset + y, 1, 1);
+
+                            // offset box: the glyph's W x H footprint at its x/y draw offset, relative to the
+                            // cell origin at (marginX, marginY). Its position shows the offset (what FontXY's
+                            // X/Y metrics control); its size shows the glyph's extent. (Replaces the old origin cross.)
+                            gfx.DrawRectangle(originPen,
+                                cx + marginX + glyph.XOffset, cy + marginY + glyph.YOffset,
+                                glyph.Width - 1, glyph.Height - 1);
                         }
                     }
 

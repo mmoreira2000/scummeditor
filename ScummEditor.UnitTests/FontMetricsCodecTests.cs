@@ -45,7 +45,7 @@ namespace ScummEditor.UnitTests
             int newX = g.XOffset == 5 ? 6 : 5;
             int newY = g.YOffset == -3 ? -2 : -3;
 
-            changed = FontMetricsCodec.Import(cs, index + ": " + newX + " " + newY, out errors);
+            changed = FontMetricsCodec.Import(cs, index.ToString("X2") + ": " + newX + " " + newY, out errors);
             Assert.Empty(errors);
             Assert.Equal(1, changed);
             Assert.Equal(before.Length, cs.RawContent.Length); // size-neutral
@@ -80,9 +80,9 @@ namespace ScummEditor.UnitTests
 
             string text =
                 "; a comment\n" +
-                "9999: 0 0\n" +              // unknown/absent glyph -> reported
-                g.Index + ": 200 0\n" +      // out of range -> reported
-                g.Index + ": " + (g.XOffset == 1 ? 2 : 1) + " " + g.YOffset + "\n"; // valid edit
+                "9999: 0 0\n" +                          // unknown/absent glyph (hex 0x9999) -> reported
+                g.Index.ToString("X2") + ": 200 0\n" +   // out of range -> reported
+                g.Index.ToString("X2") + ": " + (g.XOffset == 1 ? 2 : 1) + " " + g.YOffset + "\n"; // valid edit
             List<string> errors;
             int changed = FontMetricsCodec.Import(cs, text, out errors);
 

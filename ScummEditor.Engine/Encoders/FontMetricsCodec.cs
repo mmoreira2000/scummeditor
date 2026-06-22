@@ -14,9 +14,10 @@ namespace ScummEditor.Engine.Encoders
     /// independently here. The edit is SIZE-NEUTRAL (it patches the two offset bytes in place), so no block
     /// relocation is needed; the parent re-saves the charset's RawContent verbatim.
     ///
-    /// Text format: one line per PRESENT glyph, "&lt;index&gt;: &lt;xOffset&gt; &lt;yOffset&gt;", with a read-only
-    /// "; WxH" width/height note. Lines starting with ';' and blank lines are ignored. Absent glyphs are
-    /// omitted. Re-importing an unmodified export changes nothing.
+    /// Text format: one line per PRESENT glyph, "&lt;hexIndex&gt;: &lt;xOffset&gt; &lt;yOffset&gt;", with a read-only
+    /// "; WxH" width/height note. The index is the 2-digit HEX glyph slot id, matching the cell labels in
+    /// the guide PNG, so a translator can line up each row with the glyph it sees. Lines starting with ';'
+    /// and blank lines are ignored. Absent glyphs are omitted. Re-importing an unmodified export changes nothing.
     /// </summary>
     public static class FontMetricsCodec
     {
@@ -24,14 +25,15 @@ namespace ScummEditor.Engine.Encoders
         {
             var sb = new StringBuilder();
             sb.Append("; SCUMM font glyph metrics - X/Y draw offsets (like scummtr FontXY).\r\n");
-            sb.Append("; Edit the two numbers after each index: <index>: <xOffset> <yOffset>   (range -128..127).\r\n");
+            sb.Append("; The index is the HEX glyph slot id (same as the cell labels in the guide PNG).\r\n");
+            sb.Append("; Edit the two numbers after each index: <hexIndex>: <xOffset> <yOffset>   (range -128..127).\r\n");
             sb.Append("; The 'WxH' note is read-only - width/height come from the glyph bitmap (edit via the PNG atlas).\r\n");
             if (charset == null || charset.Glyphs == null) return sb.ToString();
 
             foreach (Glyph g in charset.Glyphs)
             {
                 if (!g.Present) continue;
-                sb.Append(g.Index).Append(": ")
+                sb.Append(g.Index.ToString("X2")).Append(": ")
                   .Append(g.XOffset).Append(' ').Append(g.YOffset)
                   .Append("   ; ").Append(g.Width).Append('x').Append(g.Height)
                   .Append("\r\n");
@@ -66,11 +68,14 @@ namespace ScummEditor.Engine.Encoders
                 if (line.Length == 0) continue;
 
                 int colon = line.IndexOf(':');
-                if (colon <= 0) { errors.Add(Line(ln) + "expected '<index>: <x> <y>'"); continue; }
+                if (colon <= 0) { errors.Add(Line(ln) + "expected '<hexIndex>: <x> <y>'"); continue; }
 
+                // The index is hex (matching the guide PNG cell labels); tolerate an optional 0x prefix.
+                string idText = line.Substring(0, colon).Trim();
+                if (idText.StartsWith("0x") || idText.StartsWith("0X")) idText = idText.Substring(2);
                 int index;
-                if (!int.TryParse(line.Substring(0, colon).Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out index))
-                { errors.Add(Line(ln) + "invalid glyph index"); continue; }
+                if (!int.TryParse(idText, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out index))
+                { errors.Add(Line(ln) + "invalid glyph index (expected hex, e.g. E3)"); continue; }
 
                 string[] parts = line.Substring(colon + 1).Split(new[] { ' ', '\t', ',' }, StringSplitOptions.RemoveEmptyEntries);
                 int x, y;
