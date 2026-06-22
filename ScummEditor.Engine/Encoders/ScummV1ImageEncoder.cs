@@ -536,7 +536,12 @@ namespace ScummEditor.Engine.Encoders
             int roomSize = RoomSize(room);
             int charOff0 = room.CharMapOffset, picOff0 = room.PicMapOffset, colorOff0 = room.ColorMapOffset;
             int maskMapOff0 = room.MaskMapOffset, maskDataOff0 = room.MaskDataOffset;
-            if (charOff0 <= 0 || picOff0 <= 0 || colorOff0 <= 0 || maskMapOff0 <= 0 || maskDataOff0 <= 0)
+            // Every map offset must be a real in-room position (> 0 and < roomSize). Besides catching a
+            // non-standard layout, this guarantees each map offset is added as a region below, so the
+            // direct newOffsetOf[...] re-pointing at the end cannot miss a key and throw.
+            if (charOff0 <= 0 || picOff0 <= 0 || colorOff0 <= 0 || maskMapOff0 <= 0 || maskDataOff0 <= 0 ||
+                charOff0 >= roomSize || picOff0 >= roomSize || colorOff0 >= roomSize ||
+                maskMapOff0 >= roomSize || maskDataOff0 >= roomSize)
             { error = "This room's map layout is non-standard; its image cannot be re-imported safely."; return null; }
 
             // The new bytes for every region we re-encode, keyed by the region's ORIGINAL file offset.
@@ -572,7 +577,10 @@ namespace ScummEditor.Engine.Encoders
                             if (len > maxLen) maxLen = len;
                         }
                     if (maxLen <= 0) { error = "The edited object has no decodable image block."; return null; }
-                    byte[] full = ScummV1ImageDecoder.DecodeV1Gfx(room.Data, off, maxLen) ?? new byte[maxLen];
+                    // Decode the WHOLE shared stream (long enough for the largest reader). If it cannot be
+                    // decoded, refuse - zero-filling would silently wipe the image data the other sharers read.
+                    byte[] full = ScummV1ImageDecoder.DecodeV1Gfx(room.Data, off, maxLen);
+                    if (full == null) { error = "This object's shared image stream could not be decoded; its image cannot be re-imported safely."; return null; }
                     foreach (int objIdx in grp.Value)
                     {
                         byte[] em = objEdits[objIdx];
@@ -600,8 +608,11 @@ namespace ScummEditor.Engine.Encoders
             if (offsets.Count == 0) { error = "This room has no relocatable regions; its image cannot be re-imported safely."; return null; }
 
             var sorted = new List<int>(offsets);
-            int headerEnd = sorted[0]; // the fixed header + OBIM/OBCD tables + id lists live in [0, headerEnd)
-            if (headerEnd < 28 + numObj * 4)
+            int headerEnd = sorted[0]; // the fixed header + OBIM/OBCD tables + sound/script id lists live in [0, headerEnd)
+            // The header runs: fixed fields, the OBIM+OBCD tables (numObj*2 each), then the 1-byte sound and
+            // script id lists (numSounds + numScripts). The first region MUST start at or after all of that,
+            // or the verbatim header copy would truncate the id lists and the engine would read garbage ids.
+            if (headerEnd < 28 + numObj * 4 + room.NumSounds + room.NumScripts)
             { error = "This room's header/region layout is non-standard; its image cannot be re-imported safely."; return null; }
 
             // Lay the room out: header verbatim, then each region (re-encoded where edited, else verbatim) in
@@ -632,7 +643,9 @@ namespace ScummEditor.Engine.Encoders
             WriteU16Buf(nr, 18, newOffsetOf[maskDataOff0]);
             if (boxOff > 0)
             {
-                int nb = newOffsetOf[boxOff];
+                int nb;
+                if (!newOffsetOf.TryGetValue(boxOff, out nb))
+                { error = "This room's box offset is out of range; its image cannot be re-imported safely."; return null; }
                 if (nb > 0xFF) { error = "The re-encoded room pushes the 1-byte box offset out of range."; return null; }
                 nr[0x15] = (byte)nb;
             }

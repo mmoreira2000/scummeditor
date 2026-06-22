@@ -1,3 +1,11 @@
+3.6.1
+-----
+* Fix (critical): importing an edited image back into a v1 game (Maniac Mansion / Zak McKracken in their original 1987/1988 form) produced a game the real engine could not run - it started to a black screen under both the original DOS interpreter and ScummVM. The room was being rebuilt by appending the re-encoded picture data and leaving the old data behind, which roughly doubled the room, and the v1 engine cannot load a room that grew like that. Rooms are now rebuilt compactly - the picture data is re-compressed in place and every internal offset re-pointed - so an edited room stays close to its original size and the game runs. Confirmed by running an edited Maniac Mansion in DOSBox.
+
+* Importing edited v1 OBJECT images and object walk-behind (z-plane) masks works again (they were briefly export-only while the compact rebuild was finished). Where several objects share one piece of picture data - which the original games do, reading the same bytes at different sizes - an edit re-encodes the shared picture so every object that uses it stays valid. As before, an edit that cannot fit v1's format (more than 256 distinct tiles, or more than four colours in a cell) is rejected with a clear message rather than silently corrupted.
+
+* Stress-tested by stamping a coloured mark on every background, object and costume of a copy of Maniac Mansion at once (hundreds of edits) and confirming the game still boots to character-select and renders the marks in DOSBox, with rooms staying compact.
+
 3.6.0
 -----
 * Fix (important): batch-exporting a v1 game (Maniac Mansion / Zak McKracken in their original 1987/1988 form) produced corrupted images and costume frames. The batch path decoded the v1 C64-style tilemap with the v2 picture codec; v1 now has its own batch export/import that uses the correct codec, matching what the per-resource viewers already did. The exported PNGs are pixel-identical to the single-resource export, and an unmodified export re-imports as a clean no-op.
