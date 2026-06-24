@@ -85,6 +85,33 @@ namespace ScummEditor.Engine.Structures.DataFile
                         Childrens.Add(OBCD);
                         break;
 
+                    // Image blocks are typed so the image decoder/encoder and the GUI preview work on
+                    // v7. The SMAP strip codec, z-planes and APAL palette are identical to v5/v6; only
+                    // the headers (RMHD - done - and IMHD) carry the v7 layout. All keep their bytes.
+                    case "TRNS":
+                        var TRNS = new ValuePaddingBlock(this, "TRNS");
+                        TRNS.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(TRNS);
+                        break;
+
+                    case "PALS":
+                        var PALS = new PalettesData(this);
+                        PALS.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(PALS);
+                        break;
+
+                    case "RMIM":
+                        var RMIM = new RoomImage(this, this);
+                        RMIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMIM);
+                        break;
+
+                    case "OBIM":
+                        var OBIM = new ObjectImage(this);
+                        OBIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBIM);
+                        break;
+
                     default:
                         var child = new RawContainerBlock(this, typeRead);
                         child.LoadFromBinaryReader(binaryReader);

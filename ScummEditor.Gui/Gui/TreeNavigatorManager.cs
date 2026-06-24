@@ -458,15 +458,6 @@ namespace ScummEditor.Gui
 
             string name = item.GetType().Name;
 
-            // v7 (The Dig, Full Throttle) rooms are not yet decoded into typed image/costume blocks
-            // (RMIM/PALS/OBIM are kept as generic byte-preserved blocks for now), so the rich DiskBlock
-            // room preview would fail looking for them. Fall back to the generic block view; the rich
-            // preview arrives with the typed v7 image/costume support in a later phase.
-            if (name == typeof(DiskBlock).Name && item.GameInfo != null && item.GameInfo.ScummVersion == 7)
-            {
-                name = typeof(BlockBase).Name;
-            }
-
             if (_controlViewers.ContainsKey(name))
             {
                 _controlViewers[name].SetAndRefreshData(item);

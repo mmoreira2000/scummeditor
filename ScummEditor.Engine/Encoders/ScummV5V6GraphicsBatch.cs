@@ -150,8 +150,14 @@ namespace ScummEditor.Engine.Encoders
                     {
                         if (file.ImageType == ImageType.Costume)
                         {
-                            Costume costume = diskBlocks[file.RoomIndex].GetCostumes()[file.CostumeIndex];
-                            ImageResourceCodec.Encode(room, costume, ImageType.Costume, 0, file.FrameIndex, 0, bitmap, ImageEncoder.EncodeTypeSettings.AutoDetect);
+                            // v7 costumes are AKOS (not the v5/v6 COST format), so GetCostumes() is empty
+                            // for a v7 game; guard the index so a stray costume PNG is reported, not a crash.
+                            List<Costume> costumes = diskBlocks[file.RoomIndex].GetCostumes();
+                            if (file.CostumeIndex < 0 || file.CostumeIndex >= costumes.Count)
+                            {
+                                throw new ImageEncodeException("no costume #" + file.CostumeIndex + " in room " + file.RoomIndex);
+                            }
+                            ImageResourceCodec.Encode(room, costumes[file.CostumeIndex], ImageType.Costume, 0, file.FrameIndex, 0, bitmap, ImageEncoder.EncodeTypeSettings.AutoDetect);
                         }
                         else
                         {
