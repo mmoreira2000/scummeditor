@@ -132,7 +132,12 @@ namespace ScummEditor.Engine.Structures.DataFile
         {
             if (IsKnownV7LflfTag(tag) && HasValidBlockSize(binaryReader, endPosition))
             {
-                var child = new RawContainerBlock(this, tag);
+                // Global scripts are typed so the text pipeline can read them; the rest (SOUN/iMUS, AKOS
+                // costumes, CHAR) stay generic byte-preserved blocks. All keep their bytes for an exact
+                // rebuild.
+                BlockBase child = tag == "SCRP"
+                    ? (BlockBase)new ScriptBlock(this, "SCRP")
+                    : new RawContainerBlock(this, tag);
                 child.LoadFromBinaryReader(binaryReader);
                 Childrens.Add(child);
                 return;

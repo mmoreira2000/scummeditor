@@ -278,6 +278,16 @@ namespace ScummEditor.Engine.Structures.DataFile
 
         private void ParseCodeHeader(int p, int length)
         {
+            // SCUMM v7 CDHD body has 8 bytes: version:32le, obj id:16le, parent:8, parent state:8.
+            // (v7 moved the position/size fields out of the code header; only the id is kept here.)
+            if (length == 8)
+            {
+                HasCodeHeader = true;
+                ObjectId = ReadUInt16(p + 4);
+                ParentObject = RawContent[p + 6];
+                return;
+            }
+
             // SCUMM v5 CDHD body has 13 bytes; x/y/w/h are bytes in 8-pixel units.
             //   obj id:16le, x:8, y:8, w:8, h:8, flags:8, parent:8, walk_x:16le, walk_y:16le, actor dir:8
             if (length == 13)

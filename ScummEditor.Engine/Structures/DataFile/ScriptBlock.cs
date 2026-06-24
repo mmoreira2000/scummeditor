@@ -51,8 +51,19 @@ namespace ScummEditor.Engine.Structures.DataFile
 
             if (_blockType == "LSCR" && RawContent.Length > 0)
             {
-                ScriptId = RawContent[0];
-                CodeOffset = 1;
+                // The local-script id is 1 byte on v5/v6, but 2 bytes (LE) on v7 (The Dig, Full Throttle
+                // have far more local scripts); the bytecode starts right after it. Using the v6 1-byte
+                // offset on v7 starts the disassembly one byte early and desyncs every local script.
+                if (_gameInfo != null && _gameInfo.ScummVersion == 7 && RawContent.Length >= 2)
+                {
+                    ScriptId = RawContent[0] | (RawContent[1] << 8);
+                    CodeOffset = 2;
+                }
+                else
+                {
+                    ScriptId = RawContent[0];
+                    CodeOffset = 1;
+                }
             }
         }
 

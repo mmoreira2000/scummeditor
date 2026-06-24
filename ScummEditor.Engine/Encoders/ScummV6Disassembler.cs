@@ -484,6 +484,16 @@ namespace ScummEditor.Engine.Encoders
                 case 0xD8: Push("isRoomScriptRunning(" + Pop() + ")"); break;
                 case 0xDD: Push("findAllObjects(" + Pop() + ")"); break;
 
+                // Valid v6 opcodes that DOTT / Sam & Max never emit but The Dig / Full Throttle (v7,
+                // which reuses the v6 opcode table) do. getPixel/getActorLayer/getObjectNewDir pop their
+                // args off the stack (no inline bytes); pickVarRandom reads a stack list AND an inline
+                // word (the array variable); setBoxSet pops one arg.
+                case 0xE1: { string b = Pop(); string a = Pop(); Push("getPixel(" + a + ", " + b + ")"); break; }
+                case 0xE3: { string list = PopStackList(); string v = Var(ReadWord()); Push("pickVarRandom(" + v + ", " + list + ")"); break; }
+                case 0xE4: StmtCall(offset, "setBoxSet", 1); break;
+                case 0xEC: Push("getActorLayer(" + Pop() + ")"); break;
+                case 0xED: Push("getObjectNewDir(" + Pop() + ")"); break;
+
                 // ---- sub-opcode groups ----
                 case 0x6B: SubOp(offset, "cursorCommand", CursorCommand); break;
                 case 0x9B: SubOp(offset, "resourceRoutines", ResourceRoutines); break;
@@ -578,7 +588,10 @@ namespace ScummEditor.Engine.Encoders
 
         private static readonly Dictionary<int, string> WaitOps = new Dictionary<int, string>
         {
-            {0xA8,"waitForActor"}, {0xA9,"waitForMessage"}, {0xAA,"waitForCamera"}, {0xAB,"waitForSentence"}
+            {0xA8,"waitForActor"}, {0xA9,"waitForMessage"}, {0xAA,"waitForCamera"}, {0xAB,"waitForSentence"},
+            // SO_WAIT_FOR_ANIMATION (226) and SO_WAIT_FOR_TURN (232) are used by The Dig (v7); like
+            // waitForActor they carry an inline jump offset. DOTT / Sam & Max never emit them.
+            {0xE2,"waitForAnimation"}, {0xE8,"waitForTurn"}
         };
 
         private static readonly Dictionary<int, string> SaveRestoreVerbs = new Dictionary<int, string>
@@ -621,7 +634,10 @@ namespace ScummEditor.Engine.Encoders
         {
             byte sub = ReadByte();
             string name = SubName(WaitOps, sub);
-            if (sub == 0xA8)
+            // SO_WAIT_FOR_ACTOR (0xA8), SO_WAIT_FOR_ANIMATION (0xE2) and SO_WAIT_FOR_TURN (0xE8) each
+            // carry an inline signed-word jump offset (the script loops back while the actor is still
+            // moving / animating / turning); the other wait sub-ops have no inline operand.
+            if (sub == 0xA8 || sub == 0xE2 || sub == 0xE8)
             {
                 string actor = DrainStack();
                 string label = Jump(offset);

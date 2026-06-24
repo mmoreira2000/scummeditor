@@ -80,6 +80,12 @@ namespace ScummEditor.Engine.Encoders
         {
             if (game == null || game.LoadedGameInfo == null) return;
 
+            // The content word-heuristic is tuned for v2-v6. v7 (The Dig, Full Throttle) translated
+            // editions keep many English engine/debug strings in their scripts, which the heuristic
+            // misreads as English; until a proper v7 language detector exists, leave v7 as Unknown
+            // rather than report the wrong language.
+            if (game.LoadedGameInfo.ScummVersion >= 7) return;
+
             ScummLanguage md5 = game.LoadedGameInfo.Language;
             if (md5 != ScummLanguage.Unknown && md5 != ScummLanguage.English) return; // trust a confident non-English MD5
 

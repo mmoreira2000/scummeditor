@@ -60,17 +60,36 @@ namespace ScummEditor.Engine.Structures.DataFile
             while (binaryReader.Position < endPosition)
             {
                 string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
-                if (typeRead == "RMHD")
+                switch (typeRead)
                 {
-                    var RMHD = new RoomHeader(this);
-                    RMHD.LoadFromBinaryReader(binaryReader);
-                    Childrens.Add(RMHD);
-                }
-                else
-                {
-                    var child = new RawContainerBlock(this, typeRead);
-                    child.LoadFromBinaryReader(binaryReader);
-                    Childrens.Add(child);
+                    case "RMHD":
+                        var RMHD = new RoomHeader(this);
+                        RMHD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMHD);
+                        break;
+
+                    // Script and object-code blocks are typed so the text pipeline (which finds
+                    // ScriptBlock / ObjectCode children and disassembles their v6-compatible bytecode)
+                    // works on v7. They keep their raw bytes, so the room still rebuilds byte-for-byte.
+                    case "EXCD":
+                    case "ENCD":
+                    case "LSCR":
+                        var script = new ScriptBlock(this, typeRead);
+                        script.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(script);
+                        break;
+
+                    case "OBCD":
+                        var OBCD = new ObjectCode(this);
+                        OBCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBCD);
+                        break;
+
+                    default:
+                        var child = new RawContainerBlock(this, typeRead);
+                        child.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(child);
+                        break;
                 }
             }
         }
