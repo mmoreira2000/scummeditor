@@ -39,10 +39,17 @@ namespace ScummEditor.Engine.Structures.DataFile
         public override void LoadFromBinaryReader(System.IO.Stream binaryReader)
         {
             base.LoadFromBinaryReader(binaryReader);
-            Contents = binaryReader.ReadBytes((int)(BlockSize - HeaderLength));
+            int bodyLen = (int)(BlockSize - HeaderLength);
+            if (bodyLen < 0) bodyLen = 0; // a corrupt/misaligned size must not throw OverflowException on new byte[neg]
+            Contents = binaryReader.ReadBytes(bodyLen);
 
-            //Hack for the Monkey Island 2 talkie edition (v5/v6 only).
-            if (!IsSmallHeader && BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "021_")
+            // Hack for the "021_" stray block the Monkey Island 2 ULTIMATE TALKIE packer leaves behind (8
+            // orphan bytes after a generic block). Gate it to talkie games: a non-talkie game (e.g. MI2
+            // Floppy) never carries that stray, and content-sniffing "021_" on EVERY generic block made an
+            // edited floppy game's shifted bytes false-match here, absorb 8 bytes, desync the block stream
+            // and overflow when the editor RE-OPENED its own (otherwise valid) output. (v5/v6 only.)
+            if (!IsSmallHeader && _gameInfo != null && _gameInfo.IsTalkie
+                && BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4)) == "021_")
             {
                 var lstBytes = new List<byte>(Contents);
                 lstBytes.AddRange(binaryReader.ReadBytes(8));
