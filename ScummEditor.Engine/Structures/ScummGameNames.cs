@@ -23,6 +23,8 @@ namespace ScummEditor.Engine.Structures
                 case ScummGame.FateOfAtlantis: return "Indiana Jones and the Fate of Atlantis";
                 case ScummGame.DayOfTheTentacle: return "Day of the Tentacle";
                 case ScummGame.SamAndMax: return "Sam & Max Hit the Road";
+                case ScummGame.TheDig: return "The Dig";
+                case ScummGame.FullThrottle: return "Full Throttle";
                 case ScummGame.None: return "None";
                 default: return game.ToString(); // never silently "None" for a real, newly-added game
             }

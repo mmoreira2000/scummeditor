@@ -5,7 +5,7 @@ using System.Text;
 
 namespace ScummEditor.Engine.Structures.DataFile
 {
-    public class NotImplementedDataBlock : BlockBase
+    public class NotImplementedDataBlock : BlockBase, IRawContentBlock
     {
         public byte[] Contents { get; set; }
 

@@ -8,7 +8,7 @@ namespace ScummEditor.Engine.Structures.DataFile
     /// A run of raw bytes inside a v4 container that is not a self-describing block (e.g. the
     /// trailing sound data of a room). It has no header of its own and is kept verbatim.
     /// </summary>
-    public class RawDataBlock : BlockBase
+    public class RawDataBlock : BlockBase, IRawContentBlock
     {
         private readonly int _length;
         public byte[] Contents { get; set; }

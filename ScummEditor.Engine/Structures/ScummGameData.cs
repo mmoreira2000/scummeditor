@@ -66,6 +66,12 @@ namespace ScummEditor.Engine.Structures
         /// <summary>Creates the right per-engine instance for the detected game (not yet loaded).</summary>
         public static ScummGameData Create(GameInfo gameInfo)
         {
+            if (gameInfo != null && gameInfo.ScummVersion == 7)
+            {
+                // The Dig / Full Throttle: same IFF container as v5/v6 (so it extends the v5/v6 loader),
+                // with a v7 index (ANAM block, 130-byte MAXS) and AKOS costumes.
+                return new ScummGameDataV7();
+            }
             if (gameInfo != null && gameInfo.ScummVersion == 4)
             {
                 return new ScummGameDataV4();

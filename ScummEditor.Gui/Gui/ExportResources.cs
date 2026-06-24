@@ -23,6 +23,16 @@ namespace ScummEditor.Gui
             if (string.IsNullOrEmpty(ExportLocation.Text)) return;
             if (!Directory.Exists(ExportLocation.Text)) return;
 
+            // SCUMM v7 (The Dig, Full Throttle) images/costumes are not decoded yet (the room blocks are
+            // kept as generic byte-preserved blocks), so the v5/v6 batch would crash on them. Refuse
+            // cleanly until typed v7 image/costume support lands.
+            if (_scummFile.LoadedGameInfo != null && _scummFile.LoadedGameInfo.ScummVersion == 7)
+            {
+                MessageBox.Show(this, "Graphics export is not yet available for SCUMM v7 (The Dig, Full Throttle).",
+                    "Export game graphics", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
             string location = ExportLocation.Text;
 
             Cursor = Cursors.WaitCursor;

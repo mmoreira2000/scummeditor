@@ -44,7 +44,13 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(RoomHeader).Name, new RoomHeaderControl());
             _controlViewers.Add(typeof(DiskBlock).Name, new DiskBlockControl());
             _controlViewers.Add(typeof(ScummV4RoomBlock).Name, new ScummV4RoomImageControl());
-            _controlViewers.Add(typeof(NotImplementedDataBlock).Name, new NotImplementedDataBlockControl());
+            // The byte-preserved blocks (v4-v6 NotImplementedDataBlock and the v7 generic blocks) all
+            // share the hex viewer so their raw content is shown instead of just the generic header.
+            var rawBlockControl = new NotImplementedDataBlockControl();
+            _controlViewers.Add(typeof(NotImplementedDataBlock).Name, rawBlockControl);
+            _controlViewers.Add(typeof(RawContainerBlock).Name, rawBlockControl);
+            _controlViewers.Add(typeof(RawDataBlock).Name, rawBlockControl);
+            _controlViewers.Add(typeof(RawIndexBlock).Name, rawBlockControl);
             _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
             _controlViewers.Add(typeof(ObjectImageHeader).Name, new ObjectImageHeaderControl());
@@ -101,6 +107,22 @@ namespace ScummEditor.Gui
 
         public void LoadTree()
         {
+            // BeginUpdate/EndUpdate suppress per-node repaints while the tree is populated. This is
+            // essential for v7 (The Dig, Full Throttle): their data files are tens of megabytes and
+            // produce many thousands of block nodes.
+            _treeView.BeginUpdate();
+            try
+            {
+                BuildTree();
+            }
+            finally
+            {
+                _treeView.EndUpdate();
+            }
+        }
+
+        private void BuildTree()
+        {
             _treeView.Nodes.Clear();
 
             var v4Index = GameData.IndexFile as ScummV4IndexFile;
@@ -111,6 +133,10 @@ namespace ScummEditor.Gui
             else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
             {
                 CreateOldBundleIndexTree((ScummV3OldBundleIndexFile)GameData.IndexFile);
+            }
+            else if (GameData.IndexFile is ScummV7IndexFile)
+            {
+                CreateScummV7IndexFileTree((ScummV7IndexFile)GameData.IndexFile);
             }
             else if (GameData.IndexFile != null)
             {
@@ -322,6 +348,27 @@ namespace ScummEditor.Gui
             }
         }
 
+        /// <summary>
+        /// Index tree for SCUMM v7 (The Dig, Full Throttle): the raw RNAM/MAXS blocks, the five typed
+        /// resource directories, then the raw DOBJ/AARY and the v7-only ANAM (audio names). The raw
+        /// blocks are kept verbatim, so they are shown with the generic block viewer.
+        /// </summary>
+        private void CreateScummV7IndexFileTree(ScummV7IndexFile index)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+
+            CreateNode(index.RawRNAM, node);
+            CreateNode(index.RawMAXS, node);
+            CreateNode(index.DROO, node);
+            CreateNode(index.DSCR, node);
+            CreateNode(index.DSOU, node);
+            CreateNode(index.DCOS, node);
+            CreateNode(index.DCHR, node);
+            CreateNode(index.RawDOBJ, node);
+            CreateNode(index.RawAARY, node);
+            CreateNode(index.RawANAM, node);
+        }
+
         private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
@@ -411,7 +458,14 @@ namespace ScummEditor.Gui
 
             string name = item.GetType().Name;
 
-
+            // v7 (The Dig, Full Throttle) rooms are not yet decoded into typed image/costume blocks
+            // (RMIM/PALS/OBIM are kept as generic byte-preserved blocks for now), so the rich DiskBlock
+            // room preview would fail looking for them. Fall back to the generic block view; the rich
+            // preview arrives with the typed v7 image/costume support in a later phase.
+            if (name == typeof(DiskBlock).Name && item.GameInfo != null && item.GameInfo.ScummVersion == 7)
+            {
+                name = typeof(BlockBase).Name;
+            }
 
             if (_controlViewers.ContainsKey(name))
             {

@@ -140,7 +140,14 @@ namespace ScummEditor.Engine
                 return result;
             }
 
-            // No v5/v6 game matched - try the SCUMM v4 layout (000.LFL + DISKnn.LEC).
+            // LucasArts SCUMM v7 (The Dig, Full Throttle): GAME.LA0 index + GAME.LA1 data.
+            GameInfo v7 = DetectScummV7(folder);
+            if (v7 != null)
+            {
+                return v7;
+            }
+
+            // No v5/v6/v7 game matched - try the SCUMM v4 layout (000.LFL + DISKnn.LEC).
             GameInfo v4 = DetectScummV4(folder);
             if (v4 != null)
             {
@@ -157,6 +164,78 @@ namespace ScummEditor.Engine
             var none = new GameInfo();
             none.LoadedGame = ScummGame.None;
             return none;
+        }
+
+        /// <summary>
+        /// Detects a SCUMM v7 game (The Dig, Full Throttle). Both use a GAME.LA0 index file and a
+        /// GAME.LA1 data file, neither XOR-encrypted, so the layout is confirmed by content: the index
+        /// begins with a plain "RNAM" tag and the data with the "LECF" container tag. The specific game
+        /// is read from the data file's base name (DIG / FT), the only two SCUMM v7 titles.
+        /// </summary>
+        private static GameInfo DetectScummV7(string folder)
+        {
+            foreach (string indexPath in Directory.GetFiles(folder, "*.LA0"))
+            {
+                string baseName = Path.GetFileNameWithoutExtension(indexPath);
+                string dataPath = Path.Combine(folder, baseName + ".LA1");
+
+                if (!File.Exists(dataPath))
+                {
+                    continue;
+                }
+                if (!StartsWithBigHeaderTag(indexPath, "RNAM") || !StartsWithBigHeaderTag(dataPath, "LECF"))
+                {
+                    continue;
+                }
+
+                // The only two SCUMM v7 games are The Dig (DIG.LA0) and Full Throttle (FT.LA0). The
+                // Curse of Monkey Island (SCUMM v8) ships the SAME COMI.LA0/COMI.LA1 naming and the
+                // same plain RNAM/LECF magic, so it passes the content checks above. v8 is NOT
+                // supported, so reject any other base name here rather than mislabel it as The Dig and
+                // crash on load (the v8 index has a DRSC block and a larger MAXS the v7 reader chokes on).
+                bool isFullThrottle = string.Equals(baseName, "FT", StringComparison.OrdinalIgnoreCase);
+                bool isTheDig = string.Equals(baseName, "DIG", StringComparison.OrdinalIgnoreCase);
+                if (!isFullThrottle && !isTheDig)
+                {
+                    continue;
+                }
+
+                ScummGame game = isFullThrottle ? ScummGame.FullThrottle : ScummGame.TheDig;
+
+                return new GameInfo
+                {
+                    LoadedGame = game,
+                    IndexFile = indexPath,
+                    DataFile = dataPath,
+                    DataFiles = new List<string> { dataPath }, // v7 keeps all room data in one file
+                    Xored = false,
+                    XorKey = 0x00,      // v7 data is not XOR-encrypted
+                    IndexXorKey = 0x00, // v7 index is not XOR-encrypted
+                    ScummVersion = 7,
+                    UsesSmallHeader = false, // big-header [tag:4][size:4 BE] IFF blocks, like v5/v6
+                    IsTalkie = true          // The Dig and Full Throttle are CD/talkie releases
+                };
+            }
+
+            return null;
+        }
+
+        /// <summary>True when the file begins with a v5/v6/v7 big-header 4-char block tag.</summary>
+        private static bool StartsWithBigHeaderTag(string path, string tag)
+        {
+            byte[] head = ReadFileHead(path, 4);
+            if (head == null || head.Length < 4)
+            {
+                return false;
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                if ((char)head[i] != tag[i])
+                {
+                    return false;
+                }
+            }
+            return true;
         }
 
         /// <summary>

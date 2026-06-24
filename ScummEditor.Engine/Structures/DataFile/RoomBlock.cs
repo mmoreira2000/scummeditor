@@ -41,6 +41,37 @@ namespace ScummEditor.Engine.Structures.DataFile
                 case 6:
                     LoadScummV6(binaryReader);
                     break;
+                case 7:
+                    LoadScummV7(binaryReader);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Reads a v7 ROOM (The Dig, Full Throttle). Only the room header is typed (its body is the
+        /// 10-byte v7 layout); every other child - palettes, images, object blocks, scripts, boxes -
+        /// is read with the generic recursive reader, which navigates containers and keeps leaves
+        /// verbatim, so the room rebuilds byte-for-byte before any block gets typed v7 support.
+        /// </summary>
+        private void LoadScummV7(Stream binaryReader)
+        {
+            long endPosition = binaryReader.Position - 8 + BlockSize;
+
+            while (binaryReader.Position < endPosition)
+            {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
+                if (typeRead == "RMHD")
+                {
+                    var RMHD = new RoomHeader(this);
+                    RMHD.LoadFromBinaryReader(binaryReader);
+                    Childrens.Add(RMHD);
+                }
+                else
+                {
+                    var child = new RawContainerBlock(this, typeRead);
+                    child.LoadFromBinaryReader(binaryReader);
+                    Childrens.Add(child);
+                }
             }
         }
 
