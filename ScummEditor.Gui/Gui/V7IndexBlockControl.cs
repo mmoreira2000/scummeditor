@@ -31,7 +31,9 @@ namespace ScummEditor.Gui
                 Font = new Font("Consolas", 9F),
                 BackColor = Color.White,
             };
-            Controls.Add(_text);
+            // Add to the base control's Contents panel (positioned BELOW the BlockType/Size/Offset header)
+            // so the decoded text sits under the header instead of overlapping it.
+            Contents.Controls.Add(_text);
         }
 
         public override void SetAndRefreshData(BlockBase blockBase)
