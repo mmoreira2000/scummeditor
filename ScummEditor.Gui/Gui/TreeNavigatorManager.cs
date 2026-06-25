@@ -50,7 +50,9 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(NotImplementedDataBlock).Name, rawBlockControl);
             _controlViewers.Add(typeof(RawContainerBlock).Name, rawBlockControl);
             _controlViewers.Add(typeof(RawDataBlock).Name, rawBlockControl);
-            _controlViewers.Add(typeof(RawIndexBlock).Name, rawBlockControl);
+            // The v7 index meta blocks (RNAM/MAXS/DOBJ/AARY/ANAM) are RawIndexBlock; decode them for a
+            // friendly view instead of the raw hex dump.
+            _controlViewers.Add(typeof(RawIndexBlock).Name, new V7IndexBlockControl());
             _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
             _controlViewers.Add(typeof(ObjectImageHeader).Name, new ObjectImageHeaderControl());

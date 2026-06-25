@@ -122,38 +122,36 @@ namespace ScummEditor.Gui
         }
 
         /// <summary>
-        /// Populates the palette combobox: "Costume (own colours)" first, then every room palette in the
-        /// game (so a codec-16 mask, which has no colours of its own, can be shown in a real room palette).
+        /// Populates the palette combobox with only the palettes that actually apply to this costume: its
+        /// OWN colours (RGBS, codec 1/5) - or a grayscale ramp when it has none (codec-16 masks/full-screen
+        /// animations carry no RGBS; their true colours come from a runtime palette) - plus the palette(s)
+        /// of the costume's OWN room (the ROOM in the same LFLF). Other rooms' palettes are not offered:
+        /// a costume is drawn with its own colours or its room's, not an arbitrary room's.
         /// </summary>
         private void BuildPaletteChoices()
         {
             _paletteBox.Items.Clear();
-            _paletteBox.Items.Add(new PaletteChoice { Name = "Costume (own colours)", Palette = null });
+
+            bool ownPalette = AkosImageDecoder.HasOwnPalette(_akos);
+            _paletteBox.Items.Add(new PaletteChoice
+            {
+                Name = ownPalette ? "Costume (own colours)" : "Grayscale (costume has no palette)",
+                Palette = null,
+            });
 
             try
             {
                 var lflf = _akos.Parent as DiskBlock;
-                var lecf = lflf != null ? lflf.Parent : null;
-                if (lecf != null)
+                RoomBlock room = lflf != null ? lflf.GetROOM() : null;
+                PalettesData pals = room != null ? room.GetPALS() : null;
+                var wrap = pals != null ? pals.GetWRAP() : null;
+                List<PaletteData> apals = wrap != null ? wrap.GetAPALs() : null;
+                if (apals != null)
                 {
-                    int roomIndex = 0;
-                    foreach (DiskBlock disk in lecf.Childrens.OfType<DiskBlock>())
+                    for (int p = 0; p < apals.Count; p++)
                     {
-                        RoomBlock room = disk.GetROOM();
-                        PalettesData pals = room != null ? room.GetPALS() : null;
-                        var wrap = pals != null ? pals.GetWRAP() : null;
-                        List<PaletteData> apals = wrap != null ? wrap.GetAPALs() : null;
-                        if (apals != null)
-                        {
-                            for (int p = 0; p < apals.Count; p++)
-                            {
-                                string name = apals.Count > 1
-                                    ? string.Format("Room {0} - palette {1}", roomIndex, p)
-                                    : string.Format("Room {0}", roomIndex);
-                                _paletteBox.Items.Add(new PaletteChoice { Name = name, Palette = apals[p].Colors });
-                            }
-                        }
-                        roomIndex++;
+                        string name = apals.Count > 1 ? string.Format("Room palette {0}", p) : "Room palette";
+                        _paletteBox.Items.Add(new PaletteChoice { Name = name, Palette = apals[p].Colors });
                     }
                 }
             }
