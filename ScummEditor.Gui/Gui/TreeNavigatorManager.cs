@@ -28,6 +28,7 @@ namespace ScummEditor.Gui
         private readonly OldBundleScriptControl _oldBundleScriptControl = new OldBundleScriptControl();
         private readonly V2ExeFontControl _v2ExeFontControl = new V2ExeFontControl();
         private readonly NutFontControl _nutFontControl = new NutFontControl();
+        private readonly ImuseBundleControl _imuseBundleControl = new ImuseBundleControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -177,6 +178,7 @@ namespace ScummEditor.Gui
             CreateV3FontNodes();
             CreateV2ExeFontNode();
             CreateNutFontNodes();
+            CreateBundleNodes(GameData.LoadedGameInfo);
             CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
@@ -322,6 +324,20 @@ namespace ScummEditor.Gui
             foreach (BlockBase block in indexFile.Blocks)
             {
                 CreateNode(block, node);
+            }
+        }
+
+        /// <summary>Root nodes for the external iMUSE sound bundles (v7 The Dig DIGMUSIC.BUN / DIGVOICE.BUN);
+        /// the iMUSE bundle viewer handles each. These are separate files next to the .LA0/.LA1 container.</summary>
+        private void CreateBundleNodes(GameInfo gameInfo)
+        {
+            if (gameInfo == null || gameInfo.BundleFiles == null) return;
+
+            foreach (string path in gameInfo.BundleFiles)
+            {
+                var node = _treeView.Nodes.Add("SoundBundle",
+                    "Sound Bundle (" + System.IO.Path.GetFileName(path) + ")");
+                node.Tag = new ImuseBundleFile(path);
             }
         }
 
@@ -510,6 +526,16 @@ namespace ScummEditor.Gui
                 _nutFontControl.SetData(nutFont, GameRoomPalettes());
                 _displayPanel.Controls.Add(_nutFontControl);
                 _nutFontControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v7 external iMUSE sound bundles (The Dig DIGMUSIC.BUN / DIGVOICE.BUN).
+            var bundle = e.Node.Tag as ImuseBundleFile;
+            if (bundle != null)
+            {
+                _imuseBundleControl.SetData(bundle);
+                _displayPanel.Controls.Add(_imuseBundleControl);
+                _imuseBundleControl.Dock = DockStyle.Fill;
                 return;
             }
 

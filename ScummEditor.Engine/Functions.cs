@@ -209,6 +209,7 @@ namespace ScummEditor.Engine
                     DataFile = dataPath,
                     DataFiles = new List<string> { dataPath }, // v7 keeps all room data in one file
                     NutFontFiles = EnumerateNutFonts(folder), // external SMUSH fonts (FONT0.NUT, ...)
+                    BundleFiles = EnumerateBundles(folder),   // external iMUSE bundles (DIGMUSIC/DIGVOICE.BUN)
                     Xored = false,
                     XorKey = 0x00,      // v7 data is not XOR-encrypted
                     IndexXorKey = 0x00, // v7 index is not XOR-encrypted
@@ -246,6 +247,19 @@ namespace ScummEditor.Engine
             }
             fonts.Sort(StringComparer.OrdinalIgnoreCase);
             return fonts;
+        }
+
+        /// <summary>Every .BUN iMUSE sound bundle in a v7 game folder (The Dig's DIGMUSIC.BUN /
+        /// DIGVOICE.BUN), ordered by name. Full Throttle ships none (its speech is MONSTER.SOU).</summary>
+        private static List<string> EnumerateBundles(string folder)
+        {
+            var bundles = new List<string>();
+            foreach (string path in Directory.GetFiles(folder, "*.BUN"))
+            {
+                bundles.Add(path);
+            }
+            bundles.Sort(StringComparer.OrdinalIgnoreCase);
+            return bundles;
         }
 
         /// <summary>True when the file begins with a v5/v6/v7 big-header 4-char block tag.</summary>

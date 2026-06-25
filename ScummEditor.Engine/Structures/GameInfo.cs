@@ -93,5 +93,12 @@ namespace ScummEditor.Engine.Structures
         /// every other engine.
         /// </summary>
         public List<string> NutFontFiles { get; set; }
+
+        /// <summary>
+        /// External iMUSE sound bundle files (.BUN), e.g. The Dig's DIGMUSIC.BUN / DIGVOICE.BUN sitting next
+        /// to the .LA0/.LA1 container. Null/empty when the game has none (Full Throttle keeps speech in
+        /// MONSTER.SOU instead).
+        /// </summary>
+        public List<string> BundleFiles { get; set; }
     }
 }
