@@ -79,6 +79,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
 
             _controlViewers.Add(typeof(SoundBlock).Name, new SoundBlockControl());
+            _controlViewers.Add(typeof(SoundBlockV7).Name, new SoundBlockV7Control()); // v7 SOUN (iMUS/VOC)
 
             var scriptControl = new ScriptControl();
             _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);

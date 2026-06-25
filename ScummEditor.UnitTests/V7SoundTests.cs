@@ -1,0 +1,133 @@
+using System.Collections.Generic;
+using System.IO;
+using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Structures;
+using ScummEditor.Engine.Structures.DataFile;
+using Xunit;
+
+namespace ScummEditor.UnitTests
+{
+    /// <summary>
+    /// SCUMM v7 in-container sound (SOUN). v7 SOUN blocks are typed as SoundBlockV7 (a byte-exact
+    /// RawContainerBlock marker) so the GUI can decode them: The Dig wraps an iMUS digital-audio resource
+    /// (MAP/FRMT/DATA, 8/12-bit PCM) decoded by ImuseAudioDecoder; Full Throttle stores a Creative Voice
+    /// File (VOC) decoded by the existing SoundConverter.VocToWav. These tests run on the real games.
+    /// </summary>
+    public class V7SoundTests
+    {
+        [SkippableTheory]
+        [InlineData(GameLibrary.TheDig)]
+        [InlineData(GameLibrary.FullThrottle)]
+        public void SounBlocksAreTypedAsSoundBlockV7(string relativePath)
+        {
+            Skip.If(GameLibrary.Folder(relativePath) == null, "GameData folder not present: " + relativePath);
+
+            ScummGameData game = GameLibrary.Load(relativePath);
+            List<SoundBlockV7> sounds = CollectSounds(game);
+            Assert.True(sounds.Count > 0, "no SOUN blocks found (SOUN not typed as SoundBlockV7?)");
+        }
+
+        [SkippableFact]
+        public void TheDigImusSoundsDecodeToWav()
+        {
+            Skip.If(GameLibrary.Folder(GameLibrary.TheDig) == null, "The Dig not present");
+
+            ScummGameData game = GameLibrary.Load(GameLibrary.TheDig);
+            int decoded = 0, checkedCount = 0;
+            foreach (SoundBlockV7 s in CollectSounds(game))
+            {
+                byte[] body = Serialize(s);
+                if (!ImuseAudioDecoder.IsImus(body)) continue;
+
+                ImuseAudioDecoder.ImuseInfo info = ImuseAudioDecoder.GetInfo(body);
+                Assert.NotNull(info);
+                Assert.Contains(info.WordSize, new[] { 8, 12, 16 });
+                Assert.InRange(info.Channels, 1, 2);
+                Assert.True(info.SampleRate == 11025 || info.SampleRate == 22050, "unexpected rate " + info.SampleRate);
+
+                byte[] wav = ImuseAudioDecoder.ToWav(body);
+                Assert.NotNull(wav);
+                AssertValidWav(wav, info.Channels, info.SampleRate, info.WordSize == 8 ? 8 : 16);
+                decoded++;
+
+                if (++checkedCount >= 40) break; // a representative sample keeps the test fast
+            }
+            Assert.True(decoded > 0, "no iMUS sounds decoded");
+        }
+
+        [SkippableFact]
+        public void FullThrottleVocSoundsDecodeToWav()
+        {
+            Skip.If(GameLibrary.Folder(GameLibrary.FullThrottle) == null, "Full Throttle not present");
+
+            ScummGameData game = GameLibrary.Load(GameLibrary.FullThrottle);
+            int decoded = 0, checkedCount = 0;
+            foreach (SoundBlockV7 s in CollectSounds(game))
+            {
+                byte[] body = Serialize(s);
+                int voc = IndexOf(body, "Creative Voice File");
+                if (voc < 0) continue;
+
+                byte[] slice = new byte[body.Length - voc];
+                System.Array.Copy(body, voc, slice, 0, slice.Length);
+                byte[] wav = SoundConverter.VocToWav(slice);
+                // VocToWav returns null only for an unsupported codec (e.g. ADPCM); FT speech is PCM.
+                if (wav != null)
+                {
+                    Assert.True(wav.Length > 44 && wav[0] == 'R' && wav[1] == 'I' && wav[2] == 'F' && wav[3] == 'F',
+                        "VOC did not decode to a RIFF/WAVE");
+                    decoded++;
+                }
+
+                if (++checkedCount >= 40) break;
+            }
+            Assert.True(decoded > 0, "no VOC sounds decoded");
+        }
+
+        private static List<SoundBlockV7> CollectSounds(ScummGameData game)
+        {
+            var list = new List<SoundBlockV7>();
+            Walk((BlockBase)game.DataFile, list);
+            return list;
+        }
+
+        private static void Walk(BlockBase node, List<SoundBlockV7> outList)
+        {
+            if (node is SoundBlockV7 s) outList.Add(s);
+            foreach (BlockBase c in node.Childrens) Walk(c, outList);
+        }
+
+        private static byte[] Serialize(BlockBase block)
+        {
+            using (var ms = new MemoryStream())
+            {
+                block.SaveToBinaryWriter(ms);
+                return ms.ToArray();
+            }
+        }
+
+        private static void AssertValidWav(byte[] wav, int channels, int sampleRate, int bits)
+        {
+            Assert.True(wav.Length > 44, "WAV too short");
+            Assert.True(wav[0] == 'R' && wav[1] == 'I' && wav[2] == 'F' && wav[3] == 'F', "no RIFF");
+            Assert.True(wav[8] == 'W' && wav[9] == 'A' && wav[10] == 'V' && wav[11] == 'E', "no WAVE");
+            Assert.Equal(channels, wav[22] | (wav[23] << 8));            // fmt channels
+            Assert.Equal(sampleRate, wav[24] | (wav[25] << 8) | (wav[26] << 16) | (wav[27] << 24));
+            Assert.Equal(bits, wav[34] | (wav[35] << 8));                // bits per sample
+        }
+
+        private static int IndexOf(byte[] data, string text)
+        {
+            for (int i = 0; i + text.Length <= data.Length; i++)
+            {
+                bool match = true;
+                for (int j = 0; j < text.Length; j++)
+                {
+                    if (data[i + j] != text[j]) { match = false; break; }
+                }
+                if (match) return i;
+            }
+            return -1;
+        }
+    }
+}

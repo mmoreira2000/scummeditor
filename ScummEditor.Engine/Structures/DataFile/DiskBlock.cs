@@ -134,9 +134,9 @@ namespace ScummEditor.Engine.Structures.DataFile
             {
                 // Global scripts are typed so the text pipeline can read them; AKOS costumes are typed so
                 // the GUI shows the costume viewer; CHAR fonts are typed as Charset so the font viewer and
-                // export/import work (the v7 in-resource charset has the same body layout as v5/v6). All
-                // of these keep their bytes verbatim, so the file still rebuilds byte-identically. The rest
-                // (SOUN/iMUS) stay generic byte-preserved blocks.
+                // export/import work; SOUN sounds are typed as SoundBlockV7 so the sound viewer can decode
+                // the iMUS/VOC audio. All of these subclass the generic container (or keep RawContent
+                // verbatim), so the file still rebuilds byte-identically.
                 BlockBase child;
                 if (tag == "SCRP")
                 {
@@ -149,6 +149,10 @@ namespace ScummEditor.Engine.Structures.DataFile
                 else if (tag == "CHAR")
                 {
                     child = new Charset(this);
+                }
+                else if (tag == "SOUN")
+                {
+                    child = new SoundBlockV7(this, "SOUN");
                 }
                 else
                 {
