@@ -257,6 +257,93 @@ namespace ScummEditor.UnitTests
             Assert.Equal(new[] { 7, 9 }, two);
         }
 
+        /// <summary>ImageInfo parses the AKOS batch filename "Room#i Akos#j Cel#k" to ImageType.AkosCostume.</summary>
+        [Fact]
+        public void ImageInfoParsesAkosCostumeFilename()
+        {
+            var akos = new ImageInfo("Room#5 Akos#3 Cel#7.png");
+            Assert.Equal(ImageType.AkosCostume, akos.ImageType);
+            Assert.Equal(5, akos.RoomIndex);
+            Assert.Equal(3, akos.AkosIndex);
+            Assert.Equal(7, akos.CelIndex);
+
+            // a v5/v6 COST costume name is still parsed as the (different) Costume type
+            var cost = new ImageInfo("Room#2 Costume#1 FrameIndex#4.png");
+            Assert.Equal(ImageType.Costume, cost.ImageType);
+        }
+
+        /// <summary>
+        /// Batch export/import round-trip for v7 AKOS costumes: export every cel to PNG (Costumes-only),
+        /// then import the whole folder back and confirm it re-encodes without errors and a sample cel
+        /// still decodes identically. Exercises the AKOS export loop, the "Room#i Akos#j Cel#k" filename
+        /// convention, the import dispatch and the cel splice end-to-end through ScummV5V6GraphicsBatch.
+        /// </summary>
+        [SkippableFact]
+        public void AkosBatchExportImportRoundTrips()
+        {
+            Skip.If(GameLibrary.Folder(GameLibrary.FullThrottle) == null, "not present: " + GameLibrary.FullThrottle);
+            ScummGameData game = GameLibrary.Load(GameLibrary.FullThrottle);
+
+            // A sample cel of EACH codec (1 BYLE-RLE, 5 BOMP, 16 MAJMIN) to pixel-verify across the
+            // round-trip - so the batch PNG serialization is checked for every codec, not just codec 1.
+            var sampleAkos = new Dictionary<int, BlockBase>();
+            var sampleCel = new Dictionary<int, int>();
+            var sampleBefore = new Dictionary<int, byte[,]>();
+            foreach (DiskBlock disk in game.DataFile.GetLFLFs())
+            {
+                foreach (BlockBase child in disk.Childrens)
+                {
+                    if (child.BlockType != "AKOS") continue;
+                    int codec = AkosImageDecoder.GetCodec(child);
+                    if ((codec != 1 && codec != 5 && codec != 16) || sampleBefore.ContainsKey(codec)) continue;
+
+                    int cels = AkosImageDecoder.GetCelCount(child);
+                    for (int c = 0; c < cels; c++)
+                    {
+                        byte[,] idx = AkosImageDecoder.DecodeCelIndices(child, c);
+                        if (idx != null && idx.GetLength(0) * idx.GetLength(1) > 100)
+                        {
+                            sampleAkos[codec] = child; sampleCel[codec] = c; sampleBefore[codec] = idx;
+                            break;
+                        }
+                    }
+                }
+                if (sampleBefore.Count == 3) break;
+            }
+            Assert.True(sampleBefore.ContainsKey(1) && sampleBefore.ContainsKey(5) && sampleBefore.ContainsKey(16),
+                "did not find a sample cel for each codec 1/5/16");
+
+            string dir = Path.Combine(Path.GetTempPath(), "v7akosbatch_" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(dir);
+            try
+            {
+                var options = new ScummV5V6GraphicsBatch.ExportOptions
+                {
+                    Backgrounds = false, Objects = false, BackgroundZPlanes = false, ObjectZPlanes = false, Costumes = true,
+                };
+                int exported = ScummV5V6GraphicsBatch.Export(game.DataFile, dir, options, null);
+                Assert.True(exported > 500, "too few AKOS cels exported: " + exported);
+
+                string[] pngs = Directory.GetFiles(dir, "*.png");
+                Assert.All(pngs, p => Assert.Contains("Akos#", Path.GetFileName(p)));
+
+                ScummV5V6GraphicsBatch.ImportReport report = ScummV5V6GraphicsBatch.Import(game.DataFile, dir, null);
+                Assert.True(report.Errors.Count == 0, "import errors: " + string.Join(" | ", report.Errors.Take(5)));
+                Assert.Equal(report.Found, report.Imported);
+
+                foreach (int codec in new[] { 1, 5, 16 })
+                {
+                    byte[,] after = AkosImageDecoder.DecodeCelIndices(sampleAkos[codec], sampleCel[codec]);
+                    Assert.True(after != null && MatricesEqual(sampleBefore[codec], after),
+                        "codec " + codec + " sample cel changed after batch round-trip");
+                }
+            }
+            finally
+            {
+                try { Directory.Delete(dir, true); } catch { }
+            }
+        }
+
         private static bool MatricesEqual(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;
