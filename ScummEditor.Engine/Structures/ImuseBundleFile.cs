@@ -51,6 +51,9 @@ namespace ScummEditor.Engine.Structures
                     int dirOffset = ReadUInt32BE(fs);
                     int numFiles = ReadUInt32BE(fs);
                     if (numFiles <= 0 || numFiles > 100000) return;
+                    // ReadUInt32BE returns a signed int; a corrupt >2GB offset would wrap negative and make
+                    // Seek throw. Guard the directory offset against the real file bounds instead.
+                    if (dirOffset < 0 || dirOffset > fs.Length) return;
 
                     fs.Seek(dirOffset, SeekOrigin.Begin);
                     for (int i = 0; i < numFiles; i++)

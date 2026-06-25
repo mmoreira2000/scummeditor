@@ -75,6 +75,49 @@ namespace ScummEditor.UnitTests
             Assert.True(decoded > 0, "no entries decoded from " + bundleName);
         }
 
+        [Fact]
+        public void MalformedInputDecodesGracefully()
+        {
+            // None of these may throw; clearly-bad input must return null (entry shown as undecodable).
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(null));
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(new byte[] { 1, 2, 3 }));               // too short
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(System.Text.Encoding.ASCII.GetBytes("XXXXjunkjunkjunk"))); // unknown tag
+
+            // A COMP whose single block declares the unsupported VIMA codec 13 -> null, no throw.
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(1, 0, 16, 4, 13)));
+            // A COMP whose block points past the buffer -> null.
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(1, 0, 16, 100000, 1)));
+            // A COMP claiming more blocks than the table holds -> null.
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(50, 0, 16, 4, 1)));
+
+            // A COMP with a tiny codec-4 block (degenerate repack): must not throw (may return non-iMUS bytes,
+            // which ToWav then rejects as null).
+            byte[] tiny = BuildComp(1, 0, 16, 4, 4);
+            byte[] imus = ImuseBundleDecoder.DecodeToImus(tiny); // no exception
+            Assert.Null(ImuseBundleDecoder.ToWav(tiny));          // garbage -> not a valid iMUS/WAV
+        }
+
+        /// <summary>Builds a minimal COMP chunk with one block record for the robustness tests.</summary>
+        private static byte[] BuildComp(int numBlocks, int lastBlockSize, int blockOffset, int blockSize, int codec)
+        {
+            var ms = new MemoryStream();
+            ms.Write(System.Text.Encoding.ASCII.GetBytes("COMP"), 0, 4);
+            WriteBE(ms, numBlocks);
+            WriteBE(ms, 0);              // padding
+            WriteBE(ms, lastBlockSize);
+            WriteBE(ms, blockOffset);    // one block record: offset / size / codec / pad
+            WriteBE(ms, blockSize);
+            WriteBE(ms, codec);
+            WriteBE(ms, 0);
+            ms.Write(new byte[8], 0, 8); // a little payload so a small in-bounds block has bytes to read
+            return ms.ToArray();
+        }
+
+        private static void WriteBE(Stream s, int v)
+        {
+            s.WriteByte((byte)(v >> 24)); s.WriteByte((byte)(v >> 16)); s.WriteByte((byte)(v >> 8)); s.WriteByte((byte)v);
+        }
+
         private static int Find(byte[] data, string tag)
         {
             for (int i = 0; i + 4 <= data.Length; i++)

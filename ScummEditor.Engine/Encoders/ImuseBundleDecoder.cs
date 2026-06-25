@@ -41,24 +41,36 @@ namespace ScummEditor.Engine.Encoders
 
             var imus = new MemoryStream();
             var output = new byte[BundleChunkSize + 16]; // a little slack over the chunk size
-            var blockInput = new byte[1];
+            var blockInput = new byte[2];
 
-            for (int i = 0; i < numBlocks; i++)
+            try
             {
-                int rec = tableStart + i * 16;
-                int blockOffset = ReadBE(comp, rec);
-                int blockSize = ReadBE(comp, rec + 4);
-                int codec = ReadBE(comp, rec + 8);
-                if (!ImuseBundleCodecs.CanDecode(codec)) return null; // VIMA / unknown
-                if (blockOffset < 0 || blockSize < 0 || blockOffset + blockSize > comp.Length) return null;
+                for (int i = 0; i < numBlocks; i++)
+                {
+                    int rec = tableStart + i * 16;
+                    int blockOffset = ReadBE(comp, rec);
+                    int blockSize = ReadBE(comp, rec + 4);
+                    int codec = ReadBE(comp, rec + 8);
+                    if (!ImuseBundleCodecs.CanDecode(codec)) return null; // VIMA / unknown
+                    if (blockOffset < 0 || blockSize < 0 || blockOffset + blockSize > comp.Length) return null;
 
-                // Copy the block to its own buffer with one trailing zero byte (the ScummVM CMI over-read guard).
-                if (blockInput.Length < blockSize + 1) blockInput = new byte[blockSize + 1];
-                System.Array.Copy(comp, blockOffset, blockInput, 0, blockSize);
-                blockInput[blockSize] = 0;
+                    // Copy the block to its own buffer with TWO trailing zero bytes: the LZ77 reader refills
+                    // its 16-bit mask by reading two bytes, so a single guard byte (the ScummVM CMI trick)
+                    // could still over-read by one at the very end.
+                    if (blockInput.Length < blockSize + 2) blockInput = new byte[blockSize + 2];
+                    System.Array.Copy(comp, blockOffset, blockInput, 0, blockSize);
+                    blockInput[blockSize] = 0;
+                    blockInput[blockSize + 1] = 0;
 
-                int outSize = ImuseBundleCodecs.DecompressCodec(codec, blockInput, blockSize, output);
-                if (outSize > 0) imus.Write(output, 0, outSize);
+                    int outSize = ImuseBundleCodecs.DecompressCodec(codec, blockInput, blockSize, output);
+                    if (outSize > 0) imus.Write(output, 0, outSize);
+                }
+            }
+            catch (System.Exception)
+            {
+                // A malformed/truncated COMP block can still run a codec off the end; treat the whole entry
+                // as undecodable rather than crashing the viewer (real Dig/FT bundles never hit this).
+                return null;
             }
 
             return imus.ToArray();

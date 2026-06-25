@@ -52,6 +52,8 @@ namespace ScummEditor.Engine.Encoders
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
 
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
+
                     var tbl = new byte[outputSize];
                     length = (outputSize << 3) / 12;
                     k = 0;
@@ -88,6 +90,8 @@ namespace ScummEditor.Engine.Encoders
                     outputSize = CompDecode(input, output);
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
+
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
 
                     var tbl = new byte[outputSize];
                     length = (outputSize << 3) / 12;
@@ -126,6 +130,8 @@ namespace ScummEditor.Engine.Encoders
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
 
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
+
                     var tbl = new byte[outputSize];
                     length = (outputSize << 3) / 12;
                     k = 0; c = 0; j = 0; s = -12;
@@ -162,6 +168,8 @@ namespace ScummEditor.Engine.Encoders
                     outputSize = CompDecode(input, output);
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
+
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
 
                     var tbl = new byte[outputSize];
                     System.Array.Copy(output, 0, tbl, 0, outputSize);
@@ -211,6 +219,8 @@ namespace ScummEditor.Engine.Encoders
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
 
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
+
                     var tbl = new byte[outputSize];
                     System.Array.Copy(output, 0, tbl, 0, outputSize);
 
@@ -256,6 +266,8 @@ namespace ScummEditor.Engine.Encoders
                     outputSize = CompDecode(input, output);
                     for (z = 2; z < outputSize; z++) output[z] += output[z - 1];
                     for (z = 1; z < outputSize; z++) output[z] += output[z - 1];
+
+                    if (outputSize < 2) return outputSize; // the 12-bit repack needs >= 2 bytes; guard a degenerate/empty block
 
                     var tbl = new byte[outputSize];
                     System.Array.Copy(output, 0, tbl, 0, outputSize);
@@ -354,6 +366,7 @@ namespace ScummEditor.Engine.Encoders
                         }
                     }
                     int result = dstptr + data; // data is negative -> back-reference
+                    if (result < 0) return dstptr; // malformed stream: invalid back-reference, stop gracefully
                     while (size-- != 0)
                     {
                         dst[dstptr++] = dst[result++];
