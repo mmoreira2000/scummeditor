@@ -179,7 +179,19 @@ namespace ScummEditor.UnitTests
                 string guide = Path.Combine(dir, "font.guide.png");
                 NutFontPngCodec.ExportPng(font, png, guide, null);
                 Assert.True(File.Exists(guide), "atlas export did not write the guide image");
-                NutFontPngCodec.ImportPng(font, png); // no-op re-import (the guide is reference-only)
+
+                // The editable atlas itself must carry the cell grid (index 255 in each cell's gutter), so the
+                // translation team sees the cell boundaries while editing - and it must stay re-importable.
+                using (var atlas = (System.Drawing.Bitmap)System.Drawing.Image.FromFile(png))
+                {
+                    Assert.True(IndexedImageHelper.IsIndexed(atlas), "exported atlas is not an indexed PNG");
+                    byte[,] pixels = IndexedImageHelper.GetIndexMatrix(atlas);
+                    bool hasGrid = false;
+                    for (int y = 0; y < pixels.GetLength(1) && !hasGrid; y++) if (pixels[0, y] == 255) hasGrid = true;
+                    Assert.True(hasGrid, "exported atlas has no grid line in the gutter");
+                }
+
+                NutFontPngCodec.ImportPng(font, png); // no-op re-import (grid gutter + guide are ignored)
 
                 byte[][,] after = DecodeAll(font);
                 Assert.Equal(before.Length, after.Length);

@@ -19,6 +19,14 @@ namespace ScummEditor.Engine.Encoders
     {
         private const int AtlasColumns = 16;
 
+        // Each cell carries a 1px gutter on its top/left edge that holds the grid divider line; the glyph
+        // sits just past the gutter, so the grid never overlaps a glyph and the gutter is never read back on
+        // import. The grid index lives only in the gutter, so any value is safe; 255 is coloured visibly in
+        // the exported atlas (NUT font ink is typically a different index, e.g. 240-242).
+        private const int GridGutter = 1;
+        private const int GridIndex = 255;
+        private static readonly Color GridColor = Color.FromArgb(0, 170, 210); // cyan: visible on any glyph palette
+
         // ---- single glyph (per-node GUI) ----
 
         public static void ExportGlyphPng(NutFont font, int index, string pngPath, Color[] palette)
@@ -55,27 +63,35 @@ namespace ScummEditor.Engine.Encoders
                 throw new ImageEncodeException("NUT font has no decodable glyphs to export");
             }
 
-            var atlas = new byte[cols * cellW, rows * cellH];
+            int atlasW = cols * cellW, atlasH = rows * cellH;
+            var atlas = new byte[atlasW, atlasH];
             if (transparency != 0)
             {
-                for (int x = 0; x < atlas.GetLength(0); x++)
-                    for (int y = 0; y < atlas.GetLength(1); y++)
+                for (int x = 0; x < atlasW; x++)
+                    for (int y = 0; y < atlasH; y++)
                         atlas[x, y] = (byte)transparency;
             }
+
+            // Grid divider lines on every cell's top/left edge (the gutter). Glyphs are placed past the
+            // gutter, so the grid never overlaps a glyph, and import reads only the glyph area.
+            for (int gx = 0; gx < atlasW; gx += cellW)
+                for (int y = 0; y < atlasH; y++) atlas[gx, y] = GridIndex;
+            for (int gy = 0; gy < atlasH; gy += cellH)
+                for (int x = 0; x < atlasW; x++) atlas[x, gy] = GridIndex;
 
             for (int slot = 0; slot < drawable.Count; slot++)
             {
                 int gi = drawable[slot];
                 byte[,] g = NutImageDecoder.DecodeGlyphIndices(font, gi);
                 if (g == null) continue;
-                int ox = (slot % cols) * cellW;
-                int oy = (slot / cols) * cellH;
+                int ox = (slot % cols) * cellW + GridGutter;
+                int oy = (slot / cols) * cellH + GridGutter;
                 for (int x = 0; x < g.GetLength(0); x++)
                     for (int y = 0; y < g.GetLength(1); y++)
                         atlas[ox + x, oy + y] = g[x, y];
             }
 
-            SaveIndexed(atlas, palette ?? Grayscale(), pngPath);
+            SaveIndexed(atlas, WithGridColor(palette ?? Grayscale()), pngPath);
 
             if (guidePath != null)
             {
@@ -113,7 +129,7 @@ namespace ScummEditor.Engine.Encoders
 
                     using (Bitmap glyph = NutImageDecoder.DecodeGlyph(font, gi, refPalette))
                     {
-                        if (glyph != null) gfx.DrawImageUnscaled(glyph, cx, cy);
+                        if (glyph != null) gfx.DrawImageUnscaled(glyph, cx + GridGutter, cy + GridGutter);
                     }
 
                     gfx.DrawRectangle(gridPen, cx, cy, cellW - 1, cellH - 1);
@@ -149,8 +165,8 @@ namespace ScummEditor.Engine.Encoders
                 {
                     int gi = drawable[slot];
                     NutGlyph glyph = font.Glyphs[gi];
-                    int ox = (slot % cols) * cellW;
-                    int oy = (slot / cols) * cellH;
+                    int ox = (slot % cols) * cellW + GridGutter;
+                    int oy = (slot / cols) * cellH + GridGutter;
 
                     var cell = new byte[glyph.Width, glyph.Height];
                     for (int x = 0; x < glyph.Width; x++)
@@ -225,16 +241,20 @@ namespace ScummEditor.Engine.Encoders
         private static List<int> AtlasLayout(NutFont font, out int cellW, out int cellH, out int cols, out int rows, out int transparency)
         {
             var drawable = new List<int>();
-            cellW = 1; cellH = 1; transparency = 0;
+            int maxW = 1, maxH = 1;
+            transparency = 0;
             for (int i = 0; i < font.Glyphs.Count; i++)
             {
                 NutGlyph g = font.Glyphs[i];
                 if (!g.HasPixels || !NutImageDecoder.IsSupportedCodec(g.Codec)) continue;
                 drawable.Add(i);
-                if (g.Width > cellW) cellW = g.Width;
-                if (g.Height > cellH) cellH = g.Height;
+                if (g.Width > maxW) maxW = g.Width;
+                if (g.Height > maxH) maxH = g.Height;
                 transparency = NutImageDecoder.TransparencyIndex(g.Codec); // one codec per NUT file
             }
+            // The cell is the largest glyph plus the gutter that carries the grid line.
+            cellW = maxW + GridGutter;
+            cellH = maxH + GridGutter;
             cols = drawable.Count < AtlasColumns ? (drawable.Count == 0 ? 1 : drawable.Count) : AtlasColumns;
             rows = drawable.Count == 0 ? 1 : (drawable.Count + cols - 1) / cols;
             return drawable;
@@ -265,6 +285,15 @@ namespace ScummEditor.Engine.Encoders
             var palette = new Color[256];
             for (int i = 0; i < 256; i++) palette[i] = Color.FromArgb(i, i, i);
             return palette;
+        }
+
+        /// <summary>Copies a palette and paints the grid index a visible colour, so the cell grid stands out
+        /// in the exported atlas whatever the base preview palette is.</summary>
+        private static Color[] WithGridColor(Color[] palette)
+        {
+            var copy = (Color[])palette.Clone();
+            copy[GridIndex] = GridColor;
+            return copy;
         }
 
         private static string Report(string verb, int count, int total, List<string> errors)
