@@ -202,7 +202,7 @@ namespace ScummEditor.Engine
 
                 ScummGame game = isFullThrottle ? ScummGame.FullThrottle : ScummGame.TheDig;
 
-                return new GameInfo
+                var info = new GameInfo
                 {
                     LoadedGame = game,
                     IndexFile = indexPath,
@@ -216,6 +216,17 @@ namespace ScummEditor.Engine
                     UsesSmallHeader = false, // big-header [tag:4][size:4 BE] IFF blocks, like v5/v6
                     IsTalkie = true          // The Dig and Full Throttle are CD/talkie releases
                 };
+
+                // Full Throttle ships its recorded speech as an external MONSTER.SOU (Creative VOC), exactly
+                // like the v5/v6 talkies, so the existing speech viewer handles it. The Dig has no MONSTER.SOU
+                // (its voice lives in DIGVOICE.BUN), so SpeechFilePath stays null there.
+                string speechPath = Path.Combine(folder, "MONSTER.SOU");
+                if (File.Exists(speechPath))
+                {
+                    info.SpeechFilePath = speechPath;
+                }
+
+                return info;
             }
 
             return null;

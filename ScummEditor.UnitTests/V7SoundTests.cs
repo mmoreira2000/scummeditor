@@ -84,6 +84,29 @@ namespace ScummEditor.UnitTests
             Assert.True(decoded > 0, "no VOC sounds decoded");
         }
 
+        [SkippableFact]
+        public void FullThrottleExposesMonsterSouSpeech()
+        {
+            GameInfo info = GameLibrary.Detect(GameLibrary.FullThrottle);
+            Skip.If(info == null, "Full Throttle not present");
+
+            // FT's recorded speech is an external MONSTER.SOU (Creative VOC); the existing speech viewer
+            // shows/plays/exports it once detection points SpeechFilePath at it.
+            Assert.NotNull(info.SpeechFilePath);
+            Assert.EndsWith("MONSTER.SOU", info.SpeechFilePath, System.StringComparison.OrdinalIgnoreCase);
+            Assert.True(File.Exists(info.SpeechFilePath), "MONSTER.SOU not found");
+        }
+
+        [SkippableFact]
+        public void TheDigHasNoMonsterSou()
+        {
+            GameInfo info = GameLibrary.Detect(GameLibrary.TheDig);
+            Skip.If(info == null, "The Dig not present");
+
+            // The Dig keeps its voice in DIGVOICE.BUN, not a MONSTER.SOU, so no speech file is exposed.
+            Assert.Null(info.SpeechFilePath);
+        }
+
         private static List<SoundBlockV7> CollectSounds(ScummGameData game)
         {
             var list = new List<SoundBlockV7>();
