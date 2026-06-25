@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using ScummEditor.Engine.Encoders;
@@ -45,8 +46,22 @@ namespace ScummEditor.Engine.Structures
             }
             foreach (string path in LoadedGameInfo.FontFiles)
             {
+                byte[] bytes;
+                try
+                {
+                    bytes = File.ReadAllBytes(path);
+                }
+                catch (IOException)
+                {
+                    continue; // a charset file enumerated at detection is now missing/locked: skip it, still load the game
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
                 var charset = new CharsetV3 { FilePath = path };
-                charset.LoadFromFileBytes(File.ReadAllBytes(path));
+                charset.LoadFromFileBytes(bytes);
                 V3Charsets.Add(charset);
             }
         }
