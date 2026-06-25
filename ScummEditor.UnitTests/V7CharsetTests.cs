@@ -57,6 +57,17 @@ namespace ScummEditor.UnitTests
                 string guide = Path.Combine(dir, "charset.guide.png");
                 CharsetPngCodec.ExportPng(charset, png, guide);
 
+                // The editable atlas must carry the gutter grid (index 255 in each cell's column 0), like the
+                // .NUT atlas, so the two font exports look the same - and it must stay re-importable.
+                using (var atlas = (System.Drawing.Bitmap)System.Drawing.Image.FromFile(png))
+                {
+                    Assert.True(IndexedImageHelper.IsIndexed(atlas), "CHAR atlas is not an indexed PNG");
+                    byte[,] px = IndexedImageHelper.GetIndexMatrix(atlas);
+                    bool hasGrid = false;
+                    for (int y = 0; y < px.GetLength(1) && !hasGrid; y++) if (px[0, y] == 255) hasGrid = true;
+                    Assert.True(hasGrid, "CHAR atlas has no grid line in the gutter");
+                }
+
                 // Re-importing the unedited atlas must rebuild the exact same bytes (every glyph unchanged).
                 CharsetPngCodec.ImportPng(charset, png);
 

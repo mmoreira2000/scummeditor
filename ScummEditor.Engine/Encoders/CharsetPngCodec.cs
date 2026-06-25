@@ -40,12 +40,14 @@ namespace ScummEditor.Engine.Encoders
         // European MI2 fonts do). Import recomputes the same margins from the same font,
         // so the convention stays self-describing.
         private const int MinimumMargin = 8;
-        // Palette slot for the cell divider lines, drawn before the glyphs and stripped on import. The line
-        // sits on each cell's left/top edge; a most-negative-offset glyph's leftmost/topmost ink can land on
-        // that same edge and overdraw the line (it is drawn after the grid) - harmless, because import only
-        // strips pixels that are STILL == GridIndex, so real ink survives. At 8bpp (maxVal==255==GridIndex)
-        // the divider would be indistinguishable from brightest ink, so the grid is omitted there entirely.
+        // A 1px gutter is baked into the left/top margin so each cell's column 0 / row 0 is NEVER reached by a
+        // glyph (even the most-negative-offset one). The cell divider line lives in that gutter, so the grid
+        // is drawn for EVERY font (including 8bpp) and stripped on import by POSITION (zeroing column 0 / row
+        // 0 of each cell) rather than by value - which would be impossible at 8bpp where 255 is real ink.
+        // Same gutter+grid scheme as the .NUT font atlas, so all font exports look alike.
+        private const int Gutter = 1;
         private const int GridIndex = 255;
+        private static readonly Color GridColor = Color.FromArgb(0, 170, 210); // cyan, matching the .NUT atlas grid
         private const int OffsetBase = 0x15;
         private const int TableStart = 0x19;
 
@@ -61,16 +63,13 @@ namespace ScummEditor.Engine.Encoders
 
             var matrix = new byte[width, height];
 
-            // Divider lines on the top/left edge of every cell (GridIndex pixels are ignored on import).
-            // Skipped at 8bpp, where GridIndex(255) would be a legal ink value and could not be told apart.
-            bool drawGrid = (1 << charset.BitsPerPixel) - 1 < GridIndex;
-            if (drawGrid)
-            {
-                for (int x = 0; x < width; x += cellW)
-                    for (int y = 0; y < height; y++) matrix[x, y] = GridIndex;
-                for (int y = 0; y < height; y += cellH)
-                    for (int x = 0; x < width; x++) matrix[x, y] = GridIndex;
-            }
+            // Divider lines in the top/left gutter of every cell. The gutter is never glyph ink, so the grid
+            // is drawn for EVERY font (it is stripped on import by position) - unlike the old edge grid that
+            // had to be omitted at 8bpp.
+            for (int x = 0; x < width; x += cellW)
+                for (int y = 0; y < height; y++) matrix[x, y] = GridIndex;
+            for (int y = 0; y < height; y += cellH)
+                for (int x = 0; x < width; x++) matrix[x, y] = GridIndex;
 
             for (int slot = 0; slot < charset.Glyphs.Count && slot < 256; slot++)
             {
@@ -113,7 +112,7 @@ namespace ScummEditor.Engine.Encoders
                     palette[v] = Color.Magenta; // painting with these would be invalid
                 }
             }
-            if (maxVal < GridIndex) palette[GridIndex] = Color.FromArgb(60, 80, 160); // divider lines (not at 8bpp)
+            palette[GridIndex] = GridColor; // the gutter divider line (always present, at every bit depth)
             return palette;
         }
 
@@ -135,6 +134,12 @@ namespace ScummEditor.Engine.Encoders
                 if (g.XOffset + g.Width > maxX) maxX = g.XOffset + g.Width;
                 if (g.YOffset + g.Height > maxY) maxY = g.YOffset + g.Height;
             }
+
+            // Push the glyph origin in by the gutter, so column 0 / row 0 of each cell (where the grid is
+            // drawn) is never touched by a glyph - even the one with the most-negative offset, whose ink now
+            // starts at column/row >= Gutter. Import strips that gutter by position, at any bit depth.
+            marginX += Gutter;
+            marginY += Gutter;
             cellW = marginX + maxX + MinimumMargin;
             cellH = marginY + maxY + MinimumMargin;
         }
@@ -333,15 +338,13 @@ namespace ScummEditor.Engine.Encoders
             int cellW = width / Columns, cellH = height / Rows;
             int maxVal = (1 << charset.BitsPerPixel) - 1;
 
-            // The divider lines are decoration only - drop them before any analysis. Only do this when the
-            // grid index is NOT a legal ink value: at 8bpp maxVal==255==GridIndex, so the divider is not
-            // drawn (see ExportPng) and stripping it would wipe real brightest-ink pixels.
-            if (maxVal < GridIndex)
-            {
-                for (int y = 0; y < height; y++)
-                    for (int x = 0; x < width; x++)
-                        if (pixels[x, y] == GridIndex) pixels[x, y] = 0;
-            }
+            // The divider lines live in each cell's top/left gutter, which a glyph never occupies, so strip
+            // them by POSITION (zero column 0 / row 0 of every cell). This works at every bit depth - unlike
+            // a value-based strip, which 8bpp's legal 255 ink would defeat.
+            for (int x = 0; x < width; x += cellW)
+                for (int y = 0; y < height; y++) pixels[x, y] = 0;
+            for (int y = 0; y < height; y += cellH)
+                for (int x = 0; x < width; x++) pixels[x, y] = 0;
 
             // Same per-font margins the export used (recomputed from the same font).
             int marginX, marginY, layoutCellW, layoutCellH;
