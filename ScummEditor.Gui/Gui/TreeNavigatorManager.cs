@@ -55,6 +55,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
             _controlViewers.Add(typeof(ObjectImageHeader).Name, new ObjectImageHeaderControl());
             _controlViewers.Add(typeof(Costume).Name, new CostumeControl());
+            _controlViewers.Add(typeof(CostumeAkos).Name, new AkosCostumeControl()); // v7 AKOS costumes
             _controlViewers.Add(typeof(ImageBomp).Name, new ImageBompControl());
 
             var structuredBlockControl = new StructuredBlockControl();

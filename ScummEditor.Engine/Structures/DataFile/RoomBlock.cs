@@ -85,6 +85,40 @@ namespace ScummEditor.Engine.Structures.DataFile
                         Childrens.Add(OBCD);
                         break;
 
+                    // Room structural blocks: colour-cycle, walk-box data/matrix, scale slots and the
+                    // local-script count. v7 reuses the v5/v6 layout (the walk-box record is the same
+                    // 20-byte SIZEOF_BOX), so the existing typed blocks - which keep their bytes verbatim
+                    // and parse only for display - route them to the friendly viewers instead of raw hex.
+                    case "CYCL":
+                        var CYCL = new ColorCycles(this);
+                        CYCL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(CYCL);
+                        break;
+
+                    case "BOXD":
+                        var BOXD = new BoxData(this);
+                        BOXD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXD);
+                        break;
+
+                    case "BOXM":
+                        var BOXM = new BoxMatrix(this);
+                        BOXM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXM);
+                        break;
+
+                    case "SCAL":
+                        var SCAL = new Scale(this);
+                        SCAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(SCAL);
+                        break;
+
+                    case "NLSC":
+                        var NLSC = new ValuePaddingBlock(this, "NLSC");
+                        NLSC.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(NLSC);
+                        break;
+
                     // Image blocks are typed so the image decoder/encoder and the GUI preview work on
                     // v7. The SMAP strip codec, z-planes and APAL palette are identical to v5/v6; only
                     // the headers (RMHD - done - and IMHD) carry the v7 layout. All keep their bytes.
