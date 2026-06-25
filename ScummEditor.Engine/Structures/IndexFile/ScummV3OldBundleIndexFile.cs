@@ -20,7 +20,7 @@ namespace ScummEditor.Engine.Structures.IndexFile
     unchanged; the typed directories below are a navigation/edit overlay that records, per entry, the
     room number, the offset, and the byte position of the offset word (so a future edit can rewrite it).
     */
-    public class ScummV3OldBundleIndexFile : ScummV5V6IndexFile
+    public class ScummV3OldBundleIndexFile : ScummIndexFile
     {
         public ScummV3OldBundleIndexFile(GameInfo gameInfo) : base(gameInfo) { }
 

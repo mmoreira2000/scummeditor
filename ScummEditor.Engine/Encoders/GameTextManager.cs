@@ -42,7 +42,7 @@ namespace ScummEditor.Engine.Encoders
             return (IScriptBytecode)source.Script;
         }
 
-        private static List<Source> EnumerateSources(ScummV5V6DataFile dataFile)
+        private static List<Source> EnumerateSources(ScummDataFile dataFile)
         {
             var list = new List<Source>();
             List<DiskBlock> lflfs = dataFile.GetLFLFs();
@@ -157,7 +157,7 @@ namespace ScummEditor.Engine.Encoders
         // Export
         // ---------------------------------------------------------------------
 
-        public static List<GameTextEntry> Extract(ScummV5V6DataFile dataFile, GameTextCodec codec)
+        public static List<GameTextEntry> Extract(ScummDataFile dataFile, GameTextCodec codec)
         {
             return BuildEntries(EnumerateSources(dataFile), codec);
         }
@@ -242,7 +242,7 @@ namespace ScummEditor.Engine.Encoders
             return false;
         }
 
-        public static int ExportToFile(ScummV5V6DataFile dataFile, string path, GameTextCodec codec, string gameLabel)
+        public static int ExportToFile(ScummDataFile dataFile, string path, GameTextCodec codec, string gameLabel)
         {
             List<GameTextEntry> entries = Extract(dataFile, codec);
             WriteEntriesFile(entries, path, codec, gameLabel);
@@ -413,7 +413,7 @@ namespace ScummEditor.Engine.Encoders
         // Import
         // ---------------------------------------------------------------------
 
-        public static GameTextImportReport ImportFromFile(ScummV5V6DataFile dataFile, string path)
+        public static GameTextImportReport ImportFromFile(ScummDataFile dataFile, string path)
         {
             var report = new GameTextImportReport();
             GameTextCodec codec;
@@ -880,7 +880,7 @@ namespace ScummEditor.Engine.Encoders
         // Glyph validation: warn when an imported byte has no glyph in the fonts
         // ---------------------------------------------------------------------
 
-        private static void ValidateGlyphs(ScummV5V6DataFile dataFile, List<byte[]> changedContents,
+        private static void ValidateGlyphs(ScummDataFile dataFile, List<byte[]> changedContents,
                                            GameTextCodec codec, GameTextImportReport report)
         {
             var charsets = new List<Charset>();

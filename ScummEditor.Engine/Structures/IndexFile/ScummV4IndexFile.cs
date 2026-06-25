@@ -19,7 +19,7 @@ namespace ScummEditor.Engine.Structures.IndexFile
     For now the six blocks are kept byte-for-byte so the index round-trips identically; typed
     parsing (room names, directory entries) is layered on top in later steps.
     */
-    public class ScummV4IndexFile : ScummV5V6IndexFile
+    public class ScummV4IndexFile : ScummIndexFile
     {
         public List<BlockBase> Blocks { get; private set; }
 

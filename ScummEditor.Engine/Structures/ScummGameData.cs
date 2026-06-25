@@ -18,10 +18,10 @@ namespace ScummEditor.Engine.Structures
     {
         public GameInfo LoadedGameInfo { get; set; }
 
-        public ScummV5V6IndexFile IndexFile { get; set; }
+        public ScummIndexFile IndexFile { get; set; }
 
         /// <summary>The first (or only) data container. For multi-disk v4 games see <see cref="DataDisks"/>.</summary>
-        public ScummV5V6DataFile DataFile { get; set; }
+        public ScummDataFile DataFile { get; set; }
 
         /// <summary>Every loaded data container (one per file). v5/v6 has a single entry.</summary>
         public List<DataDisk> DataDisks { get; private set; } = new List<DataDisk>();
@@ -145,7 +145,7 @@ namespace ScummEditor.Engine.Structures
             foreach (string path in paths)
             {
                 var stream = new XoredFileStream(LoadedGameInfo.XorKey, path, FileMode.Open, FileAccess.Read);
-                ScummV5V6DataFile tree = CreateDataFile();
+                ScummDataFile tree = CreateDataFile();
                 tree.LoadFromBinaryReader(stream);
                 stream.Close();
 
@@ -225,10 +225,10 @@ namespace ScummEditor.Engine.Structures
         }
 
         /// <summary>Builds the data-container tree for this engine (v4 small-header vs v5/v6 IFF).</summary>
-        protected abstract ScummV5V6DataFile CreateDataFile();
+        protected abstract ScummDataFile CreateDataFile();
 
         /// <summary>Builds the index-file reader for this engine.</summary>
-        protected abstract ScummV5V6IndexFile CreateIndexFile();
+        protected abstract ScummIndexFile CreateIndexFile();
 
         /// <summary>Hook run after the data files are loaded (e.g. v4 loads its standalone fonts).</summary>
         protected virtual void AfterLoad() { }

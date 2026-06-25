@@ -294,7 +294,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummDataFileTree(ScummV5V6DataFile dataFile, string label)
+        private void CreateScummDataFileTree(ScummDataFile dataFile, string label)
         {
             TreeNode dataNode = _treeView.Nodes.Add(label, label);
 
@@ -372,7 +372,7 @@ namespace ScummEditor.Gui
             CreateNode(index.RawANAM, node);
         }
 
-        private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
+        private void CreateScummIndexFileTree(ScummIndexFile scummV6IndexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
 

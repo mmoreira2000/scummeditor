@@ -4,7 +4,7 @@ using ScummEditor.Engine.Exceptions;
 
 namespace ScummEditor.Engine.Structures.IndexFile
 {
-    public class ScummV5V6IndexFile
+    public class ScummIndexFile
     {
         private readonly GameInfo _gameInfo;
         public RoomNamesV5V6 RNAM { get; set; }
@@ -17,7 +17,7 @@ namespace ScummEditor.Engine.Structures.IndexFile
         public DirectoryOfObjects DOBJ { get; set; }
         public DirectoryOfArrays AARY { get; set; }
 
-        public ScummV5V6IndexFile(GameInfo gameInfo)
+        public ScummIndexFile(GameInfo gameInfo)
         {
             _gameInfo = gameInfo;
         }

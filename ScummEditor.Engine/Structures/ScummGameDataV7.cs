@@ -18,7 +18,7 @@ namespace ScummEditor.Engine.Structures
     /// </summary>
     public class ScummGameDataV7 : ScummGameDataV5V6
     {
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummIndexFile CreateIndexFile()
         {
             return new ScummV7IndexFile(LoadedGameInfo);
         }

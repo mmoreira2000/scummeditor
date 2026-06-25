@@ -6,6 +6,6 @@ namespace ScummEditor.Engine.Structures
     public class DataDisk
     {
         public string FilePath { get; set; }
-        public ScummV5V6DataFile Tree { get; set; }
+        public ScummDataFile Tree { get; set; }
     }
 }

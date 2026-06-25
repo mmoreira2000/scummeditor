@@ -19,7 +19,7 @@ namespace ScummEditor.Engine.Structures.DataFile
     write them back unchanged, so the file round-trips byte-for-byte; expose the chunk boundaries as
     a navigation overlay so the room/resource readers can find each chunk without re-tagging anything.
     */
-    public class ScummV3OldBundleDataFile : ScummV5V6DataFile
+    public class ScummV3OldBundleDataFile : ScummDataFile
     {
         public ScummV3OldBundleDataFile(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo) { }
 

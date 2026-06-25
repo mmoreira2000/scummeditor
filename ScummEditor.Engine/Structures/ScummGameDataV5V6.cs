@@ -23,14 +23,14 @@ namespace ScummEditor.Engine.Structures
             get { return "COST"; }
         }
 
-        protected override ScummV5V6DataFile CreateDataFile()
+        protected override ScummDataFile CreateDataFile()
         {
-            return new ScummV5V6DataFile(null, LoadedGameInfo);
+            return new ScummDataFile(null, LoadedGameInfo);
         }
 
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummIndexFile CreateIndexFile()
         {
-            return new ScummV5V6IndexFile(LoadedGameInfo);
+            return new ScummIndexFile(LoadedGameInfo);
         }
 
         protected override void LinkDataAndIndexFile()

@@ -103,7 +103,7 @@ namespace ScummEditor.Engine.Encoders
         }
 
         /// <summary>Legacy overload: detect from a single v5/v6 data file.</summary>
-        public static string Detect(ScummV5V6DataFile dataFile)
+        public static string Detect(ScummDataFile dataFile)
         {
             List<GameTextEntry> entries;
             try

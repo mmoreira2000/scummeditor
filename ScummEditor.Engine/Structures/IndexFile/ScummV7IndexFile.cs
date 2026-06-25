@@ -12,10 +12,10 @@ namespace ScummEditor.Engine.Structures.IndexFile
     /// because their offsets must be recomputed when a block is edited; their on-disk layout is the
     /// same [count][room numbers][offsets] as v5/v6, so the existing DirectoryOf* readers serve them.
     /// The remaining blocks hold no data-file offsets and are kept verbatim. The typed DROO/DSCR/DSOU/
-    /// DCOS/DCHR properties are inherited from <see cref="ScummV5V6IndexFile"/> so the shared v5/v6
+    /// DCOS/DCHR properties are inherited from <see cref="ScummIndexFile"/> so the shared v5/v6
     /// index-linking code (in ScummGameDataV5V6) works unchanged.
     /// </summary>
-    public class ScummV7IndexFile : ScummV5V6IndexFile
+    public class ScummV7IndexFile : ScummIndexFile
     {
         public RawIndexBlock RawRNAM { get; private set; }
         public RawIndexBlock RawMAXS { get; private set; }

@@ -37,7 +37,7 @@ namespace ScummEditor.Engine.Encoders
             public List<string> Errors = new List<string>();
         }
 
-        public static int Export(ScummV5V6DataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
+        public static int Export(ScummDataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
         {
             List<DiskBlock> diskBlocks = dataFile.GetLFLFs();
             var convert = new ImageDepthConversor();
@@ -147,7 +147,7 @@ namespace ScummEditor.Engine.Encoders
             return count;
         }
 
-        public static ImportReport Import(ScummV5V6DataFile dataFile, string folder, Action<int, int> onProgress)
+        public static ImportReport Import(ScummDataFile dataFile, string folder, Action<int, int> onProgress)
         {
             var report = new ImportReport();
             List<DiskBlock> diskBlocks = dataFile.GetLFLFs();
