@@ -232,6 +232,30 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        /// <summary>
+        /// ScriptPaletteScanner finds a literal setCurrentPalette(roomN) - pushByte/pushWord then roomOps
+        /// (0x9C) + sub-op 213 - and ignores non-literal (variable) pushes. Pure synthetic bytecode.
+        /// </summary>
+        [Fact]
+        public void ScriptPaletteScannerFindsLiteralSetCurrentPalette()
+        {
+            // pushByte 5; roomOps; SO_ROOM_NEW_PALETTE  -> room 5
+            Assert.Equal(new[] { 5 }, ScriptPaletteScanner.FindCurrentPaletteRooms(new byte[] { 0x00, 5, 0x9C, 213 }, 0).ToArray());
+
+            // pushWord 300; roomOps; SO_ROOM_NEW_PALETTE -> room 300 (0x012C)
+            Assert.Equal(new[] { 300 }, ScriptPaletteScanner.FindCurrentPaletteRooms(new byte[] { 0x01, 0x2C, 0x01, 0x9C, 213 }, 0).ToArray());
+
+            // pushByteVar 5 (0x02) is NOT a literal -> nothing recovered
+            Assert.Empty(ScriptPaletteScanner.FindCurrentPaletteRooms(new byte[] { 0x02, 5, 0x9C, 213 }, 0).ToArray());
+
+            // roomOps with a different sub-op (not 213) -> nothing
+            Assert.Empty(ScriptPaletteScanner.FindCurrentPaletteRooms(new byte[] { 0x00, 5, 0x9C, 175 }, 0).ToArray());
+
+            // honours startOffset (skip a leading id byte) and finds two references
+            int[] two = ScriptPaletteScanner.FindCurrentPaletteRooms(new byte[] { 0xFF, 0x00, 7, 0x9C, 213, 0x00, 9, 0x9C, 213 }, 1).ToArray();
+            Assert.Equal(new[] { 7, 9 }, two);
+        }
+
         private static bool MatricesEqual(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;

@@ -36,6 +36,11 @@ namespace ScummEditor.Gui
         private string _codecInfo = string.Empty;
         private bool _splitterApplied;
 
+        // Cache of "palettes referenced by a literal setCurrentPalette(roomN) in a script", computed once
+        // per loaded game (keyed by the LECF root) - a view-only candidate source for codec-16 cels.
+        private BlockBase _scriptPaletteRoot;
+        private List<KeyValuePair<int, Color[]>> _scriptPalettes;
+
         /// <summary>A render-palette choice for the combobox; Palette null means the costume's own colours.</summary>
         private class PaletteChoice
         {
@@ -166,7 +171,90 @@ namespace ScummEditor.Gui
                 // Palette enumeration is best-effort; the costume's own colours always remain available.
             }
 
+            // Candidate palettes that scripts load via a literal setCurrentPalette(roomN): a codec-16
+            // cel (no palette of its own) is often shown under the palette a cutscene loads, so offer those.
+            try
+            {
+                var lecf = (_akos.Parent as DiskBlock)?.Parent;
+                EnsureScriptPalettes(lecf);
+                if (_scriptPalettes != null)
+                {
+                    foreach (var sp in _scriptPalettes)
+                    {
+                        _paletteBox.Items.Add(new PaletteChoice { Name = "Script palette: room " + sp.Key, Palette = sp.Value });
+                    }
+                }
+            }
+            catch
+            {
+                // best-effort; never block the viewer on the script scan.
+            }
+
             _paletteBox.SelectedIndex = 0;
+        }
+
+        /// <summary>
+        /// Builds (once per loaded game) the list of palettes that scripts load via a literal
+        /// setCurrentPalette(roomN): scan every script for the reference, then map room N to its palette
+        /// through the LOFF room-offset table (room id -> ROOM offset -> that room's APAL). View-only.
+        /// </summary>
+        private void EnsureScriptPalettes(BlockBase lecf)
+        {
+            if (ReferenceEquals(lecf, _scriptPaletteRoot)) return;
+            _scriptPaletteRoot = lecf;
+            _scriptPalettes = new List<KeyValuePair<int, Color[]>>();
+            if (lecf == null) return;
+
+            var roomRefs = new HashSet<int>();
+            CollectScriptPaletteRooms(lecf, roomRefs);
+            if (roomRefs.Count == 0) return;
+
+            var loff = lecf.Childrens.OfType<RoomOffsetTable>().FirstOrDefault();
+            if (loff == null) return;
+
+            // ROOM block offset -> that room's first APAL palette.
+            var offsetToPalette = new Dictionary<long, Color[]>();
+            foreach (DiskBlock disk in lecf.Childrens.OfType<DiskBlock>())
+            {
+                RoomBlock room = disk.GetROOM();
+                if (room == null) continue;
+                Color[] pal = TryGetRoomPalette(room);
+                if (pal != null) offsetToPalette[room.BlockOffSet] = pal;
+            }
+
+            var added = new HashSet<int>();
+            foreach (RoomOffsetTableItem item in loff.Rooms)
+            {
+                if (!roomRefs.Contains(item.Id) || added.Contains(item.Id)) continue;
+                Color[] pal;
+                if (offsetToPalette.TryGetValue(item.OffSet, out pal))
+                {
+                    _scriptPalettes.Add(new KeyValuePair<int, Color[]>(item.Id, pal));
+                    added.Add(item.Id);
+                }
+            }
+        }
+
+        private static void CollectScriptPaletteRooms(BlockBase node, HashSet<int> rooms)
+        {
+            var script = node as ScriptBlock;
+            if (script != null && script.RawContent != null)
+            {
+                foreach (int r in ScriptPaletteScanner.FindCurrentPaletteRooms(script.RawContent, script.CodeOffset))
+                {
+                    rooms.Add(r);
+                }
+            }
+            foreach (BlockBase child in node.Childrens)
+            {
+                CollectScriptPaletteRooms(child, rooms);
+            }
+        }
+
+        private static Color[] TryGetRoomPalette(RoomBlock room)
+        {
+            try { return room.GetPALS().GetWRAP().GetAPALs()[0].Colors; }
+            catch { return null; }
         }
 
         private Color[] SelectedPalette()
