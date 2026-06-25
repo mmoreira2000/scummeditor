@@ -32,6 +32,9 @@ namespace ScummEditor.Engine.Structures
         /// <summary>Standalone v3 charset files (9N.LFL); empty for v4/v5/v6 (which use Fonts/Charset).</summary>
         public List<CharsetV3> V3Charsets { get; private set; } = new List<CharsetV3>();
 
+        /// <summary>External .NUT SMUSH fonts (v7 The Dig / Full Throttle); empty for every other engine.</summary>
+        public List<NutFontResource> NutFonts { get; private set; } = new List<NutFontResource>();
+
         /// <summary>Loads the v3 9N.LFL charset files (always plaintext) into V3Charsets.</summary>
         protected void LoadV3Charsets()
         {
@@ -187,6 +190,16 @@ namespace ScummEditor.Engine.Structures
                 if (!string.IsNullOrEmpty(charset.FilePath))
                 {
                     File.WriteAllBytes(charset.FilePath, charset.RawContent);
+                }
+            }
+
+            // Write back the external .NUT SMUSH fonts (v7), each its own file = the font bytes verbatim
+            // (only edited glyphs were re-encoded; an untouched font writes back byte-identically).
+            foreach (NutFontResource font in NutFonts)
+            {
+                if (font.Font != null && font.Font.RawContent != null && !string.IsNullOrEmpty(font.FilePath))
+                {
+                    File.WriteAllBytes(font.FilePath, font.Font.RawContent);
                 }
             }
         }

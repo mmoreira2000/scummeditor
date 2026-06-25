@@ -208,6 +208,7 @@ namespace ScummEditor.Engine
                     IndexFile = indexPath,
                     DataFile = dataPath,
                     DataFiles = new List<string> { dataPath }, // v7 keeps all room data in one file
+                    NutFontFiles = EnumerateNutFonts(folder), // external SMUSH fonts (FONT0.NUT, ...)
                     Xored = false,
                     XorKey = 0x00,      // v7 data is not XOR-encrypted
                     IndexXorKey = 0x00, // v7 index is not XOR-encrypted
@@ -218,6 +219,22 @@ namespace ScummEditor.Engine
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Every .NUT SMUSH font in a v7 game folder, ordered by name. The game keeps some fonts at the
+        /// folder root (BIGFONT.NUT, SCUMMFNT.NUT, ...) and the video-subtitle fonts in a VIDEO subfolder
+        /// (FONT0.NUT...), so the search recurses; both belong to this edition.
+        /// </summary>
+        private static List<string> EnumerateNutFonts(string folder)
+        {
+            var fonts = new List<string>();
+            foreach (string path in Directory.GetFiles(folder, "*.NUT", SearchOption.AllDirectories))
+            {
+                fonts.Add(path);
+            }
+            fonts.Sort(StringComparer.OrdinalIgnoreCase);
+            return fonts;
         }
 
         /// <summary>True when the file begins with a v5/v6/v7 big-header 4-char block tag.</summary>

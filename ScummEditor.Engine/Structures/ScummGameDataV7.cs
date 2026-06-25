@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using ScummEditor.Engine.Structures.DataFile;
 using ScummEditor.Engine.Structures.IndexFile;
@@ -26,6 +27,29 @@ namespace ScummEditor.Engine.Structures
         protected override string CostumeBlockType
         {
             get { return "AKOS"; }
+        }
+
+        /// <summary>Loads the external .NUT SMUSH fonts that sit next to the .LA0/.LA1 container.</summary>
+        protected override void AfterLoad()
+        {
+            base.AfterLoad();
+            LoadNutFonts();
+        }
+
+        private void LoadNutFonts()
+        {
+            NutFonts.Clear();
+            if (LoadedGameInfo.NutFontFiles == null)
+            {
+                return;
+            }
+
+            foreach (string path in LoadedGameInfo.NutFontFiles)
+            {
+                var font = new NutFont { FilePath = path };
+                font.LoadFromFileBytes(File.ReadAllBytes(path));
+                NutFonts.Add(new NutFontResource { FilePath = path, Font = font });
+            }
         }
 
         /// <summary>
