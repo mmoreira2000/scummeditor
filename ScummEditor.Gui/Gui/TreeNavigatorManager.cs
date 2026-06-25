@@ -27,6 +27,7 @@ namespace ScummEditor.Gui
         private readonly OldBundleObjectControl _oldBundleObjectControl = new OldBundleObjectControl();
         private readonly OldBundleScriptControl _oldBundleScriptControl = new OldBundleScriptControl();
         private readonly V2ExeFontControl _v2ExeFontControl = new V2ExeFontControl();
+        private readonly NutFontControl _nutFontControl = new NutFontControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -174,6 +175,7 @@ namespace ScummEditor.Gui
             CreateFontFileNodes();
             CreateV3FontNodes();
             CreateV2ExeFontNode();
+            CreateNutFontNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
@@ -258,6 +260,57 @@ namespace ScummEditor.Gui
                     "Font (" + System.IO.Path.GetFileName(font.FilePath) + ")");
                 node.Tag = font.Charset;
             }
+        }
+
+        /// <summary>Root nodes for the external .NUT SMUSH fonts (v7 The Dig / Full Throttle); the NutFont
+        /// viewer handles them. These are separate files next to the .LA0/.LA1 container.</summary>
+        private void CreateNutFontNodes()
+        {
+            if (GameData.NutFonts == null) return;
+
+            foreach (NutFontResource font in GameData.NutFonts)
+            {
+                var node = _treeView.Nodes.Add("NutFont",
+                    "Font (" + System.IO.Path.GetFileName(font.FilePath) + ", NUT)");
+                node.Tag = font;
+            }
+        }
+
+        /// <summary>
+        /// A few distinct room palettes from the loaded game, offered as preview palettes for the .NUT font
+        /// viewer (a NUT carries no palette of its own; its pixels are runtime palette indices). Capped and
+        /// de-duplicated so the combobox stays short even for a game with many rooms.
+        /// </summary>
+        private List<Color[]> GameRoomPalettes()
+        {
+            var palettes = new List<Color[]>();
+            if (GameData == null || GameData.DataFile == null) return palettes;
+
+            var seen = new HashSet<string>();
+            foreach (BlockBase child in GameData.DataFile.Childrens)
+            {
+                if (palettes.Count >= 8) break;
+                var disk = child as DiskBlock;
+                if (disk == null) continue;
+
+                RoomBlock room = disk.GetROOM();
+                if (room == null) continue;
+
+                Color[] palette;
+                try { palette = room.GetPALS().GetWRAP().GetAPALs()[0].Colors; }
+                catch { continue; }
+                if (palette == null) continue;
+
+                if (seen.Add(PaletteKey(palette))) palettes.Add(palette);
+            }
+            return palettes;
+        }
+
+        private static string PaletteKey(Color[] palette)
+        {
+            var sb = new System.Text.StringBuilder(palette.Length * 4);
+            foreach (Color c in palette) sb.Append(c.ToArgb()).Append(',');
+            return sb.ToString();
         }
 
         /// <summary>Index tree for SCUMM v4: a flat list of the index blocks (RN, 0R, 0S, ...).</summary>
@@ -445,6 +498,16 @@ namespace ScummEditor.Gui
                 _v2ExeFontControl.SetData(v2ExeFont);
                 _displayPanel.Controls.Add(_v2ExeFontControl);
                 _v2ExeFontControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v7 external .NUT SMUSH fonts (The Dig / Full Throttle), standalone files next to the container.
+            var nutFont = e.Node.Tag as NutFontResource;
+            if (nutFont != null)
+            {
+                _nutFontControl.SetData(nutFont, GameRoomPalettes());
+                _displayPanel.Controls.Add(_nutFontControl);
+                _nutFontControl.Dock = DockStyle.Fill;
                 return;
             }
 
