@@ -133,9 +133,10 @@ namespace ScummEditor.Engine.Structures.DataFile
             if (IsKnownV7LflfTag(tag) && HasValidBlockSize(binaryReader, endPosition))
             {
                 // Global scripts are typed so the text pipeline can read them; AKOS costumes are typed so
-                // the GUI shows the costume viewer (both stay byte-preserved via their container base).
-                // The rest (SOUN/iMUS, CHAR) stay generic byte-preserved blocks. All keep their bytes for
-                // an exact rebuild.
+                // the GUI shows the costume viewer; CHAR fonts are typed as Charset so the font viewer and
+                // export/import work (the v7 in-resource charset has the same body layout as v5/v6). All
+                // of these keep their bytes verbatim, so the file still rebuilds byte-identically. The rest
+                // (SOUN/iMUS) stay generic byte-preserved blocks.
                 BlockBase child;
                 if (tag == "SCRP")
                 {
@@ -144,6 +145,10 @@ namespace ScummEditor.Engine.Structures.DataFile
                 else if (tag == "AKOS")
                 {
                     child = new CostumeAkos(this, "AKOS");
+                }
+                else if (tag == "CHAR")
+                {
+                    child = new Charset(this);
                 }
                 else
                 {
