@@ -70,12 +70,32 @@ namespace ScummEditor.Engine.Encoders
         /// </summary>
         public static Bitmap DecodeCel(BlockBase akos, int celIndex, Color[] roomPalette)
         {
+            byte[,] indices = DecodeCelIndices(akos, celIndex);
+            if (indices == null)
+            {
+                return null;
+            }
+
+            int codec = GetCodec(akos);
+            byte[] akpl = GetSubBlock(akos, "AKPL");
+            byte[] rgbs = GetSubBlock(akos, "RGBS");
+            Color[] palette = BuildPalette(codec, akpl, rgbs, roomPalette);
+            return IndexedImageHelper.FromIndexMatrix(indices, palette, -1);
+        }
+
+        /// <summary>
+        /// Decodes cel <paramref name="celIndex"/> to its raw palette-index matrix [width, height], or null
+        /// for an empty/zero-size cel or an unsupported codec. The indices are codec-local: costume-colour
+        /// indices for codec 1/5, room/screen palette indices for codec 16. This is the shared core used by
+        /// the viewer (which then applies a palette) and the encoder (which re-encodes an edited matrix).
+        /// </summary>
+        public static byte[,] DecodeCelIndices(BlockBase akos, int celIndex)
+        {
             byte[] akhd = GetSubBlock(akos, "AKHD");
             byte[] akof = GetSubBlock(akos, "AKOF");
             byte[] akci = GetSubBlock(akos, "AKCI");
             byte[] akcd = GetSubBlock(akos, "AKCD");
             byte[] akpl = GetSubBlock(akos, "AKPL");
-            byte[] rgbs = GetSubBlock(akos, "RGBS");
             if (akhd == null || akhd.Length < 10 || akof == null || akci == null || akcd == null || akpl == null)
             {
                 return null;
@@ -108,27 +128,20 @@ namespace ScummEditor.Engine.Encoders
                 return null;
             }
 
-            Color[] palette = BuildPalette(codec, akpl, rgbs, roomPalette);
-
             // The Dig and Full Throttle use three cel codecs (matching ScummVM akos.cpp): 1 = BYLE RLE
             // (column-RLE), 5 = CDAT (a BOMP-encoded cel), 16 = MAJMIN (a bit-stream delta codec). Other
             // codecs (32/TRLE, HE-only) are left undecoded - the cel is preserved byte-for-byte either way.
-            byte[,] indices;
             switch (codec)
             {
                 case 1:
-                    indices = DecodeByleRle(akcd, (int)akcdOffset, width, height, akpl.Length);
-                    break;
+                    return DecodeByleRle(akcd, (int)akcdOffset, width, height, akpl.Length);
                 case 5:
-                    indices = DecodeBomp(akcd, (int)akcdOffset, width, height);
-                    break;
+                    return DecodeBomp(akcd, (int)akcdOffset, width, height);
                 case 16:
-                    indices = DecodeMajMin(akcd, (int)akcdOffset, width, height);
-                    break;
+                    return DecodeMajMin(akcd, (int)akcdOffset, width, height);
                 default:
                     return null;
             }
-            return IndexedImageHelper.FromIndexMatrix(indices, palette, -1);
         }
 
         /// <summary>

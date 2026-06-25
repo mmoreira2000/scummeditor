@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows.Forms;
 using ScummEditor.Engine.Encoders;
+using ScummEditor.Engine.Exceptions;
 using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 
@@ -28,6 +29,7 @@ namespace ScummEditor.Gui
         private readonly Label _info;
         private readonly ComboBox _paletteBox;
         private readonly Button _exportButton;
+        private readonly Button _importButton;
 
         private BlockBase _akos;
         private int _currentCelIndex = -1;
@@ -54,19 +56,22 @@ namespace ScummEditor.Gui
             _picture = new PictureBox { SizeMode = PictureBoxSizeMode.AutoSize };
             _scroll.Controls.Add(_picture);
 
-            // Two-row top bar: row 1 = export + palette selector, row 2 = codec / cel info.
+            // Two-row top bar: row 1 = export/import + palette selector, row 2 = codec / cel info.
             var topBar = new Panel { Dock = DockStyle.Top, Height = 54 };
-            // Export only for now: per-cel IMPORT needs the AKOS cel ENCODERS (codec 1 BYLE-RLE, 5 BOMP,
-            // 16 MAJMIN) plus re-splicing AKCD + fixing AKOF/AKCI/sizes + the LFLF/LECF offsets - that is
-            // the Phase D "encode" step, still to come. Until then this viewer is read-only (no Import
-            // button), matching how each phase ships decode first, then the matching encoder.
             _exportButton = new Button { Text = "Export PNG", Width = 90, Left = 3, Top = 3, Enabled = false };
             _exportButton.Click += ExportClick;
-            var paletteLabel = new Label { Text = "Palette:", AutoSize = true, Left = 99, Top = 8 };
-            _paletteBox = new ComboBox { Left = 150, Top = 4, Width = 260, DropDownStyle = ComboBoxStyle.DropDownList };
+            // Import re-encodes the cel back into the costume (codec 1 BYLE-RLE / codec 5 BOMP). It requires
+            // an INDEXED PNG so the costume-colour indices are preserved exactly, independent of the display
+            // palette (re-export from this viewer, edit without converting to RGB). Codec 16 (MAJMIN) is not
+            // encodable yet, so Import is disabled for those costumes.
+            _importButton = new Button { Text = "Import PNG", Width = 90, Left = 99, Top = 3, Enabled = false };
+            _importButton.Click += ImportClick;
+            var paletteLabel = new Label { Text = "Palette:", AutoSize = true, Left = 198, Top = 8 };
+            _paletteBox = new ComboBox { Left = 249, Top = 4, Width = 240, DropDownStyle = ComboBoxStyle.DropDownList };
             _paletteBox.SelectedIndexChanged += (s, e) => RenderCurrent();
             _info = new Label { Left = 3, Top = 32, AutoSize = true, Text = string.Empty };
             topBar.Controls.Add(_exportButton);
+            topBar.Controls.Add(_importButton);
             topBar.Controls.Add(paletteLabel);
             topBar.Controls.Add(_paletteBox);
             topBar.Controls.Add(_info);
@@ -97,6 +102,7 @@ namespace ScummEditor.Gui
             ClearImage();
             _currentCelIndex = -1;
             _exportButton.Enabled = false;
+            _importButton.Enabled = false;
             _info.Text = string.Empty;
             if (_akos == null) return;
 
@@ -181,6 +187,7 @@ namespace ScummEditor.Gui
         {
             ClearImage();
             _exportButton.Enabled = false;
+            _importButton.Enabled = false;
             if (_akos == null || _currentCelIndex < 0)
             {
                 _info.Text = _codecInfo;
@@ -205,7 +212,8 @@ namespace ScummEditor.Gui
                 }
                 _picture.Image = cel;
                 _exportButton.Enabled = true;
-                _info.Text = celInfo;
+                _importButton.Enabled = AkosImageEncoder.CanEncode(_akos); // codec 1/5 only
+                _info.Text = celInfo + (_importButton.Enabled ? string.Empty : "  (import N/A: codec not encodable yet)");
             }
             catch (Exception ex)
             {
@@ -236,6 +244,57 @@ namespace ScummEditor.Gui
             catch (Exception ex)
             {
                 MessageBox.Show(ex.Message, "Export failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+        }
+
+        /// <summary>
+        /// Re-encodes an INDEXED PNG back into the selected cel (codec 1/5) via AkosImageEncoder. An indexed
+        /// PNG is required so the costume-colour indexes are preserved exactly, independent of the display
+        /// palette - so the round-trip is correct even for costumes whose colours are set at runtime.
+        /// </summary>
+        private void ImportClick(object sender, EventArgs e)
+        {
+            if (_akos == null || _currentCelIndex < 0) return;
+            if (!AkosImageEncoder.CanEncode(_akos))
+            {
+                MessageBox.Show("This costume's cel codec cannot be re-encoded yet (import supports codec 1 / 5).",
+                    "Import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            using (var dialog = new OpenFileDialog { Filter = "PNG Files|*.png" })
+            {
+                if (dialog.ShowDialog() != DialogResult.OK) return;
+
+                int celToReselect = _currentCelIndex;
+                try
+                {
+                    using (var bitmap = (Bitmap)Image.FromFile(dialog.FileName))
+                    {
+                        if (!IndexedImageHelper.IsIndexed(bitmap))
+                        {
+                            MessageBox.Show(
+                                "The image must be an INDEXED (palette-based) PNG so the costume's colour indexes are preserved. " +
+                                "Re-export this cel from the editor and edit it without converting it to RGB/truecolor.",
+                                "Import", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                            return;
+                        }
+                        byte[,] indices = IndexedImageHelper.GetIndexMatrix(bitmap);
+                        AkosImageEncoder.ReplaceCel(_akos, _currentCelIndex, indices);
+                    }
+                }
+                catch (ImageEncodeException ex)
+                {
+                    MessageBox.Show(ex.Message, "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+
+                // Re-parse the costume (the AKCD/AKOF changed) and keep the user on the edited cel.
+                SetAndRefreshData(_akos);
+                if (celToReselect < _tree.Nodes.Count) _tree.SelectedNode = _tree.Nodes[celToReselect];
+
+                MessageBox.Show("Cel imported. Use \"Save changes\" to write it back to the game files.",
+                    "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
