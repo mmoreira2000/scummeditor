@@ -262,17 +262,18 @@ namespace ScummEditor.Gui
             }
         }
 
-        /// <summary>Root nodes for the external .NUT SMUSH fonts (v7 The Dig / Full Throttle); the NutFont
-        /// viewer handles them. These are separate files next to the .LA0/.LA1 container.</summary>
+        /// <summary>A single "Fonts" root node grouping the external .NUT SMUSH fonts (v7 The Dig / Full
+        /// Throttle), one child per file; the NutFont viewer handles each. Purely a visual grouping - the
+        /// fonts are separate files next to the .LA0/.LA1 container and are dispatched by their tag.</summary>
         private void CreateNutFontNodes()
         {
-            if (GameData.NutFonts == null) return;
+            if (GameData.NutFonts == null || GameData.NutFonts.Count == 0) return;
 
+            TreeNode fontsRoot = _treeView.Nodes.Add("NutFonts", "Fonts");
             foreach (NutFontResource font in GameData.NutFonts)
             {
-                var node = _treeView.Nodes.Add("NutFont",
-                    "Font (" + System.IO.Path.GetFileName(font.FilePath) + ", NUT)");
-                node.Tag = font;
+                var node = new TreeNode(System.IO.Path.GetFileName(font.FilePath)) { Tag = font };
+                fontsRoot.Nodes.Add(node);
             }
         }
 

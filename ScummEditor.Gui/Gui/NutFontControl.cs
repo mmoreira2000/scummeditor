@@ -14,10 +14,12 @@ namespace ScummEditor.Gui
     /// Viewer/editor for a SCUMM v7 external .NUT SMUSH font (The Dig, Full Throttle): the glyphs listed
     /// on the left, the decoded glyph on the right. Glyphs are decoded by NutImageDecoder (codec 1/3 BOMP,
     /// 21/44 skip-copy). A NUT carries no palette of its own (its pixels are runtime palette indices), so a
-    /// palette combobox shows the glyph either on a grayscale ramp or against one of the game's room
-    /// palettes - this is only a preview; editing is index-based. "Export/Import PNG" edits the selected
-    /// glyph; "Export/Import font" round-trips the whole font as one atlas. A NutFont is a standalone file,
-    /// not a BlockBase, so this is a plain UserControl driven by SetData (like CharsetV3Control).
+    /// palette combobox controls how the glyph is previewed: a high-contrast "Glyph shape" silhouette (the
+    /// default - font ink is often a near-white palette index that would be invisible on a light background),
+    /// a literal grayscale-by-index ramp, or one of the game's room palettes. This is only a preview;
+    /// editing is index-based (the exported PNG carries the raw indices). "Export/Import PNG" edits the
+    /// selected glyph; "Export/Import font" round-trips the whole font as one atlas. A NutFont is a
+    /// standalone file, not a BlockBase, so this is a plain UserControl driven by SetData.
     /// </summary>
     public class NutFontControl : UserControl
     {
@@ -33,13 +35,18 @@ namespace ScummEditor.Gui
         private readonly Button _importFontButton;
 
         private NutFontResource _resource;
+        private List<Color[]> _gamePalettes;
         private int _currentGlyph = -1;
         private bool _splitterApplied;
 
+        /// <summary>A combobox palette choice: the colours used to preview a glyph on screen, and the
+        /// colours written as the PLTE of an exported PNG (kept index-distinguishable so the file is
+        /// editable even when the preview is a flat silhouette).</summary>
         private class PaletteChoice
         {
             public string Name;
-            public Color[] Palette;
+            public Color[] Preview;
+            public Color[] Export;
             public override string ToString() { return Name; }
         }
 
@@ -93,10 +100,11 @@ namespace ScummEditor.Gui
         }
 
         /// <summary>Shows a NUT font. <paramref name="gamePalettes"/> are optional game room palettes offered
-        /// in the combobox (beside grayscale) so a glyph can be previewed in real colours.</summary>
+        /// in the combobox (beside the shape/grayscale views) so a glyph can be previewed in real colours.</summary>
         public void SetData(NutFontResource resource, List<Color[]> gamePalettes)
         {
             _resource = resource;
+            _gamePalettes = gamePalettes;
             _tree.Nodes.Clear();
             ClearImage();
             _currentGlyph = -1;
@@ -135,7 +143,12 @@ namespace ScummEditor.Gui
         private void BuildPaletteChoices(List<Color[]> gamePalettes)
         {
             _paletteBox.Items.Clear();
-            _paletteBox.Items.Add(new PaletteChoice { Name = "Grayscale (by index)", Palette = null });
+            Color[] gray = GrayscalePalette();
+
+            // Default: a flat dark silhouette - always clearly visible whatever palette index the font's ink
+            // uses (font ink is commonly a near-white index that vanishes on the light background in grayscale).
+            _paletteBox.Items.Add(new PaletteChoice { Name = "Glyph shape", Preview = SilhouettePalette(), Export = gray });
+            _paletteBox.Items.Add(new PaletteChoice { Name = "Grayscale (by index)", Preview = gray, Export = gray });
             if (gamePalettes != null)
             {
                 for (int i = 0; i < gamePalettes.Count; i++)
@@ -143,17 +156,17 @@ namespace ScummEditor.Gui
                     _paletteBox.Items.Add(new PaletteChoice
                     {
                         Name = gamePalettes.Count > 1 ? "Game palette " + i : "Game palette",
-                        Palette = gamePalettes[i],
+                        Preview = gamePalettes[i],
+                        Export = gamePalettes[i],
                     });
                 }
             }
             _paletteBox.SelectedIndex = 0;
         }
 
-        private Color[] SelectedPalette()
+        private PaletteChoice SelectedChoice()
         {
-            var choice = _paletteBox.SelectedItem as PaletteChoice;
-            return choice != null ? choice.Palette : null;
+            return _paletteBox.SelectedItem as PaletteChoice;
         }
 
         private void TreeAfterSelect(object sender, TreeViewEventArgs e)
@@ -183,16 +196,21 @@ namespace ScummEditor.Gui
 
             try
             {
-                Bitmap glyph = NutImageDecoder.DecodeGlyph(font, _currentGlyph, SelectedPalette());
-                if (glyph == null)
+                byte[,] indices = NutImageDecoder.DecodeGlyphIndices(font, _currentGlyph);
+                if (indices == null)
                 {
                     _info.Text = baseInfo + " - not decodable (unsupported codec)";
                     return;
                 }
-                _picture.Image = glyph;
+
+                int transparency = NutImageDecoder.TransparencyIndex(g.Codec);
+                PaletteChoice choice = SelectedChoice();
+                Color[] preview = choice != null ? choice.Preview : GrayscalePalette();
+                _picture.Image = IndexedImageHelper.FromIndexMatrix(indices, preview, transparency);
+
                 _exportGlyphButton.Enabled = true;
                 _importGlyphButton.Enabled = NutImageEncoder.CanEncode(g.Codec);
-                _info.Text = baseInfo;
+                _info.Text = baseInfo + (HasInk(indices, transparency) ? string.Empty : "  (blank - no ink, e.g. a space or placeholder)");
             }
             catch (Exception ex)
             {
@@ -212,7 +230,7 @@ namespace ScummEditor.Gui
                 if (dialog.ShowDialog() != DialogResult.OK) return;
                 try
                 {
-                    NutFontPngCodec.ExportGlyphPng(_resource.Font, _currentGlyph, dialog.FileName, SelectedPalette());
+                    NutFontPngCodec.ExportGlyphPng(_resource.Font, _currentGlyph, dialog.FileName, ExportPalette());
                 }
                 catch (Exception ex)
                 {
@@ -237,7 +255,7 @@ namespace ScummEditor.Gui
                     MessageBox.Show(ex.Message, "Import failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                     return;
                 }
-                SetData(_resource, CurrentPalettes());
+                SetData(_resource, _gamePalettes);
                 if (reselect < _tree.Nodes.Count) _tree.SelectedNode = _tree.Nodes[reselect];
                 MessageBox.Show("Glyph imported. Use \"Save changes\" to write it back to the game files.",
                     "Import", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -252,7 +270,7 @@ namespace ScummEditor.Gui
                 if (dialog.ShowDialog() != DialogResult.OK) return;
                 try
                 {
-                    NutFontPngCodec.ExportPng(_resource.Font, dialog.FileName, SelectedPalette());
+                    NutFontPngCodec.ExportPng(_resource.Font, dialog.FileName, ExportPalette());
                     MessageBox.Show("Font exported as one atlas (all glyphs in a grid). Edit it as an INDEXED PNG, " +
                         "then Import font.", "Export font", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
@@ -279,23 +297,39 @@ namespace ScummEditor.Gui
                     return;
                 }
                 int reselect = _currentGlyph;
-                SetData(_resource, CurrentPalettes());
+                SetData(_resource, _gamePalettes);
                 if (reselect >= 0 && reselect < _tree.Nodes.Count) _tree.SelectedNode = _tree.Nodes[reselect];
                 MessageBox.Show("Font imported. Use \"Save changes\" to write it back to the game files.",
                     "Import font", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
 
-        /// <summary>The current palette list (rebuilt from the combobox) so a refresh keeps the same choices.</summary>
-        private List<Color[]> CurrentPalettes()
+        private Color[] ExportPalette()
         {
-            var list = new List<Color[]>();
-            foreach (var obj in _paletteBox.Items)
-            {
-                var choice = obj as PaletteChoice;
-                if (choice != null && choice.Palette != null) list.Add(choice.Palette);
-            }
-            return list;
+            PaletteChoice choice = SelectedChoice();
+            return choice != null ? choice.Export : GrayscalePalette();
+        }
+
+        private static bool HasInk(byte[,] indices, int transparency)
+        {
+            for (int x = 0; x < indices.GetLength(0); x++)
+                for (int y = 0; y < indices.GetLength(1); y++)
+                    if (indices[x, y] != transparency) return true;
+            return false;
+        }
+
+        private static Color[] GrayscalePalette()
+        {
+            var palette = new Color[256];
+            for (int i = 0; i < 256; i++) palette[i] = Color.FromArgb(i, i, i);
+            return palette;
+        }
+
+        private static Color[] SilhouettePalette()
+        {
+            var palette = new Color[256];
+            for (int i = 0; i < 256; i++) palette[i] = Color.FromArgb(32, 32, 32); // ink is drawn dark; the transparent index is made transparent
+            return palette;
         }
 
         private string FontName()
