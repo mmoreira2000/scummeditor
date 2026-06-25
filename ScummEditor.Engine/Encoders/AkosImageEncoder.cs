@@ -17,11 +17,11 @@ namespace ScummEditor.Engine.Encoders
     /// </summary>
     public static class AkosImageEncoder
     {
-        /// <summary>True when this costume's cels can be re-encoded (codec 1 BYLE RLE or codec 5 BOMP).</summary>
+        /// <summary>True when this costume's cels can be re-encoded (codec 1 BYLE RLE, 5 BOMP or 16 MAJMIN).</summary>
         public static bool CanEncode(BlockBase akos)
         {
             int codec = AkosImageDecoder.GetCodec(akos);
-            return codec == 1 || codec == 5;
+            return codec == 1 || codec == 5 || codec == 16;
         }
 
         /// <summary>
@@ -32,9 +32,9 @@ namespace ScummEditor.Engine.Encoders
         public static void ReplaceCel(BlockBase akos, int celIndex, byte[,] indices)
         {
             int codec = AkosImageDecoder.GetCodec(akos);
-            if (codec != 1 && codec != 5)
+            if (codec != 1 && codec != 5 && codec != 16)
             {
-                throw new ImageEncodeException("AKOS cel import is implemented for codec 1 (BYLE RLE) and codec 5 (BOMP); this costume uses codec " + codec + ".");
+                throw new ImageEncodeException("AKOS cel import is implemented for codec 1 (BYLE RLE), 5 (BOMP) and 16 (MAJMIN); this costume uses codec " + codec + ".");
             }
 
             RawContainerBlock akof = GetSub(akos, "AKOF");
@@ -76,7 +76,13 @@ namespace ScummEditor.Engine.Encoders
             // The encoders are validated separately (V7CostumeTests.AkosCelEncodeRoundTrips decodes the
             // re-encoded bytes and asserts the indices are identical), so no per-call round-trip is done
             // here. A valid (non-empty) cel always yields at least one byte.
-            byte[] newData = codec == 1 ? EncodeByleRle(indices, akpl.Contents.Length) : EncodeBomp(indices);
+            byte[] newData;
+            switch (codec)
+            {
+                case 1: newData = EncodeByleRle(indices, akpl.Contents.Length); break;
+                case 5: newData = EncodeBomp(indices); break;
+                default: newData = EncodeMajMin(indices); break; // codec 16
+            }
 
             // The cel runs from celStart up to the next cel's start in AKCD (or the end of AKCD).
             int celEnd = akcd.Contents.Length;
@@ -239,6 +245,112 @@ namespace ScummEditor.Engine.Encoders
                 result.AddRange(line);
             }
             return result.ToArray();
+        }
+
+        /// <summary>
+        /// AKOS codec 16 (MAJMIN) encoder: the inverse of AkosImageDecoder.DecodeMajMin. Row-major. Header
+        /// = [shift:1][startColour:1][bit-stream...]; per pixel a code transitions to the NEXT pixel's
+        /// colour: "0" = keep; "11"+3-bit (value=delta+4, delta in -4..3 excluding 0) = signed delta; "10"+
+        /// shift raw bits = absolute colour. The bit stream is packed LSB-first (matching the decoder's
+        /// reservoir, which reads bytes 2,3.. low bit first). The decoder's repeat-run form is not emitted
+        /// (a "keep" per repeated pixel is valid, just less compact). shift is chosen to fit the max index.
+        /// </summary>
+        public static byte[] EncodeMajMin(byte[,] indices)
+        {
+            int width = indices.GetLength(0);
+            int height = indices.GetLength(1);
+
+            int maxIndex = 0;
+            foreach (byte v in indices)
+            {
+                if (v > maxIndex) maxIndex = v;
+            }
+            int shift = 1;
+            while ((1 << shift) <= maxIndex)
+            {
+                shift++;
+            }
+
+            int total = width * height;
+            int startColor = indices[0, 0];
+            int color = startColor;
+            var bw = new LsbBitWriter();
+
+            for (int idx = 0; idx < total; idx++)
+            {
+                int nextColor = idx + 1 < total ? indices[(idx + 1) % width, (idx + 1) / width] : color;
+
+                if (nextColor == color)
+                {
+                    bw.WriteBit(0); // keep
+                }
+                else
+                {
+                    int delta = ((nextColor - color + 128) & 0xFF) - 128; // signed delta mod 256
+                    if (delta >= -4 && delta <= 3 && delta != 0)
+                    {
+                        bw.WriteBit(1);
+                        bw.WriteBit(1);
+                        bw.WriteBits(delta + 4, 3); // delta -4..3 (skip 0) -> 0,1,2,3,5,6,7
+                    }
+                    else
+                    {
+                        bw.WriteBit(1);
+                        bw.WriteBit(0);
+                        bw.WriteBits(nextColor, shift); // absolute colour
+                    }
+                }
+                color = nextColor;
+            }
+
+            byte[] packed = bw.ToBytes();
+            // The decoder seeds its reservoir from bytes 2 and 3 unconditionally, so the stream needs >= 2 bytes.
+            int streamLen = packed.Length < 2 ? 2 : packed.Length;
+            var output = new byte[2 + streamLen];
+            output[0] = (byte)shift;
+            output[1] = (byte)startColor;
+            Array.Copy(packed, 0, output, 2, packed.Length);
+            return output;
+        }
+
+        /// <summary>Writes bits least-significant-bit-first, matching MajMin's ReadBits reservoir.</summary>
+        private sealed class LsbBitWriter
+        {
+            private readonly List<byte> _bytes = new List<byte>();
+            private int _current;
+            private int _count;
+
+            public void WriteBit(int bit)
+            {
+                if ((bit & 1) != 0)
+                {
+                    _current |= 1 << _count;
+                }
+                _count++;
+                if (_count == 8)
+                {
+                    _bytes.Add((byte)_current);
+                    _current = 0;
+                    _count = 0;
+                }
+            }
+
+            public void WriteBits(int value, int bits)
+            {
+                for (int i = 0; i < bits; i++)
+                {
+                    WriteBit((value >> i) & 1);
+                }
+            }
+
+            public byte[] ToBytes()
+            {
+                if (_count > 0)
+                {
+                    _bytes.Add((byte)_current);
+                }
+                return _bytes.ToArray();
+            }
         }
 
         private static RawContainerBlock GetSub(BlockBase akos, string tag)

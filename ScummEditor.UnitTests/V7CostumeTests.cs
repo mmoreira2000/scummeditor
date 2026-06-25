@@ -108,12 +108,12 @@ namespace ScummEditor.UnitTests
         }
 
         /// <summary>
-        /// AKOS cel ENCODER round-trip for codec 1 (BYLE RLE) and codec 5 (BOMP): decoding a cel to its
-        /// index matrix, re-encoding it with AkosImageEncoder.ReplaceCel (a no-op edit) and decoding again
-        /// must reproduce the exact same indices. This exercises both encoders AND the AKCD/AKOF splice (the
-        /// re-encoded run-length usually has a different byte length, so the offset table must be fixed up
+        /// AKOS cel ENCODER round-trip for codec 1 (BYLE RLE), codec 5 (BOMP) and codec 16 (MAJMIN): decoding
+        /// a cel to its index matrix, re-encoding it with AkosImageEncoder.ReplaceCel (a no-op edit) and
+        /// decoding again must reproduce the exact same indices. This exercises all three encoders AND the
+        /// AKCD/AKOF splice (the re-encoded length usually differs, so the offset table must be fixed up
         /// correctly). Edits are applied sequentially per costume, so a wrong offset fix corrupts later cels
-        /// and fails here. (Codec 16 / MAJMIN is not encodable yet, so it is skipped.)
+        /// and fails here.
         /// </summary>
         [SkippableTheory]
         [InlineData(GameLibrary.TheDig)]
@@ -133,7 +133,7 @@ namespace ScummEditor.UnitTests
                 {
                     if (child.BlockType != "AKOS") continue;
                     int codec = AkosImageDecoder.GetCodec(child);
-                    if (codec != 1 && codec != 5) continue;
+                    if (codec != 1 && codec != 5 && codec != 16) continue;
                     if (testedByCodec.GetValueOrDefault(codec) >= 150) continue; // enough of this codec
 
                     int cels = AkosImageDecoder.GetCelCount(child);
@@ -158,6 +158,7 @@ namespace ScummEditor.UnitTests
             Assert.True(mismatches.Count == 0, "encode round-trip changed pixels for: " + string.Join(", ", mismatches));
             Assert.True(testedByCodec.GetValueOrDefault(1) > 20, "too few codec-1 cels exercised: " + testedByCodec.GetValueOrDefault(1));
             Assert.True(testedByCodec.GetValueOrDefault(5) > 20, "too few codec-5 cels exercised: " + testedByCodec.GetValueOrDefault(5));
+            Assert.True(testedByCodec.GetValueOrDefault(16) > 20, "too few codec-16 cels exercised: " + testedByCodec.GetValueOrDefault(16));
         }
 
         /// <summary>

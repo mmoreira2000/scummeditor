@@ -65,10 +65,9 @@ namespace ScummEditor.Gui
             var topBar = new Panel { Dock = DockStyle.Top, Height = 54 };
             _exportButton = new Button { Text = "Export PNG", Width = 90, Left = 3, Top = 3, Enabled = false };
             _exportButton.Click += ExportClick;
-            // Import re-encodes the cel back into the costume (codec 1 BYLE-RLE / codec 5 BOMP). It requires
-            // an INDEXED PNG so the costume-colour indices are preserved exactly, independent of the display
-            // palette (re-export from this viewer, edit without converting to RGB). Codec 16 (MAJMIN) is not
-            // encodable yet, so Import is disabled for those costumes.
+            // Import re-encodes the cel back into the costume (codec 1 BYLE-RLE / 5 BOMP / 16 MAJMIN). It
+            // requires an INDEXED PNG so the costume-colour indices are preserved exactly, independent of
+            // the display palette (re-export from this viewer, edit without converting to RGB).
             _importButton = new Button { Text = "Import PNG", Width = 90, Left = 99, Top = 3, Enabled = false };
             _importButton.Click += ImportClick;
             var paletteLabel = new Label { Text = "Palette:", AutoSize = true, Left = 198, Top = 8 };
