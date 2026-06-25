@@ -269,6 +269,22 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.TheDig)]
+        public void MissingNutFileIsSkippedDuringLoad(string relativePath)
+        {
+            GameInfo info = GameLibrary.Detect(relativePath);
+            Skip.If(info == null, "GameData folder not present: " + relativePath);
+
+            // A .NUT enumerated at detection could be gone/locked by load time; that must not crash the
+            // whole game load - the file is skipped and the rest of the game (and the other fonts) load.
+            info.NutFontFiles.Add(Path.Combine(GameLibrary.Folder(relativePath), "DOES_NOT_EXIST.NUT"));
+
+            ScummGameData game = ScummGameData.LoadFromGameInfo(info); // must not throw
+            Assert.True(game.NutFonts.Count > 0, "no NUT fonts loaded");
+            Assert.DoesNotContain(game.NutFonts, r => r.FilePath != null && r.FilePath.EndsWith("DOES_NOT_EXIST.NUT"));
+        }
+
         private static bool BytesEqual(byte[] a, byte[] b)
         {
             if (a.Length != b.Length) return false;

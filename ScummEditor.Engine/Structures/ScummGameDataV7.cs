@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Linq;
 using ScummEditor.Engine.Structures.DataFile;
@@ -46,8 +47,22 @@ namespace ScummEditor.Engine.Structures
 
             foreach (string path in LoadedGameInfo.NutFontFiles)
             {
+                byte[] bytes;
+                try
+                {
+                    bytes = File.ReadAllBytes(path);
+                }
+                catch (IOException)
+                {
+                    continue; // a .NUT enumerated at detection is now missing/locked: skip it, still load the game
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
                 var font = new NutFont { FilePath = path };
-                font.LoadFromFileBytes(File.ReadAllBytes(path));
+                font.LoadFromFileBytes(bytes); // a malformed NUT parses to IsValid=false, it does not throw
                 NutFonts.Add(new NutFontResource { FilePath = path, Font = font });
             }
         }
