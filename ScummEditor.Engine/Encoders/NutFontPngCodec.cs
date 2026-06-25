@@ -43,8 +43,10 @@ namespace ScummEditor.Engine.Encoders
         // ---- whole-font atlas (batch) ----
 
         /// <summary>Exports every decodable glyph as a grid (16 columns) of fixed cells sized to the font's
-        /// largest glyph; each glyph sits at the top-left of its cell, the rest left transparent.</summary>
-        public static void ExportPng(NutFont font, string pngPath, Color[] palette)
+        /// largest glyph; each glyph sits at the top-left of its cell, the rest left transparent. When
+        /// <paramref name="guidePath"/> is given, a companion guide image (cell grid + glyph-index labels +
+        /// a faint reference of each glyph) is written too, like the CHAR/v3 font exporters.</summary>
+        public static void ExportPng(NutFont font, string pngPath, string guidePath, Color[] palette)
         {
             int cellW, cellH, cols, rows, transparency;
             List<int> drawable = AtlasLayout(font, out cellW, out cellH, out cols, out rows, out transparency);
@@ -74,6 +76,51 @@ namespace ScummEditor.Engine.Encoders
             }
 
             SaveIndexed(atlas, palette ?? Grayscale(), pngPath);
+
+            if (guidePath != null)
+            {
+                using (Bitmap guide = BuildGuide(font, drawable, cellW, cellH, cols, rows))
+                {
+                    guide.Save(guidePath, ImageFormat.Png);
+                }
+            }
+        }
+
+        /// <summary>
+        /// A companion reference image (RGB, same grid as the atlas): each cell outlined, labelled with the
+        /// glyph index, and showing a faint copy of the original glyph - so a translator knows which cell is
+        /// which glyph and where the ink sits. Mirrors the CHAR/v3 font exporters' .guide.png.
+        /// </summary>
+        private static Bitmap BuildGuide(NutFont font, List<int> drawable, int cellW, int cellH, int cols, int rows)
+        {
+            var bitmap = new Bitmap(cols * cellW, rows * cellH, PixelFormat.Format24bppRgb);
+            using (Graphics gfx = Graphics.FromImage(bitmap))
+            using (var gridPen = new Pen(Color.FromArgb(60, 80, 160)))
+            using (var idFont = new Font("Consolas", 6f))
+            using (var idBrush = new SolidBrush(Color.Red))
+            {
+                gfx.Clear(Color.White);
+
+                // A flat-gray palette renders each glyph as a faint reference under the grid/labels.
+                var refPalette = new Color[256];
+                for (int i = 0; i < 256; i++) refPalette[i] = Color.FromArgb(150, 150, 150);
+
+                for (int slot = 0; slot < drawable.Count; slot++)
+                {
+                    int gi = drawable[slot];
+                    int cx = (slot % cols) * cellW;
+                    int cy = (slot / cols) * cellH;
+
+                    using (Bitmap glyph = NutImageDecoder.DecodeGlyph(font, gi, refPalette))
+                    {
+                        if (glyph != null) gfx.DrawImageUnscaled(glyph, cx, cy);
+                    }
+
+                    gfx.DrawRectangle(gridPen, cx, cy, cellW - 1, cellH - 1);
+                    gfx.DrawString(gi.ToString(), idFont, idBrush, cx + 1, cy + 1);
+                }
+            }
+            return bitmap;
         }
 
         /// <summary>Imports a whole-font atlas: each decodable glyph is read from the top-left of its cell
@@ -124,9 +171,10 @@ namespace ScummEditor.Engine.Encoders
             for (int i = 0; i < fonts.Count; i++)
             {
                 string name = BatchFileName(fonts[i], i);
+                string guide = Path.ChangeExtension(name, null) + ".guide.png";
                 try
                 {
-                    ExportPng(fonts[i].Font, Path.Combine(folder, name), null);
+                    ExportPng(fonts[i].Font, Path.Combine(folder, name), Path.Combine(folder, guide), null);
                     count++;
                 }
                 catch (ImageEncodeException ex)

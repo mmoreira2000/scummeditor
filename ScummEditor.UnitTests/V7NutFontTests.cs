@@ -176,8 +176,10 @@ namespace ScummEditor.UnitTests
             try
             {
                 string png = Path.Combine(dir, "font.png");
-                NutFontPngCodec.ExportPng(font, png, null);
-                NutFontPngCodec.ImportPng(font, png); // no-op re-import
+                string guide = Path.Combine(dir, "font.guide.png");
+                NutFontPngCodec.ExportPng(font, png, guide, null);
+                Assert.True(File.Exists(guide), "atlas export did not write the guide image");
+                NutFontPngCodec.ImportPng(font, png); // no-op re-import (the guide is reference-only)
 
                 byte[][,] after = DecodeAll(font);
                 Assert.Equal(before.Length, after.Length);

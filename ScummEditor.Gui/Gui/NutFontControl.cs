@@ -270,9 +270,12 @@ namespace ScummEditor.Gui
                 if (dialog.ShowDialog() != DialogResult.OK) return;
                 try
                 {
-                    NutFontPngCodec.ExportPng(_resource.Font, dialog.FileName, ExportPalette());
-                    MessageBox.Show("Font exported as one atlas (all glyphs in a grid). Edit it as an INDEXED PNG, " +
-                        "then Import font.", "Export font", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    string guidePath = Path.Combine(Path.GetDirectoryName(dialog.FileName) ?? string.Empty,
+                        Path.GetFileNameWithoutExtension(dialog.FileName) + ".guide.png");
+                    NutFontPngCodec.ExportPng(_resource.Font, dialog.FileName, guidePath, ExportPalette());
+                    MessageBox.Show("Font exported as one atlas (all glyphs in a grid), plus a .guide.png with the " +
+                        "cell grid and glyph indices. Edit the atlas as an INDEXED PNG, then Import font.",
+                        "Export font", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)
                 {
