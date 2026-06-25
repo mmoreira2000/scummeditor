@@ -133,7 +133,9 @@ namespace ScummEditor.Engine.Encoders
                     }
 
                     gfx.DrawRectangle(gridPen, cx, cy, cellW - 1, cellH - 1);
-                    gfx.DrawString(gi.ToString(), idFont, idBrush, cx + 1, cy + 1);
+                    // Hexadecimal glyph index, like the CHAR/v3 guide labels - it IS the character code the
+                    // game scripts reference, so the numbering must match the scripts and the other fonts.
+                    gfx.DrawString(gi.ToString("X2"), idFont, idBrush, cx + 1, cy + 1);
                 }
             }
             return bitmap;

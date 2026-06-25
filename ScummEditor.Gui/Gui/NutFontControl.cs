@@ -119,9 +119,11 @@ namespace ScummEditor.Gui
             for (int i = 0; i < font.Glyphs.Count; i++)
             {
                 NutGlyph g = font.Glyphs[i];
+                // The glyph index is the character code the scripts reference, so label it in hex (0xNN),
+                // matching the charset viewers and the guide image.
                 string text = g.HasPixels
-                    ? string.Format("Glyph {0} ({1}x{2})", i, g.Width, g.Height)
-                    : string.Format("Glyph {0} - empty", i);
+                    ? string.Format("Glyph 0x{0:X2} ({1}x{2})", i, g.Width, g.Height)
+                    : string.Format("Glyph 0x{0:X2} - empty", i);
                 var node = _tree.Nodes.Add(text);
                 node.Tag = i;
             }
@@ -187,7 +189,7 @@ namespace ScummEditor.Gui
 
             NutFont font = _resource.Font;
             NutGlyph g = font.Glyphs[_currentGlyph];
-            string baseInfo = string.Format("codec {0}  |  glyph {1}: {2}x{3}", g.Codec, _currentGlyph, g.Width, g.Height);
+            string baseInfo = string.Format("codec {0}  |  glyph 0x{1:X2}: {2}x{3}", g.Codec, _currentGlyph, g.Width, g.Height);
             if (!g.HasPixels)
             {
                 _info.Text = baseInfo + " - empty (no frame object)";
@@ -224,7 +226,7 @@ namespace ScummEditor.Gui
             using (var dialog = new SaveFileDialog
             {
                 Filter = "PNG Files|*.png",
-                FileName = string.Format("{0} glyph{1}.png", FontName(), _currentGlyph)
+                FileName = string.Format("{0} glyph0x{1:X2}.png", FontName(), _currentGlyph)
             })
             {
                 if (dialog.ShowDialog() != DialogResult.OK) return;
