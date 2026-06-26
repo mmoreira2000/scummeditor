@@ -139,8 +139,9 @@ namespace ScummEditor.Gui
         private void CommitDetail()
         {
             if (_loadingDetail || _current == null) return;
-            // The TextBox uses \r\n line endings, matching the DOS .TRS / .BND files.
-            _current.Text = _detail.Text;
+            // Windows Forms forces CRLF in the TextBox; let the file normalise it to its own structure (a
+            // .TRS keeps its native ending - LF for the Mac edition; a LANGUAGE.BND collapses it to a space).
+            _current.Text = _file.NormalizeEditedText(_detail.Text);
             if (_grid.CurrentRow != null && _grid.CurrentRow.Index >= 0)
             {
                 _grid.CurrentRow.Cells[1].Value = Preview(_current.Text);

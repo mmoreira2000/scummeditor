@@ -29,6 +29,7 @@ namespace ScummEditor.Engine.Structures
 
         private byte[] _body;        // decoded body (the template the entries index into)
         private byte[] _header;      // the 16-byte ETRS header (empty when not encoded)
+        private string _lineEnding = "\r\n"; // the body's native line terminator, restored on import
         private readonly List<LocalizedTextEntry> _entries = new List<LocalizedTextEntry>();
 
         public IReadOnlyList<LocalizedTextEntry> Entries { get { return _entries; } }
@@ -61,6 +62,7 @@ namespace ScummEditor.Engine.Structures
                 _body = bytes;
             }
 
+            _lineEnding = DetectLineEnding(_body);
             Parse();
             IsValid = _entries.Count > 0;
         }
@@ -143,7 +145,8 @@ namespace ScummEditor.Engine.Structures
         public string ImportFromText(string content)
         {
             var map = new Dictionary<string, string>();
-            foreach (string raw in content.Replace("\r\n", "\n").Split('\n'))
+            // Normalise every line ending (incl. a lone CR) before splitting on lines, so a dump saved by any editor parses.
+            foreach (string raw in content.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
             {
                 if (raw.Length == 0 || raw[0] == '#') continue;
                 int tab = raw.IndexOf('\t');
@@ -151,20 +154,56 @@ namespace ScummEditor.Engine.Structures
                 map[raw.Substring(0, tab)] = Unescape(raw.Substring(tab + 1));
             }
 
-            int changed = 0;
+            int changed = 0, unmappable = 0, rejected = 0;
             foreach (LocalizedTextEntry e in _entries)
             {
                 string text;
-                if (map.TryGetValue(e.Key, out text) && text != e.Text)
+                if (!map.TryGetValue(e.Key, out text) || text == e.Text) continue;
+                if (StartsAnyLineWithDefine(text))
                 {
-                    e.Text = text;
-                    changed++;
+                    rejected++; // a line beginning with "#define" re-parses as a new entry boundary, corrupting the file
+                    continue;
                 }
+                e.Text = text;
+                changed++;
+                unmappable += LocalizedTextEntry.CountUnmappable(text);
             }
-            return string.Format("{0} of {1} strings updated.", changed, _entries.Count);
+            string report = string.Format("{0} of {1} strings updated.", changed, _entries.Count);
+            if (rejected > 0)
+            {
+                report += string.Format("\nWARNING: {0} string(s) skipped - text with a line beginning \"#define\" would corrupt the .TRS structure.", rejected);
+            }
+            if (unmappable > 0)
+            {
+                report += string.Format("\nWARNING: {0} character(s) are outside the game's 8-bit code page and will be saved as '?'.", unmappable);
+            }
+            return report;
+        }
+
+        /// <inheritdoc/>
+        public string NormalizeEditedText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return text ?? string.Empty;
+            // Re-express whatever the GUI produced (Windows Forms forces CRLF) in the file's native ending,
+            // so editing a Mac LF-LF .TRS does not silently rewrite every line to CRLF.
+            return text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", _lineEnding);
         }
 
         // ---- helpers ----
+
+        /// <summary>True if any line of the (edited) text begins with "#define" - such a line would be
+        /// re-parsed as a new entry boundary on the next load, merging/splitting entries and corrupting
+        /// the file. The original game files never put "#define" inside a string, so a real edit never
+        /// trips this; it guards against a stray "#define" introduced through the import dump.</summary>
+        private static bool StartsAnyLineWithDefine(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            foreach (string line in text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
+            {
+                if (line.StartsWith("#define")) return true;
+            }
+            return false;
+        }
 
         private static bool IsDefineLine(byte[] b, int start, int contentEnd)
         {
@@ -189,7 +228,7 @@ namespace ScummEditor.Engine.Structures
             return s.Replace("\\", "\\\\").Replace("\r\n", "\\n").Replace("\r", "\\n").Replace("\n", "\\n").Replace("\t", "\\t");
         }
 
-        private static string Unescape(string s)
+        private string Unescape(string s)
         {
             var sb = new StringBuilder(s.Length);
             for (int i = 0; i < s.Length; i++)
@@ -197,7 +236,7 @@ namespace ScummEditor.Engine.Structures
                 if (s[i] == '\\' && i + 1 < s.Length)
                 {
                     char n = s[++i];
-                    if (n == 'n') sb.Append("\r\n");
+                    if (n == 'n') sb.Append(_lineEnding); // restore the file's own line terminator (CRLF, or LF on Mac)
                     else if (n == 't') sb.Append('\t');
                     else if (n == '\\') sb.Append('\\');
                     else { sb.Append('\\'); sb.Append(n); }
@@ -205,6 +244,19 @@ namespace ScummEditor.Engine.Structures
                 else sb.Append(s[i]);
             }
             return sb.ToString();
+        }
+
+        /// <summary>The body's native line terminator. Restoring it on import keeps an edited string in the
+        /// file's own convention (Windows CRLF, the Steam Mac The Dig's LF) so the export/import round-trip
+        /// stays byte-identical instead of forcing every line to CRLF.</summary>
+        private static string DetectLineEnding(byte[] body)
+        {
+            for (int i = 0; i < body.Length; i++)
+            {
+                if (body[i] == (byte)'\n') return "\n";
+                if (body[i] == (byte)'\r') return (i + 1 < body.Length && body[i + 1] == (byte)'\n') ? "\r\n" : "\r";
+            }
+            return "\r\n";
         }
 
         private static void LineBounds(byte[] b, int pos, out int contentEnd, out int lineEnd)

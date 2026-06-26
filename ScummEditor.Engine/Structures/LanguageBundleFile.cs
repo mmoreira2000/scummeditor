@@ -65,7 +65,7 @@ namespace ScummEditor.Engine.Structures
                     }
                     else if (first == (byte)'e' && len == 1)
                     {
-                        Encoded = true; // messages are XOR 0x13 (h/j/c CJK markers leave them plain)
+                        Encoded = true; // messages are XOR 0x13 (h/j/c are content-type markers only, not encoding control)
                     }
                     else if (first == (byte)'@')
                     {
@@ -123,7 +123,7 @@ namespace ScummEditor.Engine.Structures
             sb.Append("# ").Append(FileName).Append(" - one line per string: KEY<TAB>TEXT. Edit the TEXT only.\r\n");
             foreach (LocalizedTextEntry e in _entries)
             {
-                sb.Append(e.Key).Append('\t').Append(e.Text.Replace("\r", " ").Replace("\n", " ")).Append("\r\n");
+                sb.Append(e.Key).Append('\t').Append(NormalizeSingleLine(e.Text)).Append("\r\n");
             }
             return sb.ToString();
         }
@@ -131,15 +131,17 @@ namespace ScummEditor.Engine.Structures
         public string ImportFromText(string content)
         {
             var map = new Dictionary<string, string>();
-            foreach (string raw in content.Replace("\r\n", "\n").Split('\n'))
+            // Normalise every line ending (incl. a lone CR) before splitting, so a dump saved by any editor
+            // parses; a BND message is single-line, so collapse any stray newline in the value to a space.
+            foreach (string raw in content.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
             {
                 if (raw.Length == 0 || raw[0] == '#') continue;
                 int tab = raw.IndexOf('\t');
                 if (tab <= 0) continue;
-                map[raw.Substring(0, tab)] = raw.Substring(tab + 1);
+                map[raw.Substring(0, tab)] = NormalizeSingleLine(raw.Substring(tab + 1));
             }
 
-            int changed = 0;
+            int changed = 0, unmappable = 0;
             foreach (LocalizedTextEntry e in _entries)
             {
                 string text;
@@ -147,9 +149,21 @@ namespace ScummEditor.Engine.Structures
                 {
                     e.Text = text;
                     changed++;
+                    unmappable += LocalizedTextEntry.CountUnmappable(text);
                 }
             }
-            return string.Format("{0} of {1} strings updated.", changed, _entries.Count);
+            string report = string.Format("{0} of {1} strings updated.", changed, _entries.Count);
+            if (unmappable > 0)
+            {
+                report += string.Format("\nWARNING: {0} character(s) are outside the game's 8-bit code page and will be saved as '?'.", unmappable);
+            }
+            return report;
+        }
+
+        /// <inheritdoc/>
+        public string NormalizeEditedText(string text)
+        {
+            return NormalizeSingleLine(text);
         }
 
         private string Decode(byte[] b, int start, int end)
@@ -165,12 +179,22 @@ namespace ScummEditor.Engine.Structures
 
         private byte[] Encode(string text)
         {
-            byte[] msg = Encoding.Latin1.GetBytes(text ?? string.Empty);
+            byte[] msg = Encoding.Latin1.GetBytes(NormalizeSingleLine(text));
             if (Encoded)
             {
                 for (int i = 0; i < msg.Length; i++) msg[i] ^= XorKey;
             }
             return msg;
+        }
+
+        /// <summary>LANGUAGE.BND holds exactly one message per line - ScummVM reads a message only up to the
+        /// first CR/LF (string.cpp:2135) - so any newline the user typed in the editor is collapsed to a
+        /// space, both on export and when the bytes are rebuilt, to keep the file's line-based structure
+        /// intact (a raw newline would split one message into two on the next load).</summary>
+        private static string NormalizeSingleLine(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+            return text.Replace("\r\n", " ").Replace("\r", " ").Replace("\n", " ");
         }
 
         /// <summary>Finds the content end (before the line terminator) and the start of the next line.</summary>

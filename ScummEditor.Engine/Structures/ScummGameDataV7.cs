@@ -45,9 +45,19 @@ namespace ScummEditor.Engine.Structures
 
             if (!string.IsNullOrEmpty(LoadedGameInfo.LanguageBundlePath) && File.Exists(LoadedGameInfo.LanguageBundlePath))
             {
-                var bundle = new LanguageBundleFile(LoadedGameInfo.LanguageBundlePath);
-                bundle.Load(File.ReadAllBytes(LoadedGameInfo.LanguageBundlePath));
-                LocalizedTextFiles.Add(bundle);
+                try
+                {
+                    var bundle = new LanguageBundleFile(LoadedGameInfo.LanguageBundlePath);
+                    bundle.Load(File.ReadAllBytes(LoadedGameInfo.LanguageBundlePath));
+                    LocalizedTextFiles.Add(bundle);
+                }
+                catch (IOException)
+                {
+                    // LANGUAGE.BND vanished/locked between detection and load: skip it, still load the game
+                }
+                catch (UnauthorizedAccessException)
+                {
+                }
             }
 
             if (LoadedGameInfo.TrsFiles != null)
@@ -64,6 +74,9 @@ namespace ScummEditor.Engine.Structures
                     catch (IOException)
                     {
                         // a .TRS that vanished/locked between detection and load: skip, still load the game
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
                     }
                 }
             }

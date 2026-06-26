@@ -107,6 +107,45 @@ namespace ScummEditor.UnitTests
             Assert.True(trs.BuildContent().SequenceEqual(trs.OriginalContent), "no-op rebuild changed the .TRS bytes");
         }
 
+        [SkippableTheory]
+        [InlineData(PtDig + "|DIG.TRS")]
+        [InlineData(PtDig + "|VIDEO/DIGTXT.TRS")]
+        public void TrsFileExportImportNoOpIsByteIdentical(string spec)
+        {
+            TrsFile trs = LoadTrs(spec);
+            Skip.If(trs == null, ".TRS not present: " + spec);
+
+            string dump = trs.ExportToText();
+            string report = trs.ImportFromText(dump); // re-import the unchanged dump
+            Assert.Contains("0 of", report);          // nothing changed
+            Assert.True(trs.BuildContent().SequenceEqual(trs.OriginalContent), "export/import no-op changed the .TRS bytes");
+        }
+
+        [Fact]
+        public void TrsExportImportPreservesLfLineEndings()
+        {
+            // A plain .TRS with Unix (LF) line endings - the Steam Mac The Dig ships LF-LF .TRS files.
+            // Export+import of an unchanged dump must stay byte-identical (the file's own line ending is
+            // restored on import, not forced to CRLF), and an edited entry must keep the LF convention.
+            byte[] file = System.Text.Encoding.Latin1.GetBytes("#define A 1\nHello\nthere\n\n#define B 2\nWorld\n");
+            var trs = new TrsFile("unix.trs");
+            trs.Load(file);
+
+            Assert.False(trs.Encoded);
+            Assert.Equal(2, trs.Entries.Count);
+
+            string report = trs.ImportFromText(trs.ExportToText());
+            Assert.Contains("0 of", report);
+            Assert.True(trs.BuildContent().SequenceEqual(file), "LF .TRS export/import no-op changed bytes");
+
+            // editing one entry through the import path keeps LF, never introduces CR
+            string editedDump = trs.ExportToText().Replace("World", "Mundo");
+            trs.ImportFromText(editedDump);
+            byte[] rebuilt = trs.BuildContent();
+            Assert.DoesNotContain((byte)'\r', rebuilt);
+            Assert.Contains("Mundo", System.Text.Encoding.Latin1.GetString(rebuilt));
+        }
+
         [SkippableFact]
         public void DigtxtTrsHasReadableStrings()
         {
@@ -145,6 +184,75 @@ namespace ScummEditor.UnitTests
             Assert.Contains(game.LocalizedTextFiles, f => f is LanguageBundleFile && f.IsValid);
             Assert.Contains(game.LocalizedTextFiles, f => f is TrsFile && f.FileName.Equals("DIG.TRS", System.StringComparison.OrdinalIgnoreCase));
             Assert.True(game.LocalizedTextFiles.Count >= 3, "expected LANGUAGE.BND + at least DIG.TRS + DIGTXT.TRS");
+        }
+
+        // ---- adversarial-validation fixes ----
+
+        [SkippableFact]
+        public void DetectionFindsLanguageBundleInVideoSubfolder()
+        {
+            // The Chinese/Japanese/Korean editions keep LANGUAGE.BND under VIDEO/, not the root. Detection
+            // must find it (it used to look only at the root, so the CJK editions' text was unreachable).
+            GameInfo info = GameLibrary.Detect(GameLibrary.TheDigChinese);
+            Skip.If(info == null, "Chinese The Dig not present");
+
+            Assert.False(string.IsNullOrEmpty(info.LanguageBundlePath), "LANGUAGE.BND not detected for the CJK edition");
+            Assert.Contains("VIDEO", info.LanguageBundlePath, System.StringComparison.OrdinalIgnoreCase);
+
+            ScummGameData game = ScummGameData.LoadFromGameInfo(info);
+            Assert.Contains(game.LocalizedTextFiles, f => f is LanguageBundleFile && f.IsValid);
+        }
+
+        [Fact]
+        public void NormalizeEditedTextCollapsesNewlinesForBundle()
+        {
+            // A LANGUAGE.BND message is one line; a newline typed in the GUI must collapse to a space so the
+            // saved file keeps its line-based structure (ScummVM reads a message only up to the first CR/LF).
+            var bnd = new LanguageBundleFile("x.bnd");
+            Assert.Equal("a b c", bnd.NormalizeEditedText("a\r\nb\nc"));
+        }
+
+        [Fact]
+        public void NormalizeEditedTextKeepsTrsNativeLineEnding()
+        {
+            // A .TRS edited in the GUI (Windows Forms forces CRLF) must be re-expressed in the file's own
+            // line ending, so editing a Mac LF-LF file does not silently rewrite every line to CRLF.
+            byte[] lf = System.Text.Encoding.Latin1.GetBytes("#define A 1\nHello\n\n");
+            var trs = new TrsFile("unix.trs");
+            trs.Load(lf);
+
+            Assert.Equal("Linha1\nLinha2\n", trs.NormalizeEditedText("Linha1\r\nLinha2\r\n"));
+        }
+
+        [Fact]
+        public void TrsImportRejectsEmbeddedDefineLine()
+        {
+            // A translated value whose own text begins a line with "#define" would be re-parsed as a new
+            // entry on reload, corrupting the file - the import must skip it and keep the structure intact.
+            byte[] file = System.Text.Encoding.Latin1.GetBytes("#define A 1\r\nHello\r\n\r\n#define B 2\r\nWorld\r\n");
+            var trs = new TrsFile("g.trs");
+            trs.Load(file);
+            int before = trs.Entries.Count;
+
+            string dump = "A 1\t#define EVIL 99\\nInjected\r\n"; // escaped \n -> a real newline starting "#define"
+            string report = trs.ImportFromText(dump);
+
+            Assert.Contains("skipped", report);
+            Assert.Equal(before, trs.Entries.Count);                       // no phantom entry
+            Assert.True(trs.BuildContent().SequenceEqual(file), "rejected edit must leave the file unchanged");
+        }
+
+        [Fact]
+        public void ImportWarnsAboutCharactersOutsideCodePage()
+        {
+            // A smart quote (U+2019) pasted from a word processor cannot be stored in the DOS code page;
+            // Latin-1 would write it as '?', so the import must warn instead of silently corrupting.
+            byte[] file = System.Text.Encoding.Latin1.GetBytes("#define A 1\r\nHello\r\n\r\n#define B 2\r\nWorld\r\n");
+            var trs = new TrsFile("g.trs");
+            trs.Load(file);
+
+            string report = trs.ImportFromText("A 1\tIt’s here\r\n");
+            Assert.Contains("outside the game's 8-bit code page", report);
         }
 
         [Fact]

@@ -10,5 +10,21 @@ namespace ScummEditor.Engine.Structures
         // Byte range of the (encoded) text within the file's original bytes, used to rebuild it in place.
         internal int TextStart;
         internal int TextEnd;
+
+        /// <summary>Counts characters that cannot be stored in the game's 8-bit code page - the Latin-1
+        /// encoder writes them as '?' - so an import can warn about, e.g., smart quotes pasted from a word
+        /// processor that would silently corrupt the saved text.</summary>
+        internal static int CountUnmappable(string text)
+        {
+            int n = 0;
+            if (text != null)
+            {
+                foreach (char c in text)
+                {
+                    if (c > 0xFF) n++;
+                }
+            }
+            return n;
+        }
     }
 }

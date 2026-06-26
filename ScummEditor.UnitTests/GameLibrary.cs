@@ -50,6 +50,8 @@ namespace ScummEditor.UnitTests
         // SCUMM v7 (GAME.LA0 index + GAME.LA1 data; not XOR-encrypted; AKOS costumes)
         public const string TheDig = "ScummV7/Dig, The (1995)/DOS v1.0";
         public const string TheDigPortuguese = "ScummV7/Dig, The (1995)/Other Languages/Portuguese/CD";
+        // The CJK editions keep LANGUAGE.BND under a VIDEO/ subfolder (detection must search recursively).
+        public const string TheDigChinese = "ScummV7/Dig, The (1995)/Other Languages/Chinese/CD";
         public const string FullThrottle = "ScummV7/Full Throttle (1995)/DOS CD";
         public const string FullThrottlePortuguese = "ScummV7/Full Throttle (1995)/Other Languages/Portuguese/DOS CD";
 

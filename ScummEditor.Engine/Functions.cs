@@ -229,8 +229,14 @@ namespace ScummEditor.Engine
                 }
 
                 // The Dig's localized editions ship the translated in-game text in an external LANGUAGE.BND.
-                string languageBundle = Path.Combine(folder, "LANGUAGE.BND");
-                if (File.Exists(languageBundle))
+                // The European editions keep it at the folder root; the CJK editions (Chinese/Japanese/
+                // Korean) keep it under a VIDEO/ subfolder, so we search recursively like EnumerateNutFonts
+                // and EnumerateTrs already do (ScummVM finds it in either place via its recursive search path).
+                string languageBundle = Directory
+                    .GetFiles(folder, "LANGUAGE.BND", SearchOption.AllDirectories)
+                    .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (!string.IsNullOrEmpty(languageBundle))
                 {
                     info.LanguageBundlePath = languageBundle;
                 }
