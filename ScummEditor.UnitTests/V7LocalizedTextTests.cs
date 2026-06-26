@@ -80,5 +80,83 @@ namespace ScummEditor.UnitTests
             Assert.Contains("0 of", report);          // nothing changed
             Assert.True(bnd.BuildContent().SequenceEqual(bnd.OriginalContent), "export/import no-op changed bytes");
         }
+
+        // ---- .TRS ----
+
+        private static TrsFile LoadTrs(string relativePath)
+        {
+            string full = GameLibrary.Folder(relativePath.Substring(0, relativePath.IndexOf('|')));
+            if (full == null) return null;
+            string path = Path.Combine(full, relativePath.Substring(relativePath.IndexOf('|') + 1).Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(path)) return null;
+            var trs = new TrsFile(path);
+            trs.Load(File.ReadAllBytes(path));
+            return trs;
+        }
+
+        [SkippableTheory]
+        [InlineData(PtDig + "|DIG.TRS")]
+        [InlineData(PtDig + "|VIDEO/DIGTXT.TRS")]
+        public void TrsFileRoundTripsByteIdentical(string spec)
+        {
+            TrsFile trs = LoadTrs(spec);
+            Skip.If(trs == null, ".TRS not present: " + spec);
+
+            Assert.True(trs.IsValid, "no #define entries parsed");
+            Assert.True(trs.Entries.Count > 0);
+            Assert.True(trs.BuildContent().SequenceEqual(trs.OriginalContent), "no-op rebuild changed the .TRS bytes");
+        }
+
+        [SkippableFact]
+        public void DigtxtTrsHasReadableStrings()
+        {
+            TrsFile trs = LoadTrs(PtDig + "|VIDEO/DIGTXT.TRS");
+            Skip.If(trs == null, "DIGTXT.TRS not present");
+            // The credits block and a subtitle line are present in the decoded text.
+            Assert.Contains(trs.Entries, e => e.Text.Contains("Charlie Ramos"));
+        }
+
+        [SkippableFact]
+        public void TrsFileEditRoundTrips()
+        {
+            TrsFile trs = LoadTrs(PtDig + "|VIDEO/DIGTXT.TRS");
+            Skip.If(trs == null, "DIGTXT.TRS not present");
+
+            LocalizedTextEntry target = trs.Entries[1]; // a subtitle block
+            string otherKey = trs.Entries[0].Key;
+            string otherText = trs.Entries[0].Text;
+            target.Text = "^f00Texto de teste.\r\n\r\n";
+
+            var reloaded = new TrsFile(trs.FilePath);
+            reloaded.Load(trs.BuildContent());
+            Assert.Equal("^f00Texto de teste.\r\n\r\n", reloaded.Entries.First(e => e.Key == target.Key).Text);
+            Assert.Equal(otherText, reloaded.Entries.First(e => e.Key == otherKey).Text);
+        }
+
+        [Fact]
+        public void EtrsEncodedTrsRoundTripsAndDecodes()
+        {
+            // Build a synthetic ETRS .TRS (16-byte header + XOR-0xCC body) to cover the encoded path.
+            byte[] body = System.Text.Encoding.Latin1.GetBytes("#define A 1\r\nHello\r\n\r\n#define B 2\r\nWorld\r\n");
+            var file = new byte[16 + body.Length];
+            file[0] = (byte)'E'; file[1] = (byte)'T'; file[2] = (byte)'R'; file[3] = (byte)'S';
+            for (int i = 0; i < body.Length; i++) file[16 + i] = (byte)(body[i] ^ 0xCC);
+
+            var trs = new TrsFile("synthetic.trs");
+            trs.Load(file);
+
+            Assert.True(trs.Encoded);
+            Assert.Equal(2, trs.Entries.Count);
+            Assert.Contains(trs.Entries, e => e.Text.Contains("Hello"));
+            Assert.True(trs.BuildContent().SequenceEqual(file), "ETRS no-op rebuild changed bytes");
+
+            // edit + rebuild + reload survives, still ETRS-encoded
+            trs.Entries[0].Text = "Bonjour\r\n\r\n";
+            var reloaded = new TrsFile("synthetic.trs");
+            reloaded.Load(trs.BuildContent());
+            Assert.True(reloaded.Encoded);
+            Assert.Contains(reloaded.Entries, e => e.Text.Contains("Bonjour"));
+            Assert.Contains(reloaded.Entries, e => e.Text.Contains("World"));
+        }
     }
 }
