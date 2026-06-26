@@ -36,6 +36,10 @@ namespace ScummEditor.Engine.Structures
         /// <summary>External .NUT SMUSH fonts (v7 The Dig / Full Throttle); empty for every other engine.</summary>
         public List<NutFontResource> NutFonts { get; private set; } = new List<NutFontResource>();
 
+        /// <summary>External localized-text files (v7 The Dig LANGUAGE.BND + the .TRS subtitle/UI files);
+        /// empty for every other engine.</summary>
+        public List<ILocalizedTextFile> LocalizedTextFiles { get; private set; } = new List<ILocalizedTextFile>();
+
         /// <summary>Loads the v3 9N.LFL charset files (always plaintext) into V3Charsets.</summary>
         protected void LoadV3Charsets()
         {
@@ -215,6 +219,16 @@ namespace ScummEditor.Engine.Structures
                 if (font.Font != null && font.Font.RawContent != null && !string.IsNullOrEmpty(font.FilePath))
                 {
                     File.WriteAllBytes(font.FilePath, font.Font.RawContent);
+                }
+            }
+
+            // Write back the external localized-text files (v7 LANGUAGE.BND + .TRS); BuildContent re-encodes
+            // only the edited strings, so an untouched file writes back byte-identically.
+            foreach (ILocalizedTextFile text in LocalizedTextFiles)
+            {
+                if (text != null && !string.IsNullOrEmpty(text.FilePath))
+                {
+                    File.WriteAllBytes(text.FilePath, text.BuildContent());
                 }
             }
         }

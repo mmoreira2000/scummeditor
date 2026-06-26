@@ -133,6 +133,20 @@ namespace ScummEditor.UnitTests
             Assert.Equal(otherText, reloaded.Entries.First(e => e.Key == otherKey).Text);
         }
 
+        // ---- load/save wiring ----
+
+        [SkippableFact]
+        public void GameLoadsLocalizedTextFiles()
+        {
+            ScummGameData game = GameLibrary.Load(PtDig);
+            Skip.If(game == null, "PT The Dig not present");
+
+            // The loader exposes LANGUAGE.BND (as a LanguageBundleFile) plus the .TRS files.
+            Assert.Contains(game.LocalizedTextFiles, f => f is LanguageBundleFile && f.IsValid);
+            Assert.Contains(game.LocalizedTextFiles, f => f is TrsFile && f.FileName.Equals("DIG.TRS", System.StringComparison.OrdinalIgnoreCase));
+            Assert.True(game.LocalizedTextFiles.Count >= 3, "expected LANGUAGE.BND + at least DIG.TRS + DIGTXT.TRS");
+        }
+
         [Fact]
         public void EtrsEncodedTrsRoundTripsAndDecodes()
         {

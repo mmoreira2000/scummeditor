@@ -29,6 +29,7 @@ namespace ScummEditor.Gui
         private readonly V2ExeFontControl _v2ExeFontControl = new V2ExeFontControl();
         private readonly NutFontControl _nutFontControl = new NutFontControl();
         private readonly ImuseBundleControl _imuseBundleControl = new ImuseBundleControl();
+        private readonly LocalizedTextControl _localizedTextControl = new LocalizedTextControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -179,6 +180,7 @@ namespace ScummEditor.Gui
             CreateV2ExeFontNode();
             CreateNutFontNodes();
             CreateBundleNodes(GameData.LoadedGameInfo);
+            CreateLocalizedTextNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
@@ -324,6 +326,20 @@ namespace ScummEditor.Gui
             foreach (BlockBase block in indexFile.Blocks)
             {
                 CreateNode(block, node);
+            }
+        }
+
+        /// <summary>A single "Texts (localized)" root node grouping the external localized-text files (v7
+        /// The Dig LANGUAGE.BND + the .TRS subtitle/UI files); the localized-text viewer handles each.</summary>
+        private void CreateLocalizedTextNodes()
+        {
+            if (GameData.LocalizedTextFiles == null || GameData.LocalizedTextFiles.Count == 0) return;
+
+            TreeNode root = _treeView.Nodes.Add("LocalizedText", "Texts (localized)");
+            foreach (ILocalizedTextFile text in GameData.LocalizedTextFiles)
+            {
+                var node = new TreeNode(System.IO.Path.GetFileName(text.FilePath)) { Tag = text };
+                root.Nodes.Add(node);
             }
         }
 
@@ -536,6 +552,16 @@ namespace ScummEditor.Gui
                 _imuseBundleControl.SetData(bundle);
                 _displayPanel.Controls.Add(_imuseBundleControl);
                 _imuseBundleControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v7 external localized text (The Dig LANGUAGE.BND + the .TRS files).
+            var localizedText = e.Node.Tag as ILocalizedTextFile;
+            if (localizedText != null)
+            {
+                _localizedTextControl.SetData(localizedText);
+                _displayPanel.Controls.Add(_localizedTextControl);
+                _localizedTextControl.Dock = DockStyle.Fill;
                 return;
             }
 

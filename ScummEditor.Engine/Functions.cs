@@ -210,6 +210,7 @@ namespace ScummEditor.Engine
                     DataFiles = new List<string> { dataPath }, // v7 keeps all room data in one file
                     NutFontFiles = EnumerateNutFonts(folder), // external SMUSH fonts (FONT0.NUT, ...)
                     BundleFiles = EnumerateBundles(folder),   // external iMUSE bundles (DIGMUSIC/DIGVOICE.BUN)
+                    TrsFiles = EnumerateTrs(folder),          // external .TRS subtitle/UI text
                     Xored = false,
                     XorKey = 0x00,      // v7 data is not XOR-encrypted
                     IndexXorKey = 0x00, // v7 index is not XOR-encrypted
@@ -225,6 +226,13 @@ namespace ScummEditor.Engine
                 if (File.Exists(speechPath))
                 {
                     info.SpeechFilePath = speechPath;
+                }
+
+                // The Dig's localized editions ship the translated in-game text in an external LANGUAGE.BND.
+                string languageBundle = Path.Combine(folder, "LANGUAGE.BND");
+                if (File.Exists(languageBundle))
+                {
+                    info.LanguageBundlePath = languageBundle;
                 }
 
                 return info;
@@ -260,6 +268,19 @@ namespace ScummEditor.Engine
             }
             bundles.Sort(StringComparer.OrdinalIgnoreCase);
             return bundles;
+        }
+
+        /// <summary>Every .TRS text resource in a v7 game folder (root + VIDEO subfolder), ordered by name:
+        /// the cutscene-subtitle / UI strings (The Dig DIGTXT.TRS/DIG.TRS, Full Throttle's per-scene .TRS).</summary>
+        private static List<string> EnumerateTrs(string folder)
+        {
+            var trs = new List<string>();
+            foreach (string path in Directory.GetFiles(folder, "*.TRS", SearchOption.AllDirectories))
+            {
+                trs.Add(path);
+            }
+            trs.Sort(StringComparer.OrdinalIgnoreCase);
+            return trs;
         }
 
         /// <summary>True when the file begins with a v5/v6/v7 big-header 4-char block tag.</summary>

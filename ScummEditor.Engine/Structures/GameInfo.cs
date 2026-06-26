@@ -100,5 +100,13 @@ namespace ScummEditor.Engine.Structures
         /// MONSTER.SOU instead).
         /// </summary>
         public List<string> BundleFiles { get; set; }
+
+        /// <summary>The Dig's external localized in-game text file (LANGUAGE.BND), present only in the
+        /// non-English editions. Null otherwise.</summary>
+        public string LanguageBundlePath { get; set; }
+
+        /// <summary>External .TRS text files (cutscene-subtitle / UI strings): The Dig DIGTXT.TRS/DIG.TRS,
+        /// Full Throttle's per-scene .TRS. Null/empty for non-v7.</summary>
+        public List<string> TrsFiles { get; set; }
     }
 }

@@ -35,6 +35,38 @@ namespace ScummEditor.Engine.Structures
         {
             base.AfterLoad();
             LoadNutFonts();
+            LoadLocalizedText();
+        }
+
+        /// <summary>Loads The Dig's LANGUAGE.BND (localized in-game text) and the .TRS subtitle/UI files.</summary>
+        private void LoadLocalizedText()
+        {
+            LocalizedTextFiles.Clear();
+
+            if (!string.IsNullOrEmpty(LoadedGameInfo.LanguageBundlePath) && File.Exists(LoadedGameInfo.LanguageBundlePath))
+            {
+                var bundle = new LanguageBundleFile(LoadedGameInfo.LanguageBundlePath);
+                bundle.Load(File.ReadAllBytes(LoadedGameInfo.LanguageBundlePath));
+                LocalizedTextFiles.Add(bundle);
+            }
+
+            if (LoadedGameInfo.TrsFiles != null)
+            {
+                foreach (string path in LoadedGameInfo.TrsFiles)
+                {
+                    if (!File.Exists(path)) continue;
+                    try
+                    {
+                        var trs = new TrsFile(path);
+                        trs.Load(File.ReadAllBytes(path));
+                        LocalizedTextFiles.Add(trs);
+                    }
+                    catch (IOException)
+                    {
+                        // a .TRS that vanished/locked between detection and load: skip, still load the game
+                    }
+                }
+            }
         }
 
         private void LoadNutFonts()
