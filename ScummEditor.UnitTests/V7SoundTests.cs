@@ -97,6 +97,33 @@ namespace ScummEditor.UnitTests
             Assert.True(File.Exists(info.SpeechFilePath), "MONSTER.SOU not found");
         }
 
+        [SkippableTheory]
+        [InlineData(GameLibrary.FullThrottle)]        // v7: each entry is VCTL + VTLK-wrapped VOC
+        [InlineData(GameLibrary.DayOfTheTentacleCd)]  // v6: VCTL + bare VOC (no VTLK wrapper)
+        [InlineData(GameLibrary.SamAndMaxCd)]         // v6: VCTL + bare VOC
+        public void MonsterSouParsesEverySpeechEntry(string relativePath)
+        {
+            string folder = GameLibrary.Folder(relativePath);
+            Skip.If(folder == null, "GameData folder not present: " + relativePath);
+            string sou = Path.Combine(folder, "MONSTER.SOU");
+            Skip.If(!File.Exists(sou), "MONSTER.SOU not present: " + relativePath);
+
+            var speech = new SpeechSouFile(sou);
+            speech.EnsureParsed();
+
+            // The walk must reach the end of the file (Full Throttle wraps the VOC in a VTLK block that the
+            // parser must skip; the older talkie editions do not) and expose every speech entry.
+            Assert.Null(speech.ParseError);
+            Assert.True(speech.Entries.Count > 100, "too few speech entries parsed: " + speech.Entries.Count);
+
+            // Spot-check the first entry: it points at a real Creative VOC and yielded a sample rate.
+            SpeechSouEntry first = speech.Entries[0];
+            byte[] voc = speech.ReadVocBytes(first);
+            Assert.True(voc.Length > 26, "VOC too short");
+            Assert.Equal("Creative Voice File", System.Text.Encoding.ASCII.GetString(voc, 0, 19));
+            Assert.True(first.SampleRate > 0, "no sample rate decoded");
+        }
+
         [SkippableFact]
         public void TheDigHasNoMonsterSou()
         {
