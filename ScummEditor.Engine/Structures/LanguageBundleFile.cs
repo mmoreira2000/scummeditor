@@ -26,6 +26,11 @@ namespace ScummEditor.Engine.Structures
         public bool IsValid { get; private set; }
         public bool Encoded { get; private set; }
 
+        /// <summary>The CJK content marker the bundle declares, if any: 'j' Japanese, 'h' Korean (Hangul),
+        /// 'c' Chinese (ScummVM string.cpp:2103-2108); '\0' for the Western (alphabetic) editions. A direct,
+        /// reliable language signal that the word heuristic cannot give for the double-byte scripts.</summary>
+        public char CjkMarker { get; private set; }
+
         private readonly List<LocalizedTextEntry> _entries = new List<LocalizedTextEntry>();
         public IReadOnlyList<LocalizedTextEntry> Entries { get { return _entries; } }
         public string FileName { get { return Path.GetFileName(FilePath); } }
@@ -45,6 +50,7 @@ namespace ScummEditor.Engine.Structures
         {
             _entries.Clear();
             Encoded = false;
+            CjkMarker = '\0';
             IsValid = false;
             byte[] b = OriginalContent;
             if (b == null || b.Length == 0) return;
@@ -66,6 +72,10 @@ namespace ScummEditor.Engine.Structures
                     else if (first == (byte)'e' && len == 1)
                     {
                         Encoded = true; // messages are XOR 0x13 (h/j/c are content-type markers only, not encoding control)
+                    }
+                    else if (len == 1 && (first == (byte)'h' || first == (byte)'j' || first == (byte)'c'))
+                    {
+                        CjkMarker = (char)first; // double-byte script marker: 'h' Korean, 'j' Japanese, 'c' Chinese
                     }
                     else if (first == (byte)'@')
                     {

@@ -559,7 +559,9 @@ namespace ScummEditor.Gui
             var localizedText = e.Node.Tag as ILocalizedTextFile;
             if (localizedText != null)
             {
-                _localizedTextControl.SetData(localizedText);
+                // Show the text through the edition's DOS code page so its accents render correctly.
+                int codePage = ScummEditor.Engine.Encoders.DosCodePageText.CodePageFor(GameData.LoadedGameInfo.Language);
+                _localizedTextControl.SetData(localizedText, codePage);
                 _displayPanel.Controls.Add(_localizedTextControl);
                 _localizedTextControl.Dock = DockStyle.Fill;
                 return;

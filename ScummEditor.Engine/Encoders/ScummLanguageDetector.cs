@@ -80,11 +80,15 @@ namespace ScummEditor.Engine.Encoders
         {
             if (game == null || game.LoadedGameInfo == null) return;
 
-            // The content word-heuristic is tuned for v2-v6. v7 (The Dig, Full Throttle) translated
-            // editions keep many English engine/debug strings in their scripts, which the heuristic
-            // misreads as English; until a proper v7 language detector exists, leave v7 as Unknown
-            // rather than report the wrong language.
-            if (game.LoadedGameInfo.ScummVersion >= 7) return;
+            // SCUMM v7 (The Dig, Full Throttle) needs its own detector: The Dig keeps its dialogue in the
+            // external LANGUAGE.BND (its in-container scripts are English engine text), while Full Throttle
+            // keeps the translated dialogue in the container scripts. DetectV7Language routes each correctly.
+            if (game.LoadedGameInfo.ScummVersion >= 7)
+            {
+                ScummLanguage v7 = DetectV7Language(game);
+                if (v7 != ScummLanguage.Unknown) game.LoadedGameInfo.Language = v7;
+                return;
+            }
 
             ScummLanguage md5 = game.LoadedGameInfo.Language;
             if (md5 != ScummLanguage.Unknown && md5 != ScummLanguage.English) return; // trust a confident non-English MD5
@@ -96,6 +100,44 @@ namespace ScummEditor.Engine.Encoders
             if (content == ScummLanguage.Unknown) return;           // nothing better to offer
             if (md5 == content) return;                             // already agree
             game.LoadedGameInfo.Language = content;                 // fill Unknown, or override a dubious English
+        }
+
+        /// <summary>
+        /// Detects a SCUMM v7 edition's language from its real translated text. The Dig's dialogue lives in
+        /// the external LANGUAGE.BND - its double-byte editions declare a CJK marker (j/h/c), and the Western
+        /// ones are recognised by the word heuristic over the bundle entries. Full Throttle (and the English
+        /// Dig) have no bundle, so their translated dialogue is the in-container script text. Returns Unknown
+        /// when nothing decides (e.g. a language with no word profile), so the caller leaves it unset.
+        /// </summary>
+        private static ScummLanguage DetectV7Language(ScummGameData game)
+        {
+            LanguageBundleFile bundle = null;
+            if (game.LocalizedTextFiles != null)
+            {
+                foreach (ILocalizedTextFile f in game.LocalizedTextFiles)
+                {
+                    if (f is LanguageBundleFile b && b.IsValid) { bundle = b; break; }
+                }
+            }
+
+            if (bundle != null)
+            {
+                switch (bundle.CjkMarker)
+                {
+                    case 'j': return ScummLanguage.Japanese;
+                    case 'h': return ScummLanguage.Korean;
+                    case 'c': return ScummLanguage.Chinese;
+                }
+                var texts = new System.Collections.Generic.List<string>(bundle.Entries.Count);
+                foreach (LocalizedTextEntry e in bundle.Entries) texts.Add(e.Text);
+                try { return FromName(GameLanguageDetector.DetectFromStrings(texts)); }
+                catch { return ScummLanguage.Unknown; }
+            }
+
+            // No LANGUAGE.BND: Full Throttle (dialogue in the scripts) or the English Dig - detect from the
+            // in-container text, which for these is the actual (possibly translated) dialogue.
+            try { return FromName(GameLanguageDetector.Detect(game)); }
+            catch { return ScummLanguage.Unknown; }
         }
 
         private static ScummLanguage FromName(string name)

@@ -118,6 +118,23 @@ namespace ScummEditor.Engine.Encoders
             return DetectFromEntries(entries);
         }
 
+        /// <summary>
+        /// Detects the language of an arbitrary set of already-extracted strings (the same word/SJIS
+        /// heuristic as <see cref="Detect(ScummGameData)"/>). Used for SCUMM v7, whose in-container scripts
+        /// keep English engine text - the real translation lives in the external localized-text files
+        /// (The Dig's LANGUAGE.BND, Full Throttle's .TRS), so the caller feeds those entries here instead.
+        /// </summary>
+        public static string DetectFromStrings(IEnumerable<string> texts)
+        {
+            if (texts == null) return null;
+            var entries = new List<GameTextEntry>();
+            foreach (string t in texts)
+            {
+                if (!string.IsNullOrEmpty(t)) entries.Add(new GameTextEntry { Text = t });
+            }
+            return DetectFromEntries(entries);
+        }
+
         private static string DetectFromEntries(List<GameTextEntry> entries)
         {
             // Japanese is recognized by its high-byte (SJIS) density before any word matching - the
