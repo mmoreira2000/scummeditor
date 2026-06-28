@@ -469,17 +469,24 @@ namespace ScummEditor.Engine.Encoders
         private static List<Source> EnumerateSourcesV8(ScummGameData game)
         {
             var list = new List<Source>();
-            int lfIndex = 0;
-            foreach (DataDisk disk in game.DataDisks)
-            {
-                foreach (DiskBlock lflf in disk.Tree.GetLFLFs())
-                {
-                    string lf = "LF" + lfIndex.ToString("D4");
-                    lfIndex++;
+            var index = game.IndexFile as Structures.IndexFile.ScummV8IndexFile;
 
+            for (int d = 0; d < game.DataDisks.Count; d++)
+            {
+                List<DiskBlock> lflfs = game.DataDisks[d].Tree.GetLFLFs();
+                Structures.DataFile.RoomOffsetTable loff = game.DataDisks[d].Tree.GetLOFF();
+                for (int k = 0; k < lflfs.Count && k < loff.Rooms.Count; k++)
+                {
+                    int roomNumber = loff.Rooms[k].Id;
+                    // Only the disk DROO names as the room's owner is edited (a room duplicated on both
+                    // disks is resolved by the engine from the owner copy); ids are keyed by room number so
+                    // they stay stable and unique across export/import.
+                    if (!IsOwnerDiskV8(index, roomNumber, d)) continue;
+
+                    string lf = "LF" + roomNumber.ToString("D4");
                     int scrp = 0, encd = 0, excd = 0;
                     var usedLabels = new HashSet<string>();
-                    foreach (BlockBase child in lflf.Childrens)
+                    foreach (BlockBase child in lflfs[k].Childrens)
                     {
                         var script = child as ScriptBlock;
                         if (script != null && script.BlockType == "SCRP")
@@ -497,6 +504,14 @@ namespace ScummEditor.Engine.Encoders
                 }
             }
             return list;
+        }
+
+        private static bool IsOwnerDiskV8(Structures.IndexFile.ScummV8IndexFile index, int roomNumber, int diskIndex)
+        {
+            if (index == null || roomNumber < 0 || roomNumber >= index.DROO.Rooms.Count) return true;
+            int owner = index.DROO.Rooms[roomNumber].Number; // 1-based disk number
+            if (owner <= 0) return true;
+            return owner == diskIndex + 1;
         }
 
         private static void AddV8RoomScriptSources(List<Source> list, string lf, RoomScriptsBlock rmsc,
