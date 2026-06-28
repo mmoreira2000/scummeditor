@@ -29,6 +29,19 @@ namespace ScummEditor.UnitTests
         }
 
         [SkippableFact]
+        public void PortugueseEditionIsDetectedFromLanguageTab()
+        {
+            GameInfo info = GameLibrary.Detect(GameLibrary.CurseOfMonkeyIslandPortuguese);
+            Skip.If(info == null, "COMI Portuguese edition not present");
+
+            ScummGameData game = ScummGameData.LoadFromGameInfo(info);
+            ScummEditor.Engine.Encoders.ScummLanguageDetector.RefineFromContent(game);
+
+            _out.WriteLine("COMI PT edition detected as: {0}", game.LoadedGameInfo.Language);
+            Assert.Equal(ScummLanguage.Portuguese, game.LoadedGameInfo.Language);
+        }
+
+        [SkippableFact]
         public void LoadsAndNoOpRebuildIsByteIdentical()
         {
             byte[] original;
