@@ -184,6 +184,39 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableFact]
+        public void BatchExportImportRoundTrips()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            string folder = Path.Combine(Path.GetTempPath(), "comi_v8_gfx_batch");
+            if (Directory.Exists(folder)) Directory.Delete(folder, true);
+
+            // Export backgrounds only (objects are many; a sample proves the wiring + the round-trip).
+            var options = new ScummV8GraphicsBatch.ExportOptions { Backgrounds = true, Objects = false };
+            int exported = ScummV8GraphicsBatch.Export(game, folder, options, null);
+            Assert.True(exported > 0, "batch exported nothing");
+
+            // A reference matrix for the first exported background, before re-import.
+            var dec = new ScummV8ImageDecoder();
+            RoomBlock first = ScummV8GraphicsBatch.EnumerateRooms(game).First(HasBackgroundStrips);
+            byte[,] before;
+            using (Bitmap b = dec.DecodeBackground(first)) before = IndexedImageHelper.GetIndexMatrix(b);
+
+            ScummV4GraphicsBatch.ImportReport report = ScummV8GraphicsBatch.Import(game, folder, null);
+            Directory.Delete(folder, true);
+
+            _out.WriteLine("batch: exported {0}, found {1}, imported {2}, errors {3}", exported, report.Found, report.Imported, report.Errors.Count);
+            Assert.Empty(report.Errors);
+            Assert.True(report.Imported > 0 && report.Imported == report.Found, "batch import did not map all PNGs back");
+
+            using (Bitmap a = dec.DecodeBackground(first))
+            {
+                Assert.True(MatrixEquals(before, IndexedImageHelper.GetIndexMatrix(a)), "a no-op batch round-trip changed a background");
+            }
+        }
+
         private static bool MatrixEquals(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;
