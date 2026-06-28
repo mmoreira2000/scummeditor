@@ -136,7 +136,18 @@ namespace ScummEditor.Engine.Encoders
             {
                 return Scumm5Disassembler.Disassemble(code, start);
             }
+            if (context.GameInfo != null && context.GameInfo.ScummVersion == 8)
+            {
+                // v8 = the same stack VM with a remapped opcode table and 4-byte inline operands.
+                return ScummV8Disassembler.Disassemble(code, start);
+            }
             return ScummV6Disassembler.Disassemble(code, start);
+        }
+
+        /// <summary>The inline jump-operand width in bytes: 4 on v8 (32-bit operands), 2 elsewhere.</summary>
+        private static int JumpOperandSize(BlockBase context)
+        {
+            return (context.GameInfo != null && context.GameInfo.ScummVersion == 8) ? 4 : 2;
         }
 
         // String kinds that are never exported/imported: internal actor names and
@@ -407,6 +418,120 @@ namespace ScummEditor.Engine.Encoders
             string name = System.IO.Path.GetFileNameWithoutExtension(path);
             int n;
             return int.TryParse(name, out n) ? n : 0;
+        }
+
+        // ---------------------------------------------------------------------
+        // SCUMM v8 entry points (The Curse of Monkey Island). Text spans both data files
+        // (COMI.LA1 + COMI.LA2); scripts live at the LFLF level (SCRP) and inside the per-room
+        // RMSC block (ENCD/EXCD/LSCR + OBCD verb code). v8 keeps the v5/v6-style sub-block OBCD,
+        // so the existing VERB rebuild is reused; object names are NOT here (they live in the DOBJ
+        // index - handled separately). The escape arguments are 4 bytes, so the codec runs in
+        // FourByteArgs mode.
+        // ---------------------------------------------------------------------
+
+        public static List<GameTextEntry> ExtractV8(ScummGameData game, GameTextCodec codec)
+        {
+            codec.FourByteArgs = true;
+            return BuildEntries(EnumerateSourcesV8(game), codec);
+        }
+
+        public static int ExportToFileV8(ScummGameData game, string path, GameTextCodec codec, string gameLabel)
+        {
+            codec.FourByteArgs = true;
+            List<GameTextEntry> entries = BuildEntries(EnumerateSourcesV8(game), codec);
+            WriteEntriesFile(entries, path, codec, gameLabel);
+            return entries.Count;
+        }
+
+        public static GameTextImportReport ImportFromFileV8(ScummGameData game, string path)
+        {
+            var report = new GameTextImportReport();
+            GameTextCodec codec;
+            Dictionary<string, string> fileTexts = ParseTextFile(path, report, out codec);
+            if (fileTexts == null) return report;
+            codec.FourByteArgs = true; // v8 escapes carry a 4-byte argument
+
+            List<byte[]> changedBytes = ApplyImport(EnumerateSourcesV8(game), fileTexts, codec, report, false);
+
+            // v8 fonts are external NUT files; validate against any in-container charsets (often none).
+            var charsets = new List<Charset>();
+            foreach (DataDisk disk in game.DataDisks) CollectCharsets(disk.Tree, charsets);
+            ValidateGlyphs(charsets, changedBytes, codec, report);
+            return report;
+        }
+
+        /// <summary>
+        /// Enumerates v8 translatable sources across both data files. Ids are positional and stable across
+        /// reloads: a global LFLF index, then SCRP at the LFLF level and ENCD/EXCD/LSCR/OBCD inside the
+        /// room's RMSC block. (Rooms duplicated byte-identically on both disks get distinct ids per disk;
+        /// editing a string in a duplicated room only changes that disk's copy - a narrow edge case.)
+        /// </summary>
+        private static List<Source> EnumerateSourcesV8(ScummGameData game)
+        {
+            var list = new List<Source>();
+            int lfIndex = 0;
+            foreach (DataDisk disk in game.DataDisks)
+            {
+                foreach (DiskBlock lflf in disk.Tree.GetLFLFs())
+                {
+                    string lf = "LF" + lfIndex.ToString("D4");
+                    lfIndex++;
+
+                    int scrp = 0, encd = 0, excd = 0;
+                    var usedLabels = new HashSet<string>();
+                    foreach (BlockBase child in lflf.Childrens)
+                    {
+                        var script = child as ScriptBlock;
+                        if (script != null && script.BlockType == "SCRP")
+                        {
+                            list.Add(new Source { Id = lf + ".SCRP" + (scrp++).ToString("D3"), Script = script });
+                            continue;
+                        }
+
+                        var rmsc = child as RoomScriptsBlock;
+                        if (rmsc != null)
+                        {
+                            AddV8RoomScriptSources(list, lf, rmsc, ref encd, ref excd, usedLabels);
+                        }
+                    }
+                }
+            }
+            return list;
+        }
+
+        private static void AddV8RoomScriptSources(List<Source> list, string lf, RoomScriptsBlock rmsc,
+                                                   ref int encd, ref int excd, HashSet<string> usedLabels)
+        {
+            int obcdOrdinal = 0;
+            foreach (BlockBase child in rmsc.Childrens)
+            {
+                var script = child as ScriptBlock;
+                if (script != null)
+                {
+                    if (script.BlockType == "ENCD")
+                        list.Add(new Source { Id = lf + ".ENCD" + (encd++).ToString("D3"), Script = script });
+                    else if (script.BlockType == "EXCD")
+                        list.Add(new Source { Id = lf + ".EXCD" + (excd++).ToString("D3"), Script = script });
+                    else if (script.BlockType == "LSCR")
+                        list.Add(new Source { Id = lf + ".LSCR" + Math.Max(script.ScriptId, 0).ToString("D3"), Script = script });
+                    continue;
+                }
+
+                var obcd = child as ObjectCode;
+                if (obcd != null)
+                {
+                    string obj = obcd.HasCodeHeader
+                        ? "OBJ" + obcd.ObjectId.ToString("D5")
+                        : "OBC" + obcdOrdinal.ToString("D3");
+                    obcdOrdinal++;
+                    string baseObj = obj;
+                    for (int dup = 2; !usedLabels.Add(obj); dup++) obj = baseObj + "x" + dup;
+
+                    if (obcd.VerbCodeOffset >= 0 && obcd.VerbCodeLength > 0)
+                        list.Add(new Source { Id = lf + "." + obj, Obcd = obcd });
+                    // v8 stores object NAMES in the DOBJ index (no OBNA), so no .name source here.
+                }
+            }
         }
 
         // ---------------------------------------------------------------------
@@ -719,20 +844,27 @@ namespace ScummEditor.Engine.Encoders
             };
 
             // --- jump fix-up ------------------------------------------------------
+            // The relative-jump operand is 2 bytes on v1-v7 and 4 bytes on v8.
+            int jumpSize = JumpOperandSize(context);
             foreach (ScummV6Disassembler.JumpRef jump in scan.Jumps)
             {
                 int opNew = map(jump.OperandOffset);
                 int targetNew = map(jump.Target);
                 if (mapError != null) { error = mapError; return null; }
 
-                int rel = targetNew - (opNew + 2);
-                if (rel < short.MinValue || rel > short.MaxValue)
+                int rel = targetNew - (opNew + jumpSize);
+                if (jumpSize == 2 && (rel < short.MinValue || rel > short.MaxValue))
                 {
                     error = "a jump exceeds +-32767 bytes after the translation (shorten the texts of this block)";
                     return null;
                 }
                 result[opNew] = (byte)(rel & 0xFF);
                 result[opNew + 1] = (byte)((rel >> 8) & 0xFF);
+                if (jumpSize == 4)
+                {
+                    result[opNew + 2] = (byte)((rel >> 16) & 0xFF);
+                    result[opNew + 3] = (byte)((rel >> 24) & 0xFF);
+                }
             }
 
             // --- verify: the rebuilt code must decode to an identical structure ---
@@ -900,10 +1032,13 @@ namespace ScummEditor.Engine.Encoders
                     byte b = content[i];
                     if (b == 0xFF || (b == 0xFE && codec.FeEscape))
                     {
-                        // skip escape (and its argument) so control bytes are not treated as glyphs
+                        // skip escape (and its argument) so control bytes are not treated as glyphs.
+                        // The argument is 4 bytes on v8 (6-byte escape) and 2 bytes elsewhere (4-byte escape);
+                        // codes 1/2/3/8 carry no argument on any version.
                         if (i + 1 >= content.Length) break;
                         byte code = content[i + 1];
-                        i += (code == 1 || code == 2 || code == 3 || code == 8) ? 2 : 4;
+                        bool noArg = code == 1 || code == 2 || code == 3 || code == 8;
+                        i += noArg ? 2 : (codec.FourByteArgs ? 6 : 4);
                         continue;
                     }
                     if (b >= 0x80) used.Add(b);

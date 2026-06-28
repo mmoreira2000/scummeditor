@@ -154,6 +154,12 @@ namespace ScummEditor.Engine.Structures.DataFile
                 {
                     child = new SoundBlockV7(this, "SOUN");
                 }
+                else if (tag == "RMSC")
+                {
+                    // v8 (The Curse of Monkey Island) holds a room's scripts/object code in a sibling RMSC
+                    // block (v7 kept them inside ROOM); type it so the text pipeline finds the scripts/OBCD.
+                    child = new RoomScriptsBlock(this);
+                }
                 else
                 {
                     child = new RawContainerBlock(this, tag);

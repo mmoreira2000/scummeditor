@@ -80,10 +80,20 @@ namespace ScummEditor.Engine.Encoders
         {
             if (game == null || game.LoadedGameInfo == null) return;
 
+            // SCUMM v8 (The Curse of Monkey Island) keeps its translated dialogue in the external
+            // LANGUAGE.TAB; its in-container scripts are /TAG/ references (engine text), so the v2-v7
+            // content heuristic would misread them and report a wrong language. Real v8 language detection
+            // (from LANGUAGE.TAB) lands in a later milestone; until then leave the MD5 result as-is
+            // (Unknown for the untabled v8 releases) rather than guess wrong.
+            if (game.LoadedGameInfo.ScummVersion == 8)
+            {
+                return;
+            }
+
             // SCUMM v7 (The Dig, Full Throttle) needs its own detector: The Dig keeps its dialogue in the
             // external LANGUAGE.BND (its in-container scripts are English engine text), while Full Throttle
             // keeps the translated dialogue in the container scripts. DetectV7Language routes each correctly.
-            if (game.LoadedGameInfo.ScummVersion >= 7)
+            if (game.LoadedGameInfo.ScummVersion == 7)
             {
                 ScummLanguage v7 = DetectV7Language(game);
                 if (v7 != ScummLanguage.Unknown) game.LoadedGameInfo.Language = v7;
