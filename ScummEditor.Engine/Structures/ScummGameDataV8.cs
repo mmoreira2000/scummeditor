@@ -28,6 +28,28 @@ namespace ScummEditor.Engine.Structures
             return new ScummV8IndexFile(LoadedGameInfo);
         }
 
+        /// <summary>Loads the v8 external resources: the .NUT fonts (via the inherited v7 loader) and the
+        /// LANGUAGE.TAB localized text (where almost all of COMI's on-screen text lives).</summary>
+        protected override void AfterLoad()
+        {
+            base.AfterLoad(); // v7 loader: NUT fonts (+ the BND/.TRS path, which finds nothing for v8)
+            LoadLanguageTab();
+        }
+
+        private void LoadLanguageTab()
+        {
+            string path = LoadedGameInfo.LanguageTabPath;
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+            try
+            {
+                var tab = new LanguageTabFile(path);
+                tab.Load(System.IO.File.ReadAllBytes(path));
+                LocalizedTextFiles.Add(tab);
+            }
+            catch (System.IO.IOException) { }                 // vanished/locked between detection and load
+            catch (System.UnauthorizedAccessException) { }
+        }
+
         /// <summary>
         /// Links each index directory entry to its data block so a size-changing edit can relocate it on
         /// save. v8 differs from v5/v6/v7 in two ways handled here:

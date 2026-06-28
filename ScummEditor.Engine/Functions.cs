@@ -216,6 +216,17 @@ namespace ScummEditor.Engine
                 IsTalkie = true          // The Curse of Monkey Island is a CD/talkie release
             };
 
+            // COMI keeps almost all of its on-screen text in an external LANGUAGE.TAB (under RESOURCE/),
+            // so search recursively like the .NUT / .BUN enumerators.
+            string languageTab = Directory
+                .GetFiles(folder, "LANGUAGE.TAB", SearchOption.AllDirectories)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (!string.IsNullOrEmpty(languageTab))
+            {
+                info.LanguageTabPath = languageTab;
+            }
+
             return info;
         }
 
