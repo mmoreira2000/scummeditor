@@ -47,6 +47,18 @@ namespace ScummEditor.UnitTests
         public const string SamAndMaxFloppy = "ScummV6/Sam and Max Hit the Road (1993)/Floppy v1.0";
         public const string SamAndMaxCd = "ScummV6/Sam and Max Hit the Road (1993)/DOS CD Talkie";
 
+        // SCUMM v7 (GAME.LA0 index + GAME.LA1 data; not XOR-encrypted; AKOS costumes)
+        public const string TheDig = "ScummV7/Dig, The (1995)/DOS v1.0";
+        public const string TheDigPortuguese = "ScummV7/Dig, The (1995)/Other Languages/Portuguese/CD";
+        // The CJK editions keep LANGUAGE.BND under a VIDEO/ subfolder (detection must search recursively).
+        public const string TheDigChinese = "ScummV7/Dig, The (1995)/Other Languages/Chinese/CD";
+        public const string FullThrottle = "ScummV7/Full Throttle (1995)/DOS CD";
+        public const string FullThrottlePortuguese = "ScummV7/Full Throttle (1995)/Other Languages/Portuguese/DOS CD";
+
+        // SCUMM v8 (The Curse of Monkey Island) - NOT supported; used to verify the v7 detector rejects it
+        // (it shares the COMI.LA0/COMI.LA1 naming + RNAM/LECF magic with v7).
+        public const string CurseOfMonkeyIsland = "ScummV8/Curse of Monkey Island, The (1997)/CD";
+
         private static readonly string _root = FindRoot();
 
         /// <summary>True when the GameData library was found next to the repo.</summary>

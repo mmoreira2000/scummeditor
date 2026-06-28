@@ -15,12 +15,12 @@ namespace ScummEditor.Engine.Structures
     /// </summary>
     public class ScummGameDataV3Small256 : ScummGameData
     {
-        protected override ScummV5V6DataFile CreateDataFile()
+        protected override ScummDataFile CreateDataFile()
         {
             return new ScummV3Small256DataFile(null, LoadedGameInfo);
         }
 
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummIndexFile CreateIndexFile()
         {
             // The v4 index reader types 0S/0N/0C and keeps the rest verbatim; the v3 index is the
             // same flat block sequence minus the RN block, so it parses unchanged.

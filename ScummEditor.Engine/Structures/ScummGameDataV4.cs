@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,12 +15,12 @@ namespace ScummEditor.Engine.Structures
     /// </summary>
     public class ScummGameDataV4 : ScummGameData
     {
-        protected override ScummV5V6DataFile CreateDataFile()
+        protected override ScummDataFile CreateDataFile()
         {
             return new ScummV4DataFile(null, LoadedGameInfo);
         }
 
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummIndexFile CreateIndexFile()
         {
             return new ScummV4IndexFile(LoadedGameInfo);
         }
@@ -41,8 +42,22 @@ namespace ScummEditor.Engine.Structures
 
             foreach (string path in LoadedGameInfo.FontFiles)
             {
+                byte[] bytes;
+                try
+                {
+                    bytes = File.ReadAllBytes(path);
+                }
+                catch (IOException)
+                {
+                    continue; // a 90x.LFL font enumerated at detection is now missing/locked: skip it, still load the game
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
                 var charset = new Charset(null, LoadedGameInfo);
-                charset.LoadFromFileBytes(File.ReadAllBytes(path));
+                charset.LoadFromFileBytes(bytes);
                 Fonts.Add(new FontResource { FilePath = path, Charset = charset });
             }
         }
@@ -254,7 +269,7 @@ namespace ScummEditor.Engine.Structures
         /// <summary>Where a v4 room lives: its disk container plus the LF/RO blocks.</summary>
         private class V4RoomLocation
         {
-            public ScummV5V6DataFile Disk;
+            public ScummDataFile Disk;
             public ScummV4DiskBlock Lf;
             public ScummV4RoomBlock Ro;
         }

@@ -385,9 +385,14 @@ namespace ScummEditor.Engine.Encoders
                 case 0x7A: case 0xFA: VerbOps(offset, op); break;
                 case 0x0C: case 0x8C: ResourceRoutines(offset); break;
 
+                // All 256 byte opcodes are handled above, so this default is unreachable today (hence the
+                // suppressed CS0162). It is kept on purpose as a defensive guard: if a case is ever removed,
+                // the offending opcode is reported cleanly instead of being silently skipped.
+#pragma warning disable CS0162 // Unreachable code: every 0x00-0xFF opcode has a case; default is a deliberate guard.
                 default:
                     Unknown(op, offset);
                     break;
+#pragma warning restore CS0162
             }
         }
 

@@ -27,6 +27,9 @@ namespace ScummEditor.Gui
         private readonly OldBundleObjectControl _oldBundleObjectControl = new OldBundleObjectControl();
         private readonly OldBundleScriptControl _oldBundleScriptControl = new OldBundleScriptControl();
         private readonly V2ExeFontControl _v2ExeFontControl = new V2ExeFontControl();
+        private readonly NutFontControl _nutFontControl = new NutFontControl();
+        private readonly ImuseBundleControl _imuseBundleControl = new ImuseBundleControl();
+        private readonly LocalizedTextControl _localizedTextControl = new LocalizedTextControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -44,11 +47,20 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(RoomHeader).Name, new RoomHeaderControl());
             _controlViewers.Add(typeof(DiskBlock).Name, new DiskBlockControl());
             _controlViewers.Add(typeof(ScummV4RoomBlock).Name, new ScummV4RoomImageControl());
-            _controlViewers.Add(typeof(NotImplementedDataBlock).Name, new NotImplementedDataBlockControl());
+            // The byte-preserved blocks (v4-v6 NotImplementedDataBlock and the v7 generic blocks) all
+            // share the hex viewer so their raw content is shown instead of just the generic header.
+            var rawBlockControl = new NotImplementedDataBlockControl();
+            _controlViewers.Add(typeof(NotImplementedDataBlock).Name, rawBlockControl);
+            _controlViewers.Add(typeof(RawContainerBlock).Name, rawBlockControl);
+            _controlViewers.Add(typeof(RawDataBlock).Name, rawBlockControl);
+            // The v7 index meta blocks (RNAM/MAXS/DOBJ/AARY/ANAM) are RawIndexBlock; decode them for a
+            // friendly view instead of the raw hex dump.
+            _controlViewers.Add(typeof(RawIndexBlock).Name, new V7IndexBlockControl());
             _controlViewers.Add(typeof(RoomOffsetTable).Name, new RoomOffsetTableControl());
             _controlViewers.Add(typeof(ZPlane).Name, new ZPlaneControl());
             _controlViewers.Add(typeof(ObjectImageHeader).Name, new ObjectImageHeaderControl());
             _controlViewers.Add(typeof(Costume).Name, new CostumeControl());
+            _controlViewers.Add(typeof(CostumeAkos).Name, new AkosCostumeControl()); // v7 AKOS costumes
             _controlViewers.Add(typeof(ImageBomp).Name, new ImageBompControl());
 
             var structuredBlockControl = new StructuredBlockControl();
@@ -69,6 +81,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(ObjectCode).Name, new ObjectCodeControl());
 
             _controlViewers.Add(typeof(SoundBlock).Name, new SoundBlockControl());
+            _controlViewers.Add(typeof(SoundBlockV7).Name, new SoundBlockV7Control()); // v7 SOUN (iMUS/VOC)
 
             var scriptControl = new ScriptControl();
             _controlViewers.Add(typeof(ScriptBlock).Name, scriptControl);
@@ -101,6 +114,22 @@ namespace ScummEditor.Gui
 
         public void LoadTree()
         {
+            // BeginUpdate/EndUpdate suppress per-node repaints while the tree is populated. This is
+            // essential for v7 (The Dig, Full Throttle): their data files are tens of megabytes and
+            // produce many thousands of block nodes.
+            _treeView.BeginUpdate();
+            try
+            {
+                BuildTree();
+            }
+            finally
+            {
+                _treeView.EndUpdate();
+            }
+        }
+
+        private void BuildTree()
+        {
             _treeView.Nodes.Clear();
 
             var v4Index = GameData.IndexFile as ScummV4IndexFile;
@@ -111,6 +140,10 @@ namespace ScummEditor.Gui
             else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
             {
                 CreateOldBundleIndexTree((ScummV3OldBundleIndexFile)GameData.IndexFile);
+            }
+            else if (GameData.IndexFile is ScummV7IndexFile)
+            {
+                CreateScummV7IndexFileTree((ScummV7IndexFile)GameData.IndexFile);
             }
             else if (GameData.IndexFile != null)
             {
@@ -145,6 +178,9 @@ namespace ScummEditor.Gui
             CreateFontFileNodes();
             CreateV3FontNodes();
             CreateV2ExeFontNode();
+            CreateNutFontNodes();
+            CreateBundleNodes(GameData.LoadedGameInfo);
+            CreateLocalizedTextNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
         }
 
@@ -231,6 +267,58 @@ namespace ScummEditor.Gui
             }
         }
 
+        /// <summary>A single "Fonts" root node grouping the external .NUT SMUSH fonts (v7 The Dig / Full
+        /// Throttle), one child per file; the NutFont viewer handles each. Purely a visual grouping - the
+        /// fonts are separate files next to the .LA0/.LA1 container and are dispatched by their tag.</summary>
+        private void CreateNutFontNodes()
+        {
+            if (GameData.NutFonts == null || GameData.NutFonts.Count == 0) return;
+
+            TreeNode fontsRoot = _treeView.Nodes.Add("NutFonts", "Fonts");
+            foreach (NutFontResource font in GameData.NutFonts)
+            {
+                var node = new TreeNode(System.IO.Path.GetFileName(font.FilePath)) { Tag = font };
+                fontsRoot.Nodes.Add(node);
+            }
+        }
+
+        /// <summary>
+        /// A few distinct room palettes from the loaded game, offered as preview palettes for the .NUT font
+        /// viewer (a NUT carries no palette of its own; its pixels are runtime palette indices). Capped and
+        /// de-duplicated so the combobox stays short even for a game with many rooms.
+        /// </summary>
+        private List<Color[]> GameRoomPalettes()
+        {
+            var palettes = new List<Color[]>();
+            if (GameData == null || GameData.DataFile == null) return palettes;
+
+            var seen = new HashSet<string>();
+            foreach (BlockBase child in GameData.DataFile.Childrens)
+            {
+                if (palettes.Count >= 8) break;
+                var disk = child as DiskBlock;
+                if (disk == null) continue;
+
+                RoomBlock room = disk.GetROOM();
+                if (room == null) continue;
+
+                Color[] palette;
+                try { palette = room.GetPALS().GetWRAP().GetAPALs()[0].Colors; }
+                catch { continue; }
+                if (palette == null) continue;
+
+                if (seen.Add(PaletteKey(palette))) palettes.Add(palette);
+            }
+            return palettes;
+        }
+
+        private static string PaletteKey(Color[] palette)
+        {
+            var sb = new System.Text.StringBuilder(palette.Length * 4);
+            foreach (Color c in palette) sb.Append(c.ToArgb()).Append(',');
+            return sb.ToString();
+        }
+
         /// <summary>Index tree for SCUMM v4: a flat list of the index blocks (RN, 0R, 0S, ...).</summary>
         private void CreateScummV4IndexFileTree(ScummV4IndexFile indexFile)
         {
@@ -238,6 +326,34 @@ namespace ScummEditor.Gui
             foreach (BlockBase block in indexFile.Blocks)
             {
                 CreateNode(block, node);
+            }
+        }
+
+        /// <summary>A single "Texts (localized)" root node grouping the external localized-text files (v7
+        /// The Dig LANGUAGE.BND + the .TRS subtitle/UI files); the localized-text viewer handles each.</summary>
+        private void CreateLocalizedTextNodes()
+        {
+            if (GameData.LocalizedTextFiles == null || GameData.LocalizedTextFiles.Count == 0) return;
+
+            TreeNode root = _treeView.Nodes.Add("LocalizedText", "Texts (localized)");
+            foreach (ILocalizedTextFile text in GameData.LocalizedTextFiles)
+            {
+                var node = new TreeNode(System.IO.Path.GetFileName(text.FilePath)) { Tag = text };
+                root.Nodes.Add(node);
+            }
+        }
+
+        /// <summary>Root nodes for the external iMUSE sound bundles (v7 The Dig DIGMUSIC.BUN / DIGVOICE.BUN);
+        /// the iMUSE bundle viewer handles each. These are separate files next to the .LA0/.LA1 container.</summary>
+        private void CreateBundleNodes(GameInfo gameInfo)
+        {
+            if (gameInfo == null || gameInfo.BundleFiles == null) return;
+
+            foreach (string path in gameInfo.BundleFiles)
+            {
+                var node = _treeView.Nodes.Add("SoundBundle",
+                    "Sound Bundle (" + System.IO.Path.GetFileName(path) + ")");
+                node.Tag = new ImuseBundleFile(path);
             }
         }
 
@@ -265,7 +381,7 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummDataFileTree(ScummV5V6DataFile dataFile, string label)
+        private void CreateScummDataFileTree(ScummDataFile dataFile, string label)
         {
             TreeNode dataNode = _treeView.Nodes.Add(label, label);
 
@@ -322,7 +438,28 @@ namespace ScummEditor.Gui
             }
         }
 
-        private void CreateScummIndexFileTree(ScummV5V6IndexFile scummV6IndexFile)
+        /// <summary>
+        /// Index tree for SCUMM v7 (The Dig, Full Throttle): the raw RNAM/MAXS blocks, the five typed
+        /// resource directories, then the raw DOBJ/AARY and the v7-only ANAM (audio names). The raw
+        /// blocks are kept verbatim, so they are shown with the generic block viewer.
+        /// </summary>
+        private void CreateScummV7IndexFileTree(ScummV7IndexFile index)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+
+            CreateNode(index.RawRNAM, node);
+            CreateNode(index.RawMAXS, node);
+            CreateNode(index.DROO, node);
+            CreateNode(index.DSCR, node);
+            CreateNode(index.DSOU, node);
+            CreateNode(index.DCOS, node);
+            CreateNode(index.DCHR, node);
+            CreateNode(index.RawDOBJ, node);
+            CreateNode(index.RawAARY, node);
+            CreateNode(index.RawANAM, node);
+        }
+
+        private void CreateScummIndexFileTree(ScummIndexFile scummV6IndexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
 
@@ -398,6 +535,38 @@ namespace ScummEditor.Gui
                 return;
             }
 
+            // v7 external .NUT SMUSH fonts (The Dig / Full Throttle), standalone files next to the container.
+            var nutFont = e.Node.Tag as NutFontResource;
+            if (nutFont != null)
+            {
+                _nutFontControl.SetData(nutFont, GameRoomPalettes());
+                _displayPanel.Controls.Add(_nutFontControl);
+                _nutFontControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v7 external iMUSE sound bundles (The Dig DIGMUSIC.BUN / DIGVOICE.BUN).
+            var bundle = e.Node.Tag as ImuseBundleFile;
+            if (bundle != null)
+            {
+                _imuseBundleControl.SetData(bundle);
+                _displayPanel.Controls.Add(_imuseBundleControl);
+                _imuseBundleControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v7 external localized text (The Dig LANGUAGE.BND + the .TRS files).
+            var localizedText = e.Node.Tag as ILocalizedTextFile;
+            if (localizedText != null)
+            {
+                // Show the text through the edition's DOS code page so its accents render correctly.
+                int codePage = ScummEditor.Engine.Encoders.DosCodePageText.CodePageFor(GameData.LoadedGameInfo.Language);
+                _localizedTextControl.SetData(localizedText, codePage);
+                _displayPanel.Controls.Add(_localizedTextControl);
+                _localizedTextControl.Dock = DockStyle.Fill;
+                return;
+            }
+
             // v2 / v3 old-bundle synthetic blocks: the tree is a real BlockBase tree (walked like v4-v6);
             // route each leaf by its kind to the matching old-bundle viewer.
             var oldBundleBlock = e.Node.Tag as OldBundleBlock;
@@ -410,8 +579,6 @@ namespace ScummEditor.Gui
             var item = (BlockBase)e.Node.Tag;
 
             string name = item.GetType().Name;
-
-
 
             if (_controlViewers.ContainsKey(name))
             {

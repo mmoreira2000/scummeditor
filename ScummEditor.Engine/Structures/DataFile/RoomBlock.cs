@@ -41,6 +41,117 @@ namespace ScummEditor.Engine.Structures.DataFile
                 case 6:
                     LoadScummV6(binaryReader);
                     break;
+                case 7:
+                    LoadScummV7(binaryReader);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Reads a v7 ROOM (The Dig, Full Throttle). Only the room header is typed (its body is the
+        /// 10-byte v7 layout); every other child - palettes, images, object blocks, scripts, boxes -
+        /// is read with the generic recursive reader, which navigates containers and keeps leaves
+        /// verbatim, so the room rebuilds byte-for-byte before any block gets typed v7 support.
+        /// </summary>
+        private void LoadScummV7(Stream binaryReader)
+        {
+            long endPosition = binaryReader.Position - 8 + BlockSize;
+
+            while (binaryReader.Position < endPosition)
+            {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
+                switch (typeRead)
+                {
+                    case "RMHD":
+                        var RMHD = new RoomHeader(this);
+                        RMHD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMHD);
+                        break;
+
+                    // Script and object-code blocks are typed so the text pipeline (which finds
+                    // ScriptBlock / ObjectCode children and disassembles their v6-compatible bytecode)
+                    // works on v7. They keep their raw bytes, so the room still rebuilds byte-for-byte.
+                    case "EXCD":
+                    case "ENCD":
+                    case "LSCR":
+                        var script = new ScriptBlock(this, typeRead);
+                        script.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(script);
+                        break;
+
+                    case "OBCD":
+                        var OBCD = new ObjectCode(this);
+                        OBCD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBCD);
+                        break;
+
+                    // Room structural blocks: colour-cycle, walk-box data/matrix, scale slots and the
+                    // local-script count. v7 reuses the v5/v6 layout (the walk-box record is the same
+                    // 20-byte SIZEOF_BOX), so the existing typed blocks - which keep their bytes verbatim
+                    // and parse only for display - route them to the friendly viewers instead of raw hex.
+                    case "CYCL":
+                        var CYCL = new ColorCycles(this);
+                        CYCL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(CYCL);
+                        break;
+
+                    case "BOXD":
+                        var BOXD = new BoxData(this);
+                        BOXD.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXD);
+                        break;
+
+                    case "BOXM":
+                        var BOXM = new BoxMatrix(this);
+                        BOXM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(BOXM);
+                        break;
+
+                    case "SCAL":
+                        var SCAL = new Scale(this);
+                        SCAL.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(SCAL);
+                        break;
+
+                    case "NLSC":
+                        var NLSC = new ValuePaddingBlock(this, "NLSC");
+                        NLSC.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(NLSC);
+                        break;
+
+                    // Image blocks are typed so the image decoder/encoder and the GUI preview work on
+                    // v7. The SMAP strip codec, z-planes and APAL palette are identical to v5/v6; only
+                    // the headers (RMHD - done - and IMHD) carry the v7 layout. All keep their bytes.
+                    case "TRNS":
+                        var TRNS = new ValuePaddingBlock(this, "TRNS");
+                        TRNS.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(TRNS);
+                        break;
+
+                    case "PALS":
+                        var PALS = new PalettesData(this);
+                        PALS.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(PALS);
+                        break;
+
+                    case "RMIM":
+                        var RMIM = new RoomImage(this, this);
+                        RMIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(RMIM);
+                        break;
+
+                    case "OBIM":
+                        var OBIM = new ObjectImage(this);
+                        OBIM.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(OBIM);
+                        break;
+
+                    default:
+                        var child = new RawContainerBlock(this, typeRead);
+                        child.LoadFromBinaryReader(binaryReader);
+                        Childrens.Add(child);
+                        break;
+                }
             }
         }
 

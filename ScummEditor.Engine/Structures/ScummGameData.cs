@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using ScummEditor.Engine.Encoders;
@@ -18,10 +19,10 @@ namespace ScummEditor.Engine.Structures
     {
         public GameInfo LoadedGameInfo { get; set; }
 
-        public ScummV5V6IndexFile IndexFile { get; set; }
+        public ScummIndexFile IndexFile { get; set; }
 
         /// <summary>The first (or only) data container. For multi-disk v4 games see <see cref="DataDisks"/>.</summary>
-        public ScummV5V6DataFile DataFile { get; set; }
+        public ScummDataFile DataFile { get; set; }
 
         /// <summary>Every loaded data container (one per file). v5/v6 has a single entry.</summary>
         public List<DataDisk> DataDisks { get; private set; } = new List<DataDisk>();
@@ -31,6 +32,13 @@ namespace ScummEditor.Engine.Structures
 
         /// <summary>Standalone v3 charset files (9N.LFL); empty for v4/v5/v6 (which use Fonts/Charset).</summary>
         public List<CharsetV3> V3Charsets { get; private set; } = new List<CharsetV3>();
+
+        /// <summary>External .NUT SMUSH fonts (v7 The Dig / Full Throttle); empty for every other engine.</summary>
+        public List<NutFontResource> NutFonts { get; private set; } = new List<NutFontResource>();
+
+        /// <summary>External localized-text files (v7 The Dig LANGUAGE.BND + the .TRS subtitle/UI files);
+        /// empty for every other engine.</summary>
+        public List<ILocalizedTextFile> LocalizedTextFiles { get; private set; } = new List<ILocalizedTextFile>();
 
         /// <summary>Loads the v3 9N.LFL charset files (always plaintext) into V3Charsets.</summary>
         protected void LoadV3Charsets()
@@ -42,8 +50,22 @@ namespace ScummEditor.Engine.Structures
             }
             foreach (string path in LoadedGameInfo.FontFiles)
             {
+                byte[] bytes;
+                try
+                {
+                    bytes = File.ReadAllBytes(path);
+                }
+                catch (IOException)
+                {
+                    continue; // a charset file enumerated at detection is now missing/locked: skip it, still load the game
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    continue;
+                }
+
                 var charset = new CharsetV3 { FilePath = path };
-                charset.LoadFromFileBytes(File.ReadAllBytes(path));
+                charset.LoadFromFileBytes(bytes);
                 V3Charsets.Add(charset);
             }
         }
@@ -66,6 +88,12 @@ namespace ScummEditor.Engine.Structures
         /// <summary>Creates the right per-engine instance for the detected game (not yet loaded).</summary>
         public static ScummGameData Create(GameInfo gameInfo)
         {
+            if (gameInfo != null && gameInfo.ScummVersion == 7)
+            {
+                // The Dig / Full Throttle: same IFF container as v5/v6 (so it extends the v5/v6 loader),
+                // with a v7 index (ANAM block, 130-byte MAXS) and AKOS costumes.
+                return new ScummGameDataV7();
+            }
             if (gameInfo != null && gameInfo.ScummVersion == 4)
             {
                 return new ScummGameDataV4();
@@ -139,7 +167,7 @@ namespace ScummEditor.Engine.Structures
             foreach (string path in paths)
             {
                 var stream = new XoredFileStream(LoadedGameInfo.XorKey, path, FileMode.Open, FileAccess.Read);
-                ScummV5V6DataFile tree = CreateDataFile();
+                ScummDataFile tree = CreateDataFile();
                 tree.LoadFromBinaryReader(stream);
                 stream.Close();
 
@@ -183,6 +211,26 @@ namespace ScummEditor.Engine.Structures
                     File.WriteAllBytes(charset.FilePath, charset.RawContent);
                 }
             }
+
+            // Write back the external .NUT SMUSH fonts (v7), each its own file = the font bytes verbatim
+            // (only edited glyphs were re-encoded; an untouched font writes back byte-identically).
+            foreach (NutFontResource font in NutFonts)
+            {
+                if (font.Font != null && font.Font.RawContent != null && !string.IsNullOrEmpty(font.FilePath))
+                {
+                    File.WriteAllBytes(font.FilePath, font.Font.RawContent);
+                }
+            }
+
+            // Write back the external localized-text files (v7 LANGUAGE.BND + .TRS); BuildContent re-encodes
+            // only the edited strings, so an untouched file writes back byte-identically.
+            foreach (ILocalizedTextFile text in LocalizedTextFiles)
+            {
+                if (text != null && !string.IsNullOrEmpty(text.FilePath))
+                {
+                    File.WriteAllBytes(text.FilePath, text.BuildContent());
+                }
+            }
         }
 
         public void PostProcessChanges()
@@ -219,10 +267,10 @@ namespace ScummEditor.Engine.Structures
         }
 
         /// <summary>Builds the data-container tree for this engine (v4 small-header vs v5/v6 IFF).</summary>
-        protected abstract ScummV5V6DataFile CreateDataFile();
+        protected abstract ScummDataFile CreateDataFile();
 
         /// <summary>Builds the index-file reader for this engine.</summary>
-        protected abstract ScummV5V6IndexFile CreateIndexFile();
+        protected abstract ScummIndexFile CreateIndexFile();
 
         /// <summary>Hook run after the data files are loaded (e.g. v4 loads its standalone fonts).</summary>
         protected virtual void AfterLoad() { }

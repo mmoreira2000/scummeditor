@@ -16,6 +16,10 @@ namespace ScummEditor.Engine.Encoders
         public int CostumeIndex { get; private set; }
         public int FrameIndex { get; private set; }
 
+        // SCUMM v7 AKOS costumes: "Room#i Akos#j Cel#k.png".
+        public int AkosIndex { get; private set; }
+        public int CelIndex { get; private set; }
+
         public ImageInfo(string fileName)
         {
             Filename = fileName;
@@ -26,6 +30,8 @@ namespace ScummEditor.Engine.Encoders
             ImageIndex = -1;
             CostumeIndex = -1;
             FrameIndex = -1;
+            AkosIndex = -1;
+            CelIndex = -1;
             ImageType = ImageType.Unknown;
 
             Parse();
@@ -58,13 +64,23 @@ namespace ScummEditor.Engine.Encoders
                     case "ZP":
                         ZPlaneIndex = int.Parse(pairValues[1]);
                         break;
+                    case "Akos":
+                        AkosIndex = int.Parse(pairValues[1]);
+                        break;
+                    case "Cel":
+                        CelIndex = int.Parse(pairValues[1]);
+                        break;
                 }
             }
 
             //Determine the ImageType
             if (RoomIndex < 0) return;
 
-            if (CostumeIndex >= 0)
+            if (AkosIndex >= 0)
+            {
+                ImageType = ImageType.AkosCostume;
+            }
+            else if (CostumeIndex >= 0)
             {
                 ImageType = ImageType.Costume;
             }

@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using ScummEditor.Engine.Exceptions;
+using ScummEditor.Engine.Structures;
 using ScummEditor.Engine.Structures.DataFile;
 
 namespace ScummEditor.Engine.Encoders
@@ -36,7 +37,7 @@ namespace ScummEditor.Engine.Encoders
             public List<string> Errors = new List<string>();
         }
 
-        public static int Export(ScummV5V6DataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
+        public static int Export(ScummDataFile dataFile, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
         {
             List<DiskBlock> diskBlocks = dataFile.GetLFLFs();
             var convert = new ImageDepthConversor();
@@ -116,6 +117,28 @@ namespace ScummEditor.Engine.Encoders
                             if (img != null) { Save(img, folder, string.Format("Room#{0} Costume#{1} FrameIndex#{2}.png", i, j, k)); count++; }
                         }
                     }
+
+                    // v7 AKOS costumes (the COST list above is empty for v7; AKOS is empty for v5/v6). Cels are
+                    // saved as indexed PNGs carrying the raw costume-colour indexes, so re-import is exact.
+                    List<BlockBase> akosList = diskBlocks[i].Childrens.Where(c => c.BlockType == "AKOS").ToList();
+                    for (int j = 0; j < akosList.Count; j++)
+                    {
+                        BlockBase akos = akosList[j];
+                        int cels = AkosImageDecoder.GetCelCount(akos);
+                        for (int k = 0; k < cels; k++)
+                        {
+                            Size sz = AkosImageDecoder.GetCelSize(akos, k);
+                            if (sz.Width * sz.Height <= 4) continue; // tiny placeholder cel (unused animation slot)
+
+                            Bitmap cel = AkosImageDecoder.DecodeCel(akos, k);
+                            if (cel != null)
+                            {
+                                Save(cel, folder, string.Format("Room#{0} Akos#{1} Cel#{2}.png", i, j, k));
+                                cel.Dispose();
+                                count++;
+                            }
+                        }
+                    }
                 }
 
                 if (onProgress != null) onProgress(i + 1, diskBlocks.Count);
@@ -124,7 +147,7 @@ namespace ScummEditor.Engine.Encoders
             return count;
         }
 
-        public static ImportReport Import(ScummV5V6DataFile dataFile, string folder, Action<int, int> onProgress)
+        public static ImportReport Import(ScummDataFile dataFile, string folder, Action<int, int> onProgress)
         {
             var report = new ImportReport();
             List<DiskBlock> diskBlocks = dataFile.GetLFLFs();
@@ -148,13 +171,36 @@ namespace ScummEditor.Engine.Encoders
                 {
                     using (var bitmap = (Bitmap)Image.FromFile(file.Filename))
                     {
-                        if (file.ImageType == ImageType.Costume)
+                        if (file.ImageType == ImageType.AkosCostume)
                         {
-                            Costume costume = diskBlocks[file.RoomIndex].GetCostumes()[file.CostumeIndex];
-                            ImageResourceCodec.Encode(room, costume, ImageType.Costume, 0, file.FrameIndex, 0, bitmap, ImageEncoder.EncodeTypeSettings.AutoDetect);
+                            // v7 AKOS costume cel: re-encode the indexed PNG's raw indexes into the cel.
+                            List<BlockBase> akosList = diskBlocks[file.RoomIndex].Childrens.Where(c => c.BlockType == "AKOS").ToList();
+                            if (file.AkosIndex < 0 || file.AkosIndex >= akosList.Count)
+                            {
+                                throw new ImageEncodeException("no AKOS costume #" + file.AkosIndex + " in room " + file.RoomIndex);
+                            }
+                            if (!IndexedImageHelper.IsIndexed(bitmap))
+                            {
+                                throw new ImageEncodeException("AKOS cel must be an indexed PNG (re-export it and edit without converting to RGB)");
+                            }
+                            AkosImageEncoder.ReplaceCel(akosList[file.AkosIndex], file.CelIndex, IndexedImageHelper.GetIndexMatrix(bitmap));
+                        }
+                        else if (file.ImageType == ImageType.Costume)
+                        {
+                            // v7 costumes are AKOS (not the v5/v6 COST format), so GetCostumes() is empty
+                            // for a v7 game; guard the index so a stray costume PNG is reported, not a crash.
+                            List<Costume> costumes = diskBlocks[file.RoomIndex].GetCostumes();
+                            if (file.CostumeIndex < 0 || file.CostumeIndex >= costumes.Count)
+                            {
+                                throw new ImageEncodeException("no costume #" + file.CostumeIndex + " in room " + file.RoomIndex);
+                            }
+                            ImageResourceCodec.Encode(room, costumes[file.CostumeIndex], ImageType.Costume, 0, file.FrameIndex, 0, bitmap, ImageEncoder.EncodeTypeSettings.AutoDetect);
                         }
                         else
                         {
+                            // Guard the object/image/z-plane indexes so a stray or out-of-range PNG is reported
+                            // (ImageEncodeException, caught below) instead of throwing IndexOutOfRange.
+                            ValidateRoomImageIndices(room, file);
                             ImageResourceCodec.Encode(room, null, file.ImageType, file.ObjectIndex, file.ImageIndex, file.ZPlaneIndex, bitmap, ImageEncoder.EncodeTypeSettings.AutoDetect);
                         }
                     }
@@ -169,6 +215,41 @@ namespace ScummEditor.Engine.Encoders
             }
 
             return report;
+        }
+
+        /// <summary>Throws ImageEncodeException when a background-z-plane / object / object-z-plane file's
+        /// indexes do not exist in the room, so a stray PNG is reported instead of crashing the import.</summary>
+        private static void ValidateRoomImageIndices(RoomBlock room, ImageInfo file)
+        {
+            if (file.ImageType == ImageType.Object || file.ImageType == ImageType.ObjectsZPlane)
+            {
+                List<ObjectImage> obims = room.GetOBIMs();
+                if (file.ObjectIndex < 0 || file.ObjectIndex >= obims.Count)
+                {
+                    throw new ImageEncodeException("no object #" + file.ObjectIndex + " in room " + file.RoomIndex);
+                }
+                List<ImageData> imgs = obims[file.ObjectIndex].GetIMxx();
+                if (file.ImageIndex < 0 || file.ImageIndex >= imgs.Count)
+                {
+                    throw new ImageEncodeException("no image #" + file.ImageIndex + " in object #" + file.ObjectIndex);
+                }
+                if (file.ImageType == ImageType.ObjectsZPlane)
+                {
+                    List<ZPlane> zps = imgs[file.ImageIndex].GetZPlanes();
+                    if (file.ZPlaneIndex < 0 || file.ZPlaneIndex >= zps.Count)
+                    {
+                        throw new ImageEncodeException("no z-plane #" + file.ZPlaneIndex + " in object #" + file.ObjectIndex);
+                    }
+                }
+            }
+            else if (file.ImageType == ImageType.ZPlane)
+            {
+                List<ZPlane> zps = room.GetRMIM().GetIM00().GetZPlanes();
+                if (file.ZPlaneIndex < 0 || file.ZPlaneIndex >= zps.Count)
+                {
+                    throw new ImageEncodeException("no background z-plane #" + file.ZPlaneIndex + " in room " + file.RoomIndex);
+                }
+            }
         }
 
         private static void Save(Bitmap bitmap, string folder, string fileName)

@@ -451,6 +451,12 @@ namespace ScummEditor.Gui
                 string report = HasV3Charsets()
                     ? CharsetV3PngCodec.ExportAll(scummFile.V3Charsets, dlg.SelectedPath)
                     : CharsetPngCodec.ExportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
+                if (HasNutFonts())
+                {
+                    // v7 also has external .NUT SMUSH fonts (the in-container CHAR charsets are covered above).
+                    report += Environment.NewLine + Environment.NewLine
+                        + NutFontPngCodec.ExportAll(scummFile.NutFonts, dlg.SelectedPath);
+                }
                 MessageBox.Show(this, report, "Export game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -464,6 +470,12 @@ namespace ScummEditor.Gui
         private bool HasV3Charsets()
         {
             return scummFile != null && scummFile.V3Charsets != null && scummFile.V3Charsets.Count > 0;
+        }
+
+        /// <summary>True when the game has external .NUT SMUSH fonts (v7 The Dig / Full Throttle).</summary>
+        private bool HasNutFonts()
+        {
+            return scummFile != null && scummFile.NutFonts != null && scummFile.NutFonts.Count > 0;
         }
 
         private void importGameFontsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -492,6 +504,11 @@ namespace ScummEditor.Gui
                 string report = HasV3Charsets()
                     ? CharsetV3PngCodec.ImportAll(scummFile.V3Charsets, dlg.SelectedPath)
                     : CharsetPngCodec.ImportAll(scummFile.GetAllEditableCharsets(), dlg.SelectedPath);
+                if (HasNutFonts())
+                {
+                    report += Environment.NewLine + Environment.NewLine
+                        + NutFontPngCodec.ImportAll(scummFile.NutFonts, dlg.SelectedPath);
+                }
                 MessageBox.Show(this,
                     report + Environment.NewLine + "Use 'Save Changes' to write the changes to the game files.",
                     "Import game fonts", MessageBoxButtons.OK, MessageBoxIcon.Information);

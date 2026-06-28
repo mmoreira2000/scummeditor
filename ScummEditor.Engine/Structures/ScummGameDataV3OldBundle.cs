@@ -12,12 +12,12 @@ namespace ScummEditor.Engine.Structures
     /// </summary>
     public class ScummGameDataV3OldBundle : ScummGameData
     {
-        protected override ScummV5V6DataFile CreateDataFile()
+        protected override ScummDataFile CreateDataFile()
         {
             return new ScummV3OldBundleDataFile(null, LoadedGameInfo);
         }
 
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummIndexFile CreateIndexFile()
         {
             return new ScummV3OldBundleIndexFile(LoadedGameInfo);
         }

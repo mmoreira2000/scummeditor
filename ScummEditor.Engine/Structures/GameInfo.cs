@@ -86,5 +86,27 @@ namespace ScummEditor.Engine.Structures
         /// unlike v5/v6 which embed CHAR blocks in the data file). Null/empty for v5/v6.
         /// </summary>
         public List<string> FontFiles { get; set; }
+
+        /// <summary>
+        /// External .NUT SMUSH font files (v7 The Dig / Full Throttle keep their SMUSH/subtitle fonts as
+        /// separate files next to the .LA0/.LA1 container, e.g. FONT0.NUT, SCUMMFNT.NUT). Null/empty for
+        /// every other engine.
+        /// </summary>
+        public List<string> NutFontFiles { get; set; }
+
+        /// <summary>
+        /// External iMUSE sound bundle files (.BUN), e.g. The Dig's DIGMUSIC.BUN / DIGVOICE.BUN sitting next
+        /// to the .LA0/.LA1 container. Null/empty when the game has none (Full Throttle keeps speech in
+        /// MONSTER.SOU instead).
+        /// </summary>
+        public List<string> BundleFiles { get; set; }
+
+        /// <summary>The Dig's external localized in-game text file (LANGUAGE.BND), present only in the
+        /// non-English editions. Null otherwise.</summary>
+        public string LanguageBundlePath { get; set; }
+
+        /// <summary>External .TRS text files (cutscene-subtitle / UI strings): The Dig DIGTXT.TRS/DIG.TRS,
+        /// Full Throttle's per-scene .TRS. Null/empty for non-v7.</summary>
+        public List<string> TrsFiles { get; set; }
     }
 }

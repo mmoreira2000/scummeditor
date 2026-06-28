@@ -13,14 +13,24 @@ namespace ScummEditor.Engine.Structures
     /// </summary>
     public class ScummGameDataV5V6 : ScummGameData
     {
-        protected override ScummV5V6DataFile CreateDataFile()
+        /// <summary>
+        /// Tag of the costume blocks the costume directory (DCOS) links to. v5/v6 store costumes as
+        /// "COST"; v7 stores them as "AKOS" (see <see cref="ScummGameDataV7"/>). Used by the
+        /// index-linking so the same code serves both engines.
+        /// </summary>
+        protected virtual string CostumeBlockType
         {
-            return new ScummV5V6DataFile(null, LoadedGameInfo);
+            get { return "COST"; }
         }
 
-        protected override ScummV5V6IndexFile CreateIndexFile()
+        protected override ScummDataFile CreateDataFile()
         {
-            return new ScummV5V6IndexFile(LoadedGameInfo);
+            return new ScummDataFile(null, LoadedGameInfo);
+        }
+
+        protected override ScummIndexFile CreateIndexFile()
+        {
+            return new ScummIndexFile(LoadedGameInfo);
         }
 
         protected override void LinkDataAndIndexFile()
@@ -47,7 +57,7 @@ namespace ScummEditor.Engine.Structures
                     matchSounds.ForEach(r => r.ItemId = sound.UniqueId);
                 }
 
-                List<BlockBase> costumes = diskBlock.Childrens.Where(s => s.BlockType == "COST").ToList();
+                List<BlockBase> costumes = diskBlock.Childrens.Where(s => s.BlockType == CostumeBlockType).ToList();
                 foreach (var costume in costumes)
                 {
                     List<DirectoryItem> matchCostumes = IndexFile.DCOS.Rooms.Where(x => x.Offset == (costume.BlockOffSet - roomOffset)).ToList();
@@ -95,7 +105,7 @@ namespace ScummEditor.Engine.Structures
                     matchSounds.ForEach(r => r.Offset = (uint)(sound.BlockOffSet - roomOffset));
                 }
 
-                List<BlockBase> costumes = diskBlock.Childrens.Where(s => s.BlockType == "COST").ToList();
+                List<BlockBase> costumes = diskBlock.Childrens.Where(s => s.BlockType == CostumeBlockType).ToList();
                 foreach (var costume in costumes)
                 {
                     List<DirectoryItem> matchCostumes = IndexFile.DCOS.Rooms.Where(x => x.ItemId == costume.UniqueId).ToList();

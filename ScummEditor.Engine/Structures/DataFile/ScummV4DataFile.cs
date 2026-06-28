@@ -19,7 +19,7 @@ namespace ScummEditor.Engine.Structures.DataFile
     (LE / LF / RO) are walked, so the file round-trips identically. Typed parsing of the inner
     blocks is layered on top in later steps.
     */
-    public class ScummV4DataFile : ScummV5V6DataFile
+    public class ScummV4DataFile : ScummDataFile
     {
         public ScummV4DataFile(BlockBase blockBase, GameInfo gameInfo) : base(blockBase, gameInfo) { }
 

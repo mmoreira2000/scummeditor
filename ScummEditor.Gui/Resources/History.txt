@@ -1,3 +1,27 @@
+4.0.0
+-----
+* SCUMM v7 support. The Dig and Full Throttle (1995) can now be opened, viewed and edited with the same feature set as the v3-v6 games plus the extras these two need - extending coverage from v1 all the way to v7. As with every other version they are recognized from the content of their data files alone, never the game EXE: v7 keeps the same tagged IFF container as v5/v6 (the engine is a direct extension of v5/v6), split across a separate index file (.LA0) and data file (.LA1), and the container round-trips byte-for-byte across all 24 editions of the two games (every language release tested).
+
+* v7 game text translation. Object and location names, verb scripts, the room entry/exit scripts and the global scripts all disassemble and export/import for translation, with the tables and jump offsets remapped automatically when a translation changes length - the same workflow as every other version. The v6 script disassembler was completed for the handful of v7-only opcodes (including the two-byte local-script id).
+
+* Localized text - the high-value translation feature for these two games. Unlike the earlier games, The Dig and Full Throttle keep most of their on-screen text OUTSIDE the game container, in separate files: The Dig's dialogue in LANGUAGE.BND (lightly obfuscated) and both games' subtitle and interface text in .TRS files (plain, or in the ETRS/obfuscated form some releases use). The editor now exposes all of it under a new "Texts (localized)" node, decodes the obfuscation transparently, and writes it back with a byte-identical round-trip - so a translation of the actual spoken/subtitle text can be edited in place. This is the text most translators care about and it was previously unreachable.
+
+* Accented characters in the localized text now display correctly. v7 stores text in the original MS-DOS code page (code page 850 for the Western releases, including Brazilian Portuguese), so the editor transcodes it for display and on save - an "ã", "ç" or "ü" shows as itself instead of a raw byte, matching what the real engine draws.
+
+* v7 room and object images. Backgrounds, object images and the walk-behind (z-plane) masks reuse the v5/v6 picture codecs (the SMAP strip format and BOMP), decoded against the room palette and exported as lossless indexed PNGs; an edited PNG imports back the same way it does for v5/v6.
+
+* v7 costumes (AKOS). The Dig and Full Throttle use the later AKOS costume format rather than the classic one; its cels are decoded (the three codecs these games use - run-length, BOMP and the bit-packed MAJMIN), shown in the costume viewer and exported as PNGs, both per-resource and in the batch graphics pass, and edited frames import back into the original codec.
+
+* v7 fonts. Both the fonts stored inside the game container (shown and edited exactly like the v3-v6 charsets) and the external .NUT SMUSH fonts (The Dig and Full Throttle each ship several) are decoded, exported as glyph atlases and imported back. A re-encoded .NUT is written in the exact layout the real engine's font loader expects, so an edited font stays loadable - verified by reproducing the engine's own two-pass frame walk and pixel decode over every glyph of every .NUT in both games.
+
+* v7 sound. The speech and music stored inside the container (the iMUSE iMUS PCM format and Creative VOC) play in the viewer and export to WAV, as does Full Throttle's MONSTER.SOU speech file (its per-line VOC, including the lip-sync wrapper) and The Dig's .BUN iMUSE bundles (DIGMUSIC.BUN / DIGVOICE.BUN, whose LZ/delta/12-bit-repack compression is fully decompressed). As with v4-v6, sound is play/export only - importing edited audio is not yet available.
+
+* v7 games appear in the resource browser as a full block tree with the same per-resource viewers as the v2-v6 games, and the language of a v7 release is detected automatically (from the localized text for The Dig, from the container scripts for Full Throttle).
+
+* Engine-wide validation: all 24 v7 editions of the two games were loaded and had every image, costume, font and sound decoded through every viewer with no failures; and a copy of each game was edited end-to-end at once - dialogue and names, fonts, backgrounds, objects and costumes - then booted in both ScummVM and the original DOS interpreter under DOSBox, confirming the edits render and the games run.
+
+* Known limitations. Importing edited sound is not yet available (the same as v4-v6). The SMUSH full-motion cutscenes (.SAN) and the original-DOS support binaries that ScummVM reimplements are listed but not edited. As with every other version, an edit that changes the size of the index file changes its checksum, so ScummVM's automatic detection may need the new checksum (a size-neutral edit keeps it identical).
+
 3.6.1
 -----
 * Fix (critical): importing an edited image back into a v1 game (Maniac Mansion / Zak McKracken in their original 1987/1988 form) produced a game the real engine could not run - it started to a black screen under both the original DOS interpreter and ScummVM. The room was being rebuilt by appending the re-encoded picture data and leaving the old data behind, which roughly doubled the room, and the v1 engine cannot load a room that grew like that. Rooms are now rebuilt compactly - the picture data is re-compressed in place and every internal offset re-pointed - so an edited room stays close to its original size and the game runs. Confirmed by running an edited Maniac Mansion in DOSBox.
