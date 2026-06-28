@@ -73,9 +73,16 @@ namespace ScummEditor.Engine.Encoders
 
             int fobjSize = 14 + payload.Length;             // codec/x/y/w/h(10) + 4 reserved + payload
             int fobjChunkLen = 8 + fobjSize;                // FOBJ tag+size + body
-            int trailingFrmeLen = glyph.FrameSize - (8 + glyph.FobjSize); // FRME data after the FOBJ chunk
-            if (trailingFrmeLen < 0) trailingFrmeLen = 0;
-            int frameSize = fobjChunkLen + trailingFrmeLen; // FRME body size
+
+            // Canonical NUT layout (verified against real fonts + ScummVM NutRenderer::loadFont): the FOBJ
+            // chunk is padded to an EVEN length with a single 0 byte INSIDE the FRME, so the FRME size is
+            // always even. ScummVM's two frame-walk loops rely on this (the decodedLength count loop pads by
+            // the FOBJ size's parity, the decode loop by the FRME size's), so an odd FRME size with external
+            // padding - what the old code produced when a re-encode changed the payload's parity - desyncs
+            // them and overflows ScummVM's glyph buffer (Full Throttle, which draws .NUT text at boot, then
+            // crashes). Re-pad here exactly like the original instead of preserving its old trailing pad.
+            int frmePad = fobjChunkLen & 1;                 // 1 when the FOBJ chunk is odd, else 0
+            int frameSize = fobjChunkLen + frmePad;         // FRME body size (always even)
 
             var frame = new MemoryStream();
             WriteTag(frame, "FRME");
@@ -90,10 +97,7 @@ namespace ScummEditor.Engine.Encoders
             // The four reserved bytes (FOBJ +18..+21) are preserved from the original frame.
             frame.Write(src, glyph.FobjOffset + 18, 4);
             frame.Write(payload, 0, payload.Length);
-            if (trailingFrmeLen > 0)
-            {
-                frame.Write(src, glyph.FobjOffset + 8 + glyph.FobjSize, trailingFrmeLen);
-            }
+            if (frmePad != 0) frame.WriteByte(0);           // the FOBJ chunk's even-alignment pad, inside the FRME
             byte[] frameBytes = frame.ToArray();
 
             // Where this frame's block (including its even-alignment pad) ends in the original file.
@@ -102,8 +106,7 @@ namespace ScummEditor.Engine.Encoders
 
             var output = new MemoryStream();
             output.Write(src, 0, glyph.FrameOffset);   // everything before the frame, verbatim
-            output.Write(frameBytes, 0, frameBytes.Length);
-            if ((frameSize & 1) != 0) output.WriteByte(0); // re-pad to an even boundary like the original
+            output.Write(frameBytes, 0, frameBytes.Length); // frameSize is even, so no external FRME pad
             if (oldNext < src.Length)
             {
                 output.Write(src, oldNext, src.Length - oldNext); // following frames + trailer, verbatim
