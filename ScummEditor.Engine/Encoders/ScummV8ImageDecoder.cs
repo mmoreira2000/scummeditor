@@ -65,15 +65,9 @@ namespace ScummEditor.Engine.Encoders
         {
             if (width <= 0 || height <= 0) return null;
 
-            BlockBase wrap = FindChild(imag, "WRAP");
-            BlockBase smap = FindChild(wrap, "SMAP");
-            if (smap == null) return null; // BOMP-coded object images are handled separately
-
-            // SMAP -> BSTR -> WRAP(leaf), or SMAP -> WRAP(leaf) if there is no BSTR layer.
-            BlockBase bstr = FindChild(smap, "BSTR");
-            BlockBase innerWrap = FindChild(bstr ?? smap, "WRAP");
-            byte[] leaf = LeafBytes(innerWrap);
-            if (leaf == null) return null;
+            RawContainerBlock innerWrap = FindStripLeaf(imag);
+            byte[] leaf = innerWrap != null ? innerWrap.Contents : null;
+            if (leaf == null) return null; // no SMAP bitmap (e.g. BOMP image or an empty/z-plane-only IMAG)
 
             List<StripData> strips = BuildStrips(leaf, width / 8);
             if (strips == null) return null;
@@ -131,10 +125,21 @@ namespace ScummEditor.Engine.Encoders
         // v8 tree navigation (the room/object sub-blocks are RawContainerBlocks)
         // -------------------------------------------------------------------------
 
-        private static BlockBase FindChild(BlockBase parent, string tag)
+        internal static BlockBase FindChild(BlockBase parent, string tag)
         {
             if (parent == null) return null;
             return parent.Childrens.FirstOrDefault(c => c.BlockType == tag);
+        }
+
+        /// <summary>Navigates ROOM/OBIM IMAG to the BSTR/WRAP leaf that holds the OFFS strip table + strips
+        /// (or null when the IMAG carries no SMAP bitmap). Shared with the encoder.</summary>
+        internal static RawContainerBlock FindStripLeaf(BlockBase imag)
+        {
+            BlockBase wrap = FindChild(imag, "WRAP");
+            BlockBase smap = FindChild(wrap, "SMAP");
+            if (smap == null) return null;
+            BlockBase bstr = FindChild(smap, "BSTR");
+            return FindChild(bstr ?? smap, "WRAP") as RawContainerBlock;
         }
 
         private static byte[] FindDescendantLeaf(BlockBase block, string tag)
@@ -153,13 +158,13 @@ namespace ScummEditor.Engine.Encoders
             return null;
         }
 
-        private static byte[] LeafBytes(BlockBase block)
+        internal static byte[] LeafBytes(BlockBase block)
         {
             var raw = block as RawContainerBlock;
             return raw != null ? raw.Contents : null;
         }
 
-        private static uint ReadUInt32LE(byte[] b, int o)
+        internal static uint ReadUInt32LE(byte[] b, int o)
         {
             return (uint)(b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24));
         }

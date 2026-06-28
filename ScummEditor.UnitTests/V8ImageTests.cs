@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
@@ -89,6 +90,107 @@ namespace ScummEditor.UnitTests
             // but a few are legitimately a uniform fill (a solid overlay), so allow a small flat fraction.
             Assert.True(decoded >= objectsWithImage * 0.9,
                 string.Format("only {0}/{1} v8 object images decoded with content", decoded, objectsWithImage));
+        }
+
+        [SkippableFact]
+        public void BackgroundReEncodeIsLossless()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            var dec = new ScummV8ImageDecoder();
+            var enc = new ScummV8ImageEncoder();
+            int sampled = 0;
+            foreach (DiskBlock lflf in game.DataFile.GetLFLFs())
+            {
+                RoomBlock room = lflf.GetROOM();
+                if (!HasBackgroundStrips(room)) continue;
+
+                using (Bitmap a = dec.DecodeBackground(room))
+                {
+                    byte[,] before = IndexedImageHelper.GetIndexMatrix(a);
+                    enc.EncodeBackground(room, a);            // re-encode the same image
+                    using (Bitmap b = dec.DecodeBackground(room))
+                    {
+                        byte[,] after = IndexedImageHelper.GetIndexMatrix(b);
+                        Assert.True(MatrixEquals(before, after), "re-encoded v8 background is not pixel-identical");
+                    }
+                }
+                if (++sampled >= 15) break; // a sample is plenty (full-room re-encode is heavy)
+            }
+            _out.WriteLine("v8 backgrounds re-encoded losslessly: {0}", sampled);
+            Assert.True(sampled > 0, "no v8 background to re-encode");
+        }
+
+        [SkippableFact]
+        public void EditedBackgroundSavesAndReloads()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            var dec = new ScummV8ImageDecoder();
+            var enc = new ScummV8ImageEncoder();
+
+            // Edit the first disk-0 room that has a background: paint a band with a present palette index.
+            List<DiskBlock> lflfs = game.DataFile.GetLFLFs();
+            int roomIndex = -1;
+            byte[,] edited = null;
+            Color[] palette = null;
+            for (int i = 0; i < lflfs.Count; i++)
+            {
+                RoomBlock room = lflfs[i].GetROOM();
+                if (!HasBackgroundStrips(room)) continue;
+                using (Bitmap a = dec.DecodeBackground(room))
+                {
+                    edited = IndexedImageHelper.GetIndexMatrix(a);
+                    palette = a.Palette.Entries;
+                }
+                int w = edited.GetLength(0), h = edited.GetLength(1);
+                byte mark = edited[0, 0];
+                for (int y = 0; y < System.Math.Min(20, h); y++)
+                    for (int x = 0; x < w; x++)
+                        edited[x, y] = mark; // a flat band at the top - a real, size-changing edit
+                using (Bitmap eb = IndexedImageHelper.FromIndexMatrix(edited, palette, -1))
+                {
+                    enc.EncodeBackground(room, eb);
+                }
+                roomIndex = i;
+                break;
+            }
+            Skip.If(roomIndex < 0, "no v8 background to edit");
+
+            game.PostProcessChanges();
+
+            // Re-serialize the index + disk 0 and reload them, exactly like a save+reload.
+            using (var idxMs = new MemoryStream())
+            {
+                game.IndexFile.SaveToBinaryWriter(idxMs); // must not throw (relocation ran)
+            }
+            ScummDataFile reparsed;
+            using (var ms = new MemoryStream())
+            {
+                game.DataFile.SaveToBinaryWriter(ms);
+                ms.Position = 0;
+                reparsed = new ScummDataFile(null, game.LoadedGameInfo);
+                reparsed.LoadFromBinaryReader(ms);
+            }
+
+            RoomBlock reloaded = reparsed.GetLFLFs()[roomIndex].GetROOM();
+            using (Bitmap rb = dec.DecodeBackground(reloaded))
+            {
+                Assert.NotNull(rb);
+                byte[,] reloadedMatrix = IndexedImageHelper.GetIndexMatrix(rb);
+                Assert.True(MatrixEquals(edited, reloadedMatrix), "the edited v8 background did not survive save+reload");
+            }
+        }
+
+        private static bool MatrixEquals(byte[,] a, byte[,] b)
+        {
+            if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;
+            for (int y = 0; y < a.GetLength(1); y++)
+                for (int x = 0; x < a.GetLength(0); x++)
+                    if (a[x, y] != b[x, y]) return false;
+            return true;
         }
 
         private static bool HasMultipleColours(Bitmap bmp)
