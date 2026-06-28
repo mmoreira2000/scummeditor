@@ -200,7 +200,7 @@ namespace ScummEditor.UnitTests
 
             // A reference matrix for the first exported background, before re-import.
             var dec = new ScummV8ImageDecoder();
-            RoomBlock first = ScummV8GraphicsBatch.EnumerateRooms(game).First(HasBackgroundStrips);
+            RoomBlock first = ScummV8GraphicsBatch.EnumerateRooms(game).Select(l => l.GetROOM()).First(HasBackgroundStrips);
             byte[,] before;
             using (Bitmap b = dec.DecodeBackground(first)) before = IndexedImageHelper.GetIndexMatrix(b);
 

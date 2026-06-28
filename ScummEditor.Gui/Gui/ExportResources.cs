@@ -81,7 +81,8 @@ namespace ScummEditor.Gui
             var options = new ScummV8GraphicsBatch.ExportOptions
             {
                 Backgrounds = ExportBackgrounds.Checked,
-                Objects = ExportObjects.Checked
+                Objects = ExportObjects.Checked,
+                Costumes = ExportCostumes.Checked
             };
             int exported = ScummV8GraphicsBatch.Export(_scummFile, location, options, OnExportProgress, () => _cancelExport);
             FinishExport(exported);

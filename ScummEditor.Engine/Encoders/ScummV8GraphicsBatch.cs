@@ -24,19 +24,17 @@ namespace ScummEditor.Engine.Encoders
         {
             public bool Backgrounds = true;
             public bool Objects = true;
+            public bool Costumes = true;
         }
 
-        /// <summary>The ROOM blocks in a stable, game-wide order (both data files, file order).</summary>
-        public static List<RoomBlock> EnumerateRooms(ScummGameData game)
+        /// <summary>The room (LFLF) blocks in a stable, game-wide order (both data files, file order).</summary>
+        public static List<DiskBlock> EnumerateRooms(ScummGameData game)
         {
-            var rooms = new List<RoomBlock>();
+            var rooms = new List<DiskBlock>();
             if (game.DataDisks == null) return rooms;
             foreach (DataDisk disk in game.DataDisks)
             {
-                foreach (DiskBlock lflf in disk.Tree.GetLFLFs())
-                {
-                    rooms.Add(lflf.GetROOM());
-                }
+                rooms.AddRange(disk.Tree.GetLFLFs());
             }
             return rooms;
         }
@@ -44,13 +42,13 @@ namespace ScummEditor.Engine.Encoders
         public static int Export(ScummGameData game, string folder, ExportOptions options, Action<int, int> onProgress, Func<bool> shouldCancel = null)
         {
             var decoder = new ScummV8ImageDecoder();
-            List<RoomBlock> rooms = EnumerateRooms(game);
+            List<DiskBlock> rooms = EnumerateRooms(game);
             int count = 0;
 
             for (int i = 0; i < rooms.Count; i++)
             {
                 if (shouldCancel != null && shouldCancel()) break;
-                RoomBlock room = rooms[i];
+                RoomBlock room = rooms[i].GetROOM();
 
                 if (options.Backgrounds)
                 {
@@ -68,6 +66,22 @@ namespace ScummEditor.Engine.Encoders
                     }
                 }
 
+                if (options.Costumes)
+                {
+                    List<BlockBase> akosList = rooms[i].Childrens.Where(c => c.BlockType == "AKOS").ToList();
+                    for (int j = 0; j < akosList.Count; j++)
+                    {
+                        int cels = AkosImageDecoder.GetCelCount(akosList[j]);
+                        for (int k = 0; k < cels; k++)
+                        {
+                            System.Drawing.Size sz = AkosImageDecoder.GetCelSize(akosList[j], k);
+                            if (sz.Width * sz.Height <= 4) continue; // placeholder slot
+                            Bitmap cel = AkosImageDecoder.DecodeCel(akosList[j], k);
+                            if (cel != null) { Save(cel, folder, string.Format("Room#{0} Akos#{1} Cel#{2}.png", i, j, k)); count++; }
+                        }
+                    }
+                }
+
                 if (onProgress != null) onProgress(i + 1, rooms.Count);
             }
             return count;
@@ -77,15 +91,15 @@ namespace ScummEditor.Engine.Encoders
         {
             var report = new ScummV4GraphicsBatch.ImportReport();
             var encoder = new ScummV8ImageEncoder();
-            List<RoomBlock> rooms = EnumerateRooms(game);
+            List<DiskBlock> rooms = EnumerateRooms(game);
             string[] files = Directory.GetFiles(folder, "Room#*.png");
 
             for (int f = 0; f < files.Length; f++)
             {
                 if (shouldCancel != null && shouldCancel()) break;
                 string name = Path.GetFileNameWithoutExtension(files[f]);
-                int roomIndex, objectIndex;
-                if (!TryParseName(name, out roomIndex, out objectIndex)) continue;
+                int roomIndex, objectIndex, akosIndex, celIndex;
+                if (!TryParseName(name, out roomIndex, out objectIndex, out akosIndex, out celIndex)) continue;
                 if (roomIndex < 0 || roomIndex >= rooms.Count) continue;
                 report.Found++;
 
@@ -93,8 +107,21 @@ namespace ScummEditor.Engine.Encoders
                 {
                     using (var bmp = new Bitmap(files[f]))
                     {
-                        if (objectIndex < 0) encoder.EncodeBackground(rooms[roomIndex], bmp);
-                        else encoder.EncodeObject(rooms[roomIndex], objectIndex, bmp);
+                        if (akosIndex >= 0)
+                        {
+                            List<BlockBase> akosList = rooms[roomIndex].Childrens.Where(c => c.BlockType == "AKOS").ToList();
+                            if (akosIndex >= akosList.Count) { report.Errors.Add(name + ": AKOS index out of range"); continue; }
+                            if (!IndexedImageHelper.IsIndexed(bmp)) { report.Errors.Add(name + ": cel must be an indexed PNG"); continue; }
+                            AkosImageEncoder.ReplaceCel(akosList[akosIndex], celIndex, IndexedImageHelper.GetIndexMatrix(bmp));
+                        }
+                        else if (objectIndex < 0)
+                        {
+                            encoder.EncodeBackground(rooms[roomIndex].GetROOM(), bmp);
+                        }
+                        else
+                        {
+                            encoder.EncodeObject(rooms[roomIndex].GetROOM(), objectIndex, bmp);
+                        }
                     }
                     report.Imported++;
                 }
@@ -107,16 +134,24 @@ namespace ScummEditor.Engine.Encoders
             return report;
         }
 
-        /// <summary>Parses "Room#i" (background) or "Room#i Obj#j Img#0" (object); objectIndex = -1 for bg.</summary>
-        private static bool TryParseName(string name, out int roomIndex, out int objectIndex)
+        /// <summary>Parses "Room#i" (background), "Room#i Obj#j Img#0" (object) or "Room#i Akos#j Cel#k"
+        /// (costume cel). objectIndex = -1 unless an object; akosIndex/celIndex = -1 unless a cel.</summary>
+        private static bool TryParseName(string name, out int roomIndex, out int objectIndex, out int akosIndex, out int celIndex)
         {
-            roomIndex = -1;
-            objectIndex = -1;
+            roomIndex = -1; objectIndex = -1; akosIndex = -1; celIndex = -1;
             string[] parts = name.Split(' ');
             if (parts.Length == 0 || !parts[0].StartsWith("Room#")) return false;
             if (!int.TryParse(parts[0].Substring(5), out roomIndex)) return false;
             if (parts.Length == 1) return true; // background
-            // object: "Room#i Obj#j Img#0"
+
+            string akos = parts.FirstOrDefault(p => p.StartsWith("Akos#"));
+            if (akos != null)
+            {
+                string cel = parts.FirstOrDefault(p => p.StartsWith("Cel#"));
+                return int.TryParse(akos.Substring(5), out akosIndex)
+                    && cel != null && int.TryParse(cel.Substring(4), out celIndex);
+            }
+
             string obj = parts.FirstOrDefault(p => p.StartsWith("Obj#"));
             if (obj == null) return false;
             return int.TryParse(obj.Substring(4), out objectIndex);
