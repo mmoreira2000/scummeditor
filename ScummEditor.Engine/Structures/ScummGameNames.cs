@@ -25,6 +25,7 @@ namespace ScummEditor.Engine.Structures
                 case ScummGame.SamAndMax: return "Sam & Max Hit the Road";
                 case ScummGame.TheDig: return "The Dig";
                 case ScummGame.FullThrottle: return "Full Throttle";
+                case ScummGame.CurseOfMonkeyIsland: return "The Curse of Monkey Island";
                 case ScummGame.None: return "None";
                 default: return game.ToString(); // never silently "None" for a real, newly-added game
             }

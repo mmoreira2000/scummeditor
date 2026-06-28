@@ -27,12 +27,30 @@ namespace ScummEditor.Engine.Structures.IndexFile
 
         public List<DirectoryItem> Rooms { get; set; }
 
+        /// <summary>
+        /// SCUMM v8 (The Curse of Monkey Island) widened the item-count field of every index directory
+        /// from a 2-byte to a 4-byte little-endian integer (the rest of the body is unchanged). The real
+        /// counts still fit in a ushort, so <see cref="NumOfItems"/> stays a ushort and only the on-disk
+        /// width changes per version - keeping the byte-identical round-trip on both v4-v7 and v8.
+        /// </summary>
+        private bool UsesWideCount
+        {
+            get { return _gameInfo != null && _gameInfo.ScummVersion == 8; }
+        }
+
         public override void LoadFromBinaryReader(System.IO.Stream binaryReader)
         {
             base.LoadFromBinaryReader(binaryReader);
 
             Rooms = new List<DirectoryItem>();
-            NumOfItems = binaryReader.ReadUint16();
+            if (UsesWideCount)
+            {
+                NumOfItems = (ushort)binaryReader.ReadUint32();
+            }
+            else
+            {
+                NumOfItems = binaryReader.ReadUint16();
+            }
             for (int i = 0; i < NumOfItems; i++)
             {
                 var room = new DirectoryItem();
@@ -50,7 +68,14 @@ namespace ScummEditor.Engine.Structures.IndexFile
         {
             base.SaveToBinaryWriter(binaryWriter);
 
-            binaryWriter.Write(NumOfItems);
+            if (UsesWideCount)
+            {
+                binaryWriter.Write((uint)NumOfItems);
+            }
+            else
+            {
+                binaryWriter.Write(NumOfItems);
+            }
 
             foreach (DirectoryItem item in Rooms)
             {

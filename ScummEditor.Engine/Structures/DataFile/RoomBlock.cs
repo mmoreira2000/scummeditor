@@ -44,6 +44,30 @@ namespace ScummEditor.Engine.Structures.DataFile
                 case 7:
                     LoadScummV7(binaryReader);
                     break;
+                case 8:
+                    LoadScummV8(binaryReader);
+                    break;
+            }
+        }
+
+        /// <summary>
+        /// Reads a v8 ROOM (The Curse of Monkey Island). Every child - the 32-byte RMHD, the colour
+        /// cycle, the PALS palette, the IMAG/WRAP/OFFS room image, the OBIM object images, the box data
+        /// and scale - is read with the generic recursive reader, which navigates containers and keeps
+        /// leaves verbatim, so the room rebuilds byte-for-byte before any block gets typed v8 support.
+        /// (v8 moved the scripts and object code out of ROOM into a sibling RMSC block, so the room here
+        /// holds graphics + structure only.)
+        /// </summary>
+        private void LoadScummV8(Stream binaryReader)
+        {
+            long endPosition = binaryReader.Position - 8 + BlockSize;
+
+            while (binaryReader.Position < endPosition)
+            {
+                string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
+                var child = new RawContainerBlock(this, typeRead);
+                child.LoadFromBinaryReader(binaryReader);
+                Childrens.Add(child);
             }
         }
 

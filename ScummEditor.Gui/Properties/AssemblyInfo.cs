@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("SCUMMeditor")]
-[assembly: AssemblyDescription("Utility to view and edit SCUMM v1 to v6 game files")]
+[assembly: AssemblyDescription("Utility to view and edit SCUMM v1 to v8 game files")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyProduct("SCUMMeditor")]

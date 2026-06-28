@@ -98,6 +98,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(DirectoryOfCostumes).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfScripts).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfSounds).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfRoomScripts).Name, directoryOfItemsControlGeneric); // v8 DRSC
 
             var indexDetailsControl = new IndexDetailsControl();
             _controlViewers.Add(typeof(MaximumValues).Name, indexDetailsControl);
@@ -140,6 +141,10 @@ namespace ScummEditor.Gui
             else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
             {
                 CreateOldBundleIndexTree((ScummV3OldBundleIndexFile)GameData.IndexFile);
+            }
+            else if (GameData.IndexFile is ScummV8IndexFile)
+            {
+                CreateScummV8IndexFileTree((ScummV8IndexFile)GameData.IndexFile);
             }
             else if (GameData.IndexFile is ScummV7IndexFile)
             {
@@ -457,6 +462,27 @@ namespace ScummEditor.Gui
             CreateNode(index.RawDOBJ, node);
             CreateNode(index.RawAARY, node);
             CreateNode(index.RawANAM, node);
+        }
+
+        /// <summary>
+        /// Index tree for SCUMM v8 (The Curse of Monkey Island): the raw RNAM/MAXS blocks, the six typed
+        /// resource directories (DROO, the v8-only DRSC room-scripts directory, DSCR/DSOU/DCOS/DCHR), then
+        /// the raw DOBJ/AARY. The raw blocks are kept verbatim and shown with the generic block viewer.
+        /// </summary>
+        private void CreateScummV8IndexFileTree(ScummV8IndexFile index)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+
+            CreateNode(index.RawRNAM, node);
+            CreateNode(index.RawMAXS, node);
+            CreateNode(index.DROO, node);
+            CreateNode(index.DRSC, node);
+            CreateNode(index.DSCR, node);
+            CreateNode(index.DSOU, node);
+            CreateNode(index.DCOS, node);
+            CreateNode(index.DCHR, node);
+            CreateNode(index.RawDOBJ, node);
+            CreateNode(index.RawAARY, node);
         }
 
         private void CreateScummIndexFileTree(ScummIndexFile scummV6IndexFile)
