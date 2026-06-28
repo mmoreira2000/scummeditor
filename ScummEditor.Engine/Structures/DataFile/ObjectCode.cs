@@ -141,7 +141,16 @@ namespace ScummEditor.Engine.Structures.DataFile
                         VerbBlockOffset = p;
                         VerbEntryBase = p; // v5/v6 verb offsets are relative to the VERB tag
                         VerbBlockSize = (int)size;
-                        ParseVerbTable(bodyStart, bodyLength);
+                        // SCUMM v8 (The Curse of Monkey Island) widened the verb offset table to 8-byte
+                        // entries (id:32le + offset:32le, terminated by a 32-bit 0; offset relative to the
+                        // VERB body, i.e. engine returns verboffs+8+stored). That differs from the v5/v6/v7
+                        // 3-byte [id:8][offset:16le] table, so the shared ParseVerbTable would mis-parse it.
+                        // v8 verb-code editing is a separate milestone; until then the v8 verb table is left
+                        // unparsed (VerbCodeOffset stays -1) so nothing downstream extracts garbage.
+                        if (_gameInfo == null || _gameInfo.ScummVersion != 8)
+                        {
+                            ParseVerbTable(bodyStart, bodyLength);
+                        }
                         break;
                     case "OBNA":
                         ObnaBlockOffset = p;
