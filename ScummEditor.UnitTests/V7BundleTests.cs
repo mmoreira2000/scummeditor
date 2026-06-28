@@ -83,8 +83,9 @@ namespace ScummEditor.UnitTests
             Assert.Null(ImuseBundleDecoder.DecodeToImus(new byte[] { 1, 2, 3 }));               // too short
             Assert.Null(ImuseBundleDecoder.DecodeToImus(System.Text.Encoding.ASCII.GetBytes("XXXXjunkjunkjunk"))); // unknown tag
 
-            // A COMP whose single block declares the unsupported VIMA codec 13 -> null, no throw.
-            Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(1, 0, 16, 4, 13)));
+            // A COMP whose single block declares an unsupported codec (14 is not in 0-12/13/15) -> null, no
+            // throw. (Codecs 13/15 = VIMA are now supported for COMI, so they decode rather than return null.)
+            Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(1, 0, 16, 4, 14)));
             // A COMP whose block points past the buffer -> null.
             Assert.Null(ImuseBundleDecoder.DecodeToImus(BuildComp(1, 0, 16, 100000, 1)));
             // A COMP claiming more blocks than the table holds -> null.

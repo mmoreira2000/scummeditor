@@ -10,10 +10,11 @@ namespace ScummEditor.Engine.Encoders
     /// </summary>
     public static class ImuseBundleCodecs
     {
-        /// <summary>True for the codecs this port can decompress (everything the Dig/FT bundles use).</summary>
+        /// <summary>True for the codecs this port can decompress: 0-12 (the Dig/FT LZ77 family) and the
+        /// VIMA IMA-ADPCM codecs 13 (mono) / 15 (stereo) that COMI's music + voice bundles use.</summary>
         public static bool CanDecode(int codec)
         {
-            return codec >= 0 && codec <= 12;
+            return (codec >= 0 && codec <= 12) || codec == 13 || codec == 15;
         }
 
         /// <summary>
@@ -310,8 +311,13 @@ namespace ScummEditor.Engine.Encoders
                     return outputSize;
                 }
 
+                case 13:
+                case 15:
+                    InitializeImcTables();
+                    return DecompressAdpcm(input, inputSize, output, codec == 13 ? 1 : 2);
+
                 default:
-                    throw new System.NotSupportedException("iMUSE bundle codec " + codec + " is not supported (VIMA 13/15 are CMI-only)");
+                    throw new System.NotSupportedException("iMUSE bundle codec " + codec + " is not supported");
             }
         }
 
@@ -373,6 +379,177 @@ namespace ScummEditor.Engine.Encoders
                     }
                 }
             }
+        }
+
+        // -------------------------------------------------------------------------
+        // VIMA - the variable-bitwidth IMA-ADPCM codec (13 = mono, 15 = stereo) used by COMI's music
+        // (MUSDISK) and voice (VOXDISK) bundles. Direct port of ScummVM dimuse_codecs.cpp decompressADPCM
+        // + initializeImcTables, with the standard 89-entry IMA step table. Each block decompresses to
+        // 0x2000 bytes of signed 16-bit LE PCM (which becomes the iMUS DATA, so ImuseAudioDecoder's 16-bit
+        // path turns it into WAV).
+        // -------------------------------------------------------------------------
+
+        // The standard IMA-ADPCM step-size table (Audio::Ima_ADPCMStream::_imaTable).
+        private static readonly int[] ImaTable =
+        {
+                7,    8,    9,   10,   11,   12,   13,   14,   16,   17,   19,   21,   23,   25,   28,   31,
+               34,   37,   41,   45,   50,   55,   60,   66,   73,   80,   88,   97,  107,  118,  130,  143,
+              157,  173,  190,  209,  230,  253,  279,  307,  337,  371,  408,  449,  494,  544,  598,  658,
+              724,  796,  876,  963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024,
+             3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630, 9493,10442,11487,12635,13899,
+            15289,16818,18500,20350,22385,24623,27086,29794,32767
+        };
+
+        // imxOtherTable[bits-2][data] - the table-position adjustment (-1 = 0xFF in the C source).
+        private static readonly sbyte[][] ImxOtherTable =
+        {
+            new sbyte[] { -1, 4 },
+            new sbyte[] { -1, -1, 2, 8 },
+            new sbyte[] { -1, -1, -1, -1, 1, 2, 4, 6 },
+            new sbyte[] { -1, -1, -1, -1, -1, -1, -1, -1, 1, 2, 4, 6, 8, 12, 16, 32 },
+            new sbyte[] { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                           1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28, 32 },
+            new sbyte[] { -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                          -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+                           1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+                          17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 }
+        };
+
+        private static byte[] _destImcTable;
+        private static uint[] _destImcTable2;
+        private static readonly object _imcLock = new object();
+
+        private static void InitializeImcTables()
+        {
+            if (_destImcTable != null) return;
+            lock (_imcLock)
+            {
+                if (_destImcTable != null) return;
+                var table = new byte[89];
+                var table2 = new uint[89 * 64];
+
+                for (int pos = 0; pos <= 88; pos++)
+                {
+                    byte put = 1;
+                    int tableValue = ((ImaTable[pos] * 4) / 7) / 2;
+                    while (tableValue != 0) { tableValue /= 2; put++; }
+                    if (put < 3) put = 3;
+                    if (put > 8) put = 8;
+                    table[pos] = (byte)(put - 1);
+                }
+
+                for (int n = 0; n < 64; n++)
+                {
+                    for (int pos = 0; pos <= 88; pos++)
+                    {
+                        int count = 32, put = 0, tableValue = ImaTable[pos];
+                        do
+                        {
+                            if ((count & n) != 0) put += tableValue;
+                            count /= 2;
+                            tableValue /= 2;
+                        } while (count != 0);
+                        table2[n + pos * 64] = (uint)put;
+                    }
+                }
+
+                _destImcTable2 = table2;
+                _destImcTable = table; // publish last (the null check above gates on this)
+            }
+        }
+
+        private static int DecompressAdpcm(byte[] src, int srcSize, byte[] dst, int channels)
+        {
+            const int MaxChannels = 2;
+            int outputSamplesLeft = 0x1000;
+            var initialTablePos = new int[MaxChannels];
+            var initialOutputWord = new int[MaxChannels];
+
+            int s = 0;
+            int firstWord = (src[s] << 8) | src[s + 1]; s += 2;
+            int rawBase = 0;
+            if (firstWord != 0)
+            {
+                // a leading block of raw (already-PCM) audio; clamp to the buffers (real data fits in 0x2000)
+                int copy = firstWord;
+                if (copy > dst.Length) copy = dst.Length;
+                if (s + copy > src.Length) copy = src.Length - s;
+                if (copy < 0) copy = 0;
+                System.Array.Copy(src, s, dst, 0, copy);
+                rawBase = copy;
+                s += copy;
+                outputSamplesLeft -= firstWord / 2;
+            }
+            else
+            {
+                for (int i = 0; i < channels; i++)
+                {
+                    initialTablePos[i] = src[s]; s += 1;
+                    s += 4; // skip the (unused) initial imcTable entry
+                    initialOutputWord[i] = ReadBE32(src, s); s += 4;
+                }
+            }
+
+            int bitstreamStart = s;
+            int totalBitOffset = 0;
+            for (int chan = 0; chan < channels; chan++)
+            {
+                int curTablePos = initialTablePos[chan];
+                int outputWord = initialOutputWord[chan];
+                int destPos = rawBase + chan * 2;
+
+                int bound = (channels == 1)
+                    ? outputSamplesLeft
+                    : (chan == 0 ? (outputSamplesLeft + 1) / 2 : outputSamplesLeft / 2);
+
+                for (int i = 0; i < bound; i++)
+                {
+                    int bits = _destImcTable[curTablePos];
+                    int readPos = bitstreamStart + (totalBitOffset >> 3);
+                    int readWord = (ushort)(ReadBE16(src, readPos) << (totalBitOffset & 7));
+                    int packet = (byte)(readWord >> (16 - bits));
+                    totalBitOffset += bits;
+
+                    int signBitMask = 1 << (bits - 1);
+                    int dataBitMask = signBitMask - 1;
+                    int data = packet & dataBitMask;
+
+                    int tmpA = data << (7 - bits);
+                    int imcTableEntry = ImaTable[curTablePos] >> (bits - 1);
+                    int delta = imcTableEntry + (int)_destImcTable2[tmpA + curTablePos * 64];
+                    if ((packet & signBitMask) != 0) delta = -delta;
+
+                    outputWord += delta;
+                    if (outputWord < -0x8000) outputWord = -0x8000;
+                    if (outputWord > 0x7fff) outputWord = 0x7fff;
+
+                    if (destPos + 1 < dst.Length)
+                    {
+                        dst[destPos] = (byte)(outputWord & 0xFF);
+                        dst[destPos + 1] = (byte)((outputWord >> 8) & 0xFF);
+                    }
+                    destPos += channels << 1;
+
+                    curTablePos += ImxOtherTable[bits - 2][data];
+                    if (curTablePos < 0) curTablePos = 0;
+                    if (curTablePos > 88) curTablePos = 88;
+                }
+            }
+
+            return 0x2000;
+        }
+
+        private static int ReadBE16(byte[] b, int o)
+        {
+            int hi = (o >= 0 && o < b.Length) ? b[o] : 0;
+            int lo = (o + 1 >= 0 && o + 1 < b.Length) ? b[o + 1] : 0;
+            return (hi << 8) | lo;
+        }
+
+        private static int ReadBE32(byte[] b, int o)
+        {
+            if (o < 0 || o + 4 > b.Length) return 0;
+            return (b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3];
         }
     }
 }
