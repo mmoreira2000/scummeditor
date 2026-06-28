@@ -54,7 +54,13 @@ namespace ScummEditor.Engine.Structures.DataFile
                 // The local-script id is 1 byte on v5/v6, but 2 bytes (LE) on v7 (The Dig, Full Throttle
                 // have far more local scripts); the bytecode starts right after it. Using the v6 1-byte
                 // offset on v7 starts the disassembly one byte early and desyncs every local script.
-                if (_gameInfo != null && _gameInfo.ScummVersion == 7 && RawContent.Length >= 2)
+                if (_gameInfo != null && _gameInfo.ScummVersion == 8 && RawContent.Length >= 4)
+                {
+                    // v8 (The Curse of Monkey Island) widened the local-script id to 4 bytes (LE).
+                    ScriptId = RawContent[0] | (RawContent[1] << 8) | (RawContent[2] << 16) | (RawContent[3] << 24);
+                    CodeOffset = 4;
+                }
+                else if (_gameInfo != null && _gameInfo.ScummVersion == 7 && RawContent.Length >= 2)
                 {
                     ScriptId = RawContent[0] | (RawContent[1] << 8);
                     CodeOffset = 2;
@@ -80,6 +86,12 @@ namespace ScummEditor.Engine.Structures.DataFile
             if (_gameInfo != null && _gameInfo.ScummVersion == 5)
             {
                 return Scumm5Disassembler.Disassemble(RawContent, CodeOffset);
+            }
+            if (_gameInfo != null && _gameInfo.ScummVersion == 8)
+            {
+                // v8 (The Curse of Monkey Island) is the same stack VM with a fully remapped opcode table
+                // and 4-byte inline operands - a fresh disassembler returning the same Result shape.
+                return ScummV8Disassembler.Disassemble(RawContent, CodeOffset);
             }
             return ScummV6Disassembler.Disassemble(RawContent, CodeOffset);
         }
