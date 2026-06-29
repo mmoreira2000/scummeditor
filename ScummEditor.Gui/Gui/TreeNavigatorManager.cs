@@ -30,6 +30,7 @@ namespace ScummEditor.Gui
         private readonly NutFontControl _nutFontControl = new NutFontControl();
         private readonly ImuseBundleControl _imuseBundleControl = new ImuseBundleControl();
         private readonly LocalizedTextControl _localizedTextControl = new LocalizedTextControl();
+        private readonly ScummV8RoomImageControl _scummV8RoomImageControl = new ScummV8RoomImageControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -590,6 +591,18 @@ namespace ScummEditor.Gui
                 _localizedTextControl.SetData(localizedText, codePage);
                 _displayPanel.Controls.Add(_localizedTextControl);
                 _localizedTextControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v8 ROOM: a dedicated background/object/z-plane image viewer. RoomBlock is shared with v5/v6/v7
+            // (whose images are shown via the DiskBlock viewer), so this is gated to v8 - its SMAP/BOMP/ZPLN
+            // nesting is v8-specific and needs ScummV8ImageDecoder/Encoder.
+            var roomBlock = e.Node.Tag as RoomBlock;
+            if (roomBlock != null && GameData.LoadedGameInfo != null && GameData.LoadedGameInfo.ScummVersion == 8)
+            {
+                _scummV8RoomImageControl.SetAndRefreshData(roomBlock);
+                _displayPanel.Controls.Add(_scummV8RoomImageControl);
+                _scummV8RoomImageControl.Dock = DockStyle.Fill;
                 return;
             }
 
