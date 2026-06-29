@@ -140,6 +140,14 @@ namespace ScummEditor.Engine
                 return result;
             }
 
+            // LucasArts SCUMM v8 (The Curse of Monkey Island): COMI.LA0 index + COMI.LA1/.LA2 data.
+            // Checked BEFORE v7 because COMI shares the .LA0/.LA1 naming and the plain RNAM/LECF magic.
+            GameInfo v8 = DetectScummV8(folder);
+            if (v8 != null)
+            {
+                return v8;
+            }
+
             // LucasArts SCUMM v7 (The Dig, Full Throttle): GAME.LA0 index + GAME.LA1 data.
             GameInfo v7 = DetectScummV7(folder);
             if (v7 != null)
@@ -164,6 +172,62 @@ namespace ScummEditor.Engine
             var none = new GameInfo();
             none.LoadedGame = ScummGame.None;
             return none;
+        }
+
+        /// <summary>
+        /// Detects the SCUMM v8 game (The Curse of Monkey Island). It ships COMI.LA0 (index) plus TWO
+        /// data files, COMI.LA1 and COMI.LA2 (the game spans two disks), none XOR-encrypted, with the
+        /// external resources (FONT*.NUT, *.BUN, *.SAN, LANGUAGE.TAB) in a RESOURCE subfolder. The layout
+        /// is confirmed by content alone (never the EXE): the index begins with a plain "RNAM" tag and
+        /// both data files with the "LECF" container tag. The two-data-file pair is what tells v8 apart
+        /// from v7 (The Dig / Full Throttle have a single .LA1 and a different base name).
+        /// </summary>
+        private static GameInfo DetectScummV8(string folder)
+        {
+            string indexPath = Path.Combine(folder, "COMI.LA0");
+            string dataPath1 = Path.Combine(folder, "COMI.LA1");
+            string dataPath2 = Path.Combine(folder, "COMI.LA2");
+
+            if (!File.Exists(indexPath) || !File.Exists(dataPath1) || !File.Exists(dataPath2))
+            {
+                return null;
+            }
+            if (!StartsWithBigHeaderTag(indexPath, "RNAM")
+                || !StartsWithBigHeaderTag(dataPath1, "LECF")
+                || !StartsWithBigHeaderTag(dataPath2, "LECF"))
+            {
+                return null;
+            }
+
+            var info = new GameInfo
+            {
+                LoadedGame = ScummGame.CurseOfMonkeyIsland,
+                IndexFile = indexPath,
+                DataFile = dataPath1,
+                DataFiles = new List<string> { dataPath1, dataPath2 }, // v8 spans two data disks
+                NutFontFiles = EnumerateNutFonts(folder), // external SMUSH fonts (RESOURCE/FONT0-4.NUT)
+                BundleFiles = EnumerateBundles(folder),   // external iMUSE bundles (MUS/VOXDISK1-2.BUN)
+                TrsFiles = EnumerateTrs(folder),          // v8 ships none, but keep the pipeline uniform
+                Xored = false,
+                XorKey = 0x00,      // v8 data is not XOR-encrypted
+                IndexXorKey = 0x00, // v8 index is not XOR-encrypted
+                ScummVersion = 8,
+                UsesSmallHeader = false, // big-header [tag:4][size:4 BE] IFF blocks, like v5/v6/v7
+                IsTalkie = true          // The Curse of Monkey Island is a CD/talkie release
+            };
+
+            // COMI keeps almost all of its on-screen text in an external LANGUAGE.TAB (under RESOURCE/),
+            // so search recursively like the .NUT / .BUN enumerators.
+            string languageTab = Directory
+                .GetFiles(folder, "LANGUAGE.TAB", SearchOption.AllDirectories)
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (!string.IsNullOrEmpty(languageTab))
+            {
+                info.LanguageTabPath = languageTab;
+            }
+
+            return info;
         }
 
         /// <summary>
@@ -263,12 +327,13 @@ namespace ScummEditor.Engine
             return fonts;
         }
 
-        /// <summary>Every .BUN iMUSE sound bundle in a v7 game folder (The Dig's DIGMUSIC.BUN /
-        /// DIGVOICE.BUN), ordered by name. Full Throttle ships none (its speech is MONSTER.SOU).</summary>
+        /// <summary>Every .BUN iMUSE sound bundle in a v7/v8 game folder, ordered by name. v7 keeps them at
+        /// the folder root (The Dig's DIGMUSIC.BUN / DIGVOICE.BUN; Full Throttle ships none); v8 keeps them
+        /// in a RESOURCE subfolder (MUSDISK1/2.BUN + VOXDISK1/2.BUN), so the search recurses.</summary>
         private static List<string> EnumerateBundles(string folder)
         {
             var bundles = new List<string>();
-            foreach (string path in Directory.GetFiles(folder, "*.BUN"))
+            foreach (string path in Directory.GetFiles(folder, "*.BUN", SearchOption.AllDirectories))
             {
                 bundles.Add(path);
             }

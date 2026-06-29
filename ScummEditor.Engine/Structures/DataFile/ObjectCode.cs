@@ -139,9 +139,21 @@ namespace ScummEditor.Engine.Structures.DataFile
                         break;
                     case "VERB":
                         VerbBlockOffset = p;
-                        VerbEntryBase = p; // v5/v6 verb offsets are relative to the VERB tag
                         VerbBlockSize = (int)size;
-                        ParseVerbTable(bodyStart, bodyLength);
+                        // SCUMM v8 (The Curse of Monkey Island) widened the verb offset table to 8-byte
+                        // entries (id:32le + offset:32le, terminated by a 32-bit 0; offset relative to the
+                        // VERB body, i.e. engine returns verboffs+8+stored - getVerbEntrypoint). That differs
+                        // from the v5/v6/v7 3-byte [id:8][offset:16le] table (relative to the VERB tag).
+                        if (_gameInfo != null && _gameInfo.ScummVersion == 8)
+                        {
+                            VerbEntryBase = bodyStart; // v8: offsets relative to the VERB body (tag + 8)
+                            ParseVerbTableV8(bodyStart, bodyLength);
+                        }
+                        else
+                        {
+                            VerbEntryBase = p; // v5/v6/v7: offsets relative to the VERB tag
+                            ParseVerbTable(bodyStart, bodyLength);
+                        }
                         break;
                     case "OBNA":
                         ObnaBlockOffset = p;
@@ -338,6 +350,30 @@ namespace ScummEditor.Engine.Structures.DataFile
             VerbCodeLength = end - p;
         }
 
+        /// <summary>
+        /// Parses the SCUMM v8 VERB offset table: 8-byte entries [id:32le][offset:32le], terminated by a
+        /// 32-bit-0 id (0xFFFFFFFF is the fallback id, kept like any other). Offsets are relative to the VERB
+        /// body. The verb bytecode is one contiguous stream from the end of the table to the end of the VERB.
+        /// </summary>
+        private void ParseVerbTableV8(int p, int length)
+        {
+            NumVerbs = 0;
+            int end = p + length;
+            while (p + 4 <= end)
+            {
+                uint id = ReadUInt32LE(p);
+                if (id == 0) { p += 4; break; } // 32-bit-0 terminator
+                if (p + 8 > end) { p = end; break; }
+                NumVerbs++;
+                VerbEntries.Add(new VerbEntry { Id = (int)id, Offset = (int)ReadUInt32LE(p + 4) });
+                p += 8; // id (32le) + offset (32le)
+            }
+
+            // Bytecode runs from the end of the table to the end of the VERB block.
+            VerbCodeOffset = p;
+            VerbCodeLength = end - p;
+        }
+
         private string ReadCString(int p, int length)
         {
             int end = p + length;
@@ -359,6 +395,11 @@ namespace ScummEditor.Engine.Structures.DataFile
         private uint ReadUInt32BE(int p)
         {
             return (uint)((RawContent[p] << 24) | (RawContent[p + 1] << 16) | (RawContent[p + 2] << 8) | RawContent[p + 3]);
+        }
+
+        private uint ReadUInt32LE(int p)
+        {
+            return (uint)(RawContent[p] | (RawContent[p + 1] << 8) | (RawContent[p + 2] << 16) | (RawContent[p + 3] << 24));
         }
 
         /// <summary>Re-parses the structural info after RawContent is replaced (text import).</summary>

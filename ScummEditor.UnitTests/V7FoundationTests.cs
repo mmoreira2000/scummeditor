@@ -106,10 +106,11 @@ namespace ScummEditor.UnitTests
         {
             Skip.If(GameLibrary.Folder(GameLibrary.CurseOfMonkeyIsland) == null, "COMI (v8) not present");
 
-            // The Curse of Monkey Island is SCUMM v8 (unsupported) but ships the same COMI.LA0/COMI.LA1
-            // naming and the same plain RNAM/LECF magic as v7, so the content checks pass. The v7 detector
-            // must NOT claim it: it used to be mislabelled "The Dig" (v7) and then crashed on load (the v8
-            // index has a DRSC block and a larger MAXS the v7 reader cannot parse).
+            // The Curse of Monkey Island is SCUMM v8 and ships the same COMI.LA0/COMI.LA1 naming and the
+            // same plain RNAM/LECF magic as v7, so the content checks pass. The v7 detector must NOT claim
+            // it (it is detected as v8 by DetectScummV8, which runs first): it used to be mislabelled "The
+            // Dig" (v7) and crash on load (the v8 index has a DRSC block and a larger MAXS). v8 detection
+            // itself is asserted by V8SupportTests; here we only guard that the v7 path never grabs it.
             GameInfo info = Functions.FindScummGameInFolder(GameLibrary.Folder(GameLibrary.CurseOfMonkeyIsland));
             Assert.NotEqual(7, info.ScummVersion);
             Assert.NotEqual(ScummGame.TheDig, info.LoadedGame);

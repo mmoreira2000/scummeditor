@@ -108,5 +108,9 @@ namespace ScummEditor.Engine.Structures
         /// <summary>External .TRS text files (cutscene-subtitle / UI strings): The Dig DIGTXT.TRS/DIG.TRS,
         /// Full Throttle's per-scene .TRS. Null/empty for non-v7.</summary>
         public List<string> TrsFiles { get; set; }
+
+        /// <summary>The SCUMM v8 (The Curse of Monkey Island) external localized text file (LANGUAGE.TAB);
+        /// null for non-v8. This is where almost all of COMI's on-screen text lives.</summary>
+        public string LanguageTabPath { get; set; }
     }
 }

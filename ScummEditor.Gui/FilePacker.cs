@@ -314,6 +314,8 @@ namespace ScummEditor.Gui
                     count = ScummV3OldTextManager.ExportToFile(scummFile, dlg.FileName, codec, gameLabel);
                 else if (version == 4 || version == 3)
                     count = GameTextManager.ExportToFileV4(scummFile, dlg.FileName, codec, gameLabel);
+                else if (version == 8)
+                    count = GameTextManager.ExportToFileV8(scummFile, dlg.FileName, codec, gameLabel);
                 else
                     count = GameTextManager.ExportToFile(scummFile.DataFile, dlg.FileName, codec, gameLabel);
                 MessageBox.Show(this, count + " texts exported to:\n" + dlg.FileName,
@@ -403,6 +405,8 @@ namespace ScummEditor.Gui
                     report = ScummV3OldTextManager.ImportFromFile(scummFile, dlg.FileName);
                 else if (version == 4 || version == 3)
                     report = GameTextManager.ImportFromFileV4(scummFile, dlg.FileName);
+                else if (version == 8)
+                    report = GameTextManager.ImportFromFileV8(scummFile, dlg.FileName);
                 else
                     report = GameTextManager.ImportFromFile(scummFile.DataFile, dlg.FileName);
 

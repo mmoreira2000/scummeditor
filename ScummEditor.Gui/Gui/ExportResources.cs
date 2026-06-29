@@ -62,10 +62,30 @@ namespace ScummEditor.Gui
             {
                 ExportV4(location);
             }
+            else if (version == 8)
+            {
+                ExportV8(location); // The Curse of Monkey Island (IMAG/WRAP/OFFS images, two data files)
+            }
             else
             {
                 ExportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-exports every v8 room background + object image (both COMI data files).</summary>
+        private void ExportV8(string location)
+        {
+            Progress.Maximum = Math.Max(1, ScummV8GraphicsBatch.EnumerateRooms(_scummFile).Count);
+            ShowProgress();
+
+            var options = new ScummV8GraphicsBatch.ExportOptions
+            {
+                Backgrounds = ExportBackgrounds.Checked,
+                Objects = ExportObjects.Checked,
+                Costumes = ExportCostumes.Checked
+            };
+            int exported = ScummV8GraphicsBatch.Export(_scummFile, location, options, OnExportProgress, () => _cancelExport);
+            FinishExport(exported);
         }
 
         /// <summary>Batch-exports the GdiV1 tilemap images + 0x57 costume frames of a v1 game (Maniac/Zak classic).</summary>

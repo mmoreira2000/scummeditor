@@ -55,9 +55,10 @@ namespace ScummEditor.UnitTests
         public const string FullThrottle = "ScummV7/Full Throttle (1995)/DOS CD";
         public const string FullThrottlePortuguese = "ScummV7/Full Throttle (1995)/Other Languages/Portuguese/DOS CD";
 
-        // SCUMM v8 (The Curse of Monkey Island) - NOT supported; used to verify the v7 detector rejects it
-        // (it shares the COMI.LA0/COMI.LA1 naming + RNAM/LECF magic with v7).
+        // SCUMM v8 (The Curse of Monkey Island) - COMI.LA0 index + COMI.LA1/.LA2 (two data disks); not
+        // XOR-encrypted; AKOS costumes; external FONT*.NUT + *.BUN + LANGUAGE.TAB in a RESOURCE subfolder.
         public const string CurseOfMonkeyIsland = "ScummV8/Curse of Monkey Island, The (1997)/CD";
+        public const string CurseOfMonkeyIslandPortuguese = "ScummV8/Curse of Monkey Island, The (1997)/Other Languages/Portuguese/CD";
 
         private static readonly string _root = FindRoot();
 

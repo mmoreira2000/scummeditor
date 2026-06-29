@@ -35,7 +35,7 @@ namespace ScummEditor.Engine.Structures.DataFile
             {
                 string typeRead = BinaryHelper.ConvertByteArrayToUTF8String(binaryReader.PeekBytes(4));
 
-                if (_gameInfo != null && _gameInfo.ScummVersion == 7)
+                if (_gameInfo != null && (_gameInfo.ScummVersion == 7 || _gameInfo.ScummVersion == 8))
                 {
                     LoadV7Child(binaryReader, typeRead, endPosition);
                     continue;
@@ -154,6 +154,12 @@ namespace ScummEditor.Engine.Structures.DataFile
                 {
                     child = new SoundBlockV7(this, "SOUN");
                 }
+                else if (tag == "RMSC")
+                {
+                    // v8 (The Curse of Monkey Island) holds a room's scripts/object code in a sibling RMSC
+                    // block (v7 kept them inside ROOM); type it so the text pipeline finds the scripts/OBCD.
+                    child = new RoomScriptsBlock(this);
+                }
                 else
                 {
                     child = new RawContainerBlock(this, tag);
@@ -169,10 +175,12 @@ namespace ScummEditor.Engine.Structures.DataFile
             Childrens.Add(gap);
         }
 
-        /// <summary>The block tags that appear directly inside a v7 LFLF (room disk block).</summary>
+        /// <summary>The block tags that appear directly inside a v7/v8 LFLF (room disk block). v8 adds
+        /// RMSC (the room-scripts block, holding the room's ENCD/EXCD/OBCD that v7 kept inside ROOM).</summary>
         private static bool IsKnownV7LflfTag(string tag)
         {
-            return tag == "ROOM" || tag == "SCRP" || tag == "SOUN" || tag == "AKOS" || tag == "CHAR";
+            return tag == "ROOM" || tag == "SCRP" || tag == "SOUN" || tag == "AKOS" || tag == "CHAR"
+                || tag == "RMSC";
         }
 
         /// <summary>Peeks the block header at the current position; true when the size is well-formed
@@ -215,7 +223,7 @@ namespace ScummEditor.Engine.Structures.DataFile
         private static bool IsKnownV7LflfTagBytes(byte[] b, int o)
         {
             return MatchTag(b, o, "ROOM") || MatchTag(b, o, "SCRP") || MatchTag(b, o, "SOUN")
-                || MatchTag(b, o, "AKOS") || MatchTag(b, o, "CHAR");
+                || MatchTag(b, o, "AKOS") || MatchTag(b, o, "CHAR") || MatchTag(b, o, "RMSC");
         }
 
         private static bool MatchTag(byte[] b, int o, string tag)

@@ -52,6 +52,54 @@ namespace ScummEditor.Engine.Encoders
             return _resultBitmap;
         }
 
+        /// <summary>
+        /// Decodes a raw BOMP RLE bitstream into a [width,height] palette-index matrix. The per-line format
+        /// (16le size + RLE; control bit0 = repeat-same-color, bits1-7 = count-1) is identical across v5-v8;
+        /// only the chunk header that precedes <paramref name="data"/> differs by version. Reused by the v8
+        /// object-image decoder (which has no ImageBomp/RoomBlock wrapper).
+        /// </summary>
+        public static byte[,] DecodeIndexMatrix(byte[] data, int width, int height)
+        {
+            var matrix = new byte[width, height];
+            if (data == null || data.Length == 0 || width <= 0 || height <= 0) return matrix;
+
+            var bsm = new BitStreamManager(data);
+            int col = 0, line = 0;
+            bool finished = false;
+            while (!finished && line < height)
+            {
+                uint lineSize = bsm.ReadUInt16();
+                int streamPosition = bsm.Position;
+                while ((bsm.Position - streamPosition) < (lineSize * 8))
+                {
+                    bool repeatSameColor = bsm.ReadBit();
+                    int count = bsm.ReadValue(7) + 1;
+                    if (count > width) count = width;
+
+                    if (repeatSameColor)
+                    {
+                        byte colorIndex = bsm.ReadByte();
+                        for (int j = 0; j < count; j++) PutPixel(matrix, ref col, ref line, width, colorIndex);
+                    }
+                    else
+                    {
+                        for (int j = 0; j < count; j++) PutPixel(matrix, ref col, ref line, width, bsm.ReadByte());
+                    }
+
+                    if ((col == 0 && line == height) || bsm.EndOfStream) { finished = true; break; }
+                }
+            }
+            return matrix;
+        }
+
+        private static void PutPixel(byte[,] matrix, ref int col, ref int line, int width, byte index)
+        {
+            if (line >= matrix.GetLength(1)) return;
+            matrix[col, line] = index;
+            col++;
+            if (col == width) { col = 0; line++; }
+        }
+
         public void Decode()
         {
             UsedIndexes = new List<int>();

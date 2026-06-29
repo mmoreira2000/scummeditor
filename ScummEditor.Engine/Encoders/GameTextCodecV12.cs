@@ -178,6 +178,13 @@ namespace ScummEditor.Engine.Encoders
                             error = "malformed control token at " + i;
                             return null;
                         }
+                        // 0x00 is the string terminator in every SCUMM version; embedding it mid-string would
+                        // truncate the game text at runtime (mirrors the v3-v6/v8 GameTextCodec guard).
+                        if (v == 0)
+                        {
+                            error = "cannot embed {x00} (the string terminator) in text";
+                            return null;
+                        }
                         bytes.Add((byte)v);
                         i += 5;
                         continue;

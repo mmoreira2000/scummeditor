@@ -41,7 +41,14 @@ namespace ScummEditor.Engine.Encoders
         /// </summary>
         public bool FeEscape { get; set; }
 
-        // FF/FE escape codes without an argument; all the others carry a 16-bit LE argument.
+        /// <summary>
+        /// Whether the argument-bearing 0xFF escape codes carry a 4-byte (32-bit LE) argument instead of
+        /// the 2-byte one. True ONLY for SCUMM v8 (The Curse of Monkey Island): its convertMessageToString
+        /// reads a uint32 per escape (codes 1/2/3/8 still take no argument). Defaults to false (v4-v7).
+        /// </summary>
+        public bool FourByteArgs { get; set; }
+
+        // FF/FE escape codes without an argument; all the others carry an argument (16-bit, or 32-bit on v8).
         private static readonly int[] NoArgCodes = { 1, 2, 3, 8 };
 
         private static readonly Dictionary<int, string> EscapeNames = new Dictionary<int, string>
@@ -168,16 +175,19 @@ namespace ScummEditor.Engine.Encoders
                     string name;
                     if (!EscapeNames.TryGetValue(code, out name)) name = "esc" + code;
 
+                    int argLen = FourByteArgs ? 4 : 2;
                     if (Array.IndexOf(NoArgCodes, (int)code) >= 0)
                     {
                         sb.Append('{').Append(prefix).Append(name).Append('}');
                         i += 2;
                     }
-                    else if (i + 3 < end)
+                    else if (i + 1 + argLen < end)
                     {
-                        int val = buf[i + 2] | (buf[i + 3] << 8);
+                        long val = FourByteArgs
+                            ? (uint)(buf[i + 2] | (buf[i + 3] << 8) | (buf[i + 4] << 16) | (buf[i + 5] << 24))
+                            : (buf[i + 2] | (buf[i + 3] << 8));
                         sb.Append('{').Append(prefix).Append(name).Append(':').Append(val).Append('}');
-                        i += 4;
+                        i += 2 + argLen;
                     }
                     else
                     {
@@ -260,6 +270,20 @@ namespace ScummEditor.Engine.Encoders
                     error = "invalid token: {" + token + "}";
                     return false;
                 }
+                // 0x00 is the string terminator in every SCUMM version; embedding it mid-string would
+                // silently truncate the game text at runtime (and desync the disassembler on rebuild).
+                if (raw == 0x00)
+                {
+                    error = "cannot embed {0x00} (the string terminator) in text";
+                    return false;
+                }
+                // In v8 a 0xFF byte leads an escape sequence, so a literal {0xFF} would be mis-read as one;
+                // the escape tokens (e.g. {int:N}, {verb:N}) must be used instead.
+                if (raw == 0xFF && FourByteArgs)
+                {
+                    error = "cannot embed a literal {0xFF} in v8 text; use the escape tokens instead";
+                    return false;
+                }
                 bytes.Add(raw);
                 return true;
             }
@@ -308,14 +332,20 @@ namespace ScummEditor.Engine.Encoders
             bytes.Add((byte)code);
             if (hasArg)
             {
-                int val;
-                if (!int.TryParse(argText, out val) || val < 0 || val > 0xFFFF)
+                long max = FourByteArgs ? 0xFFFFFFFFL : 0xFFFFL;
+                long val;
+                if (!long.TryParse(argText, out val) || val < 0 || val > max)
                 {
                     error = "invalid argument in {" + token + "}";
                     return false;
                 }
                 bytes.Add((byte)(val & 0xFF));
-                bytes.Add((byte)(val >> 8));
+                bytes.Add((byte)((val >> 8) & 0xFF));
+                if (FourByteArgs)
+                {
+                    bytes.Add((byte)((val >> 16) & 0xFF));
+                    bytes.Add((byte)((val >> 24) & 0xFF));
+                }
             }
             return true;
         }

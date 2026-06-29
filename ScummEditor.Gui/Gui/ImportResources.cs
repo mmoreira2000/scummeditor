@@ -75,10 +75,22 @@ namespace ScummEditor.Gui
             {
                 ImportV4(location);
             }
+            else if (version == 8)
+            {
+                ImportV8(location); // The Curse of Monkey Island (IMAG/WRAP/OFFS images, two data files)
+            }
             else
             {
                 ImportV5V6(location);
             }
+        }
+
+        /// <summary>Batch-imports edited backgrounds + object images into a v8 game (both COMI data files).</summary>
+        private void ImportV8(string location)
+        {
+            ShowProgress(location);
+            ScummV4GraphicsBatch.ImportReport report = ScummV8GraphicsBatch.Import(_scummFile, location, OnImportProgress);
+            ShowImportResult(report.Imported, report.Found, report.Errors);
         }
 
         /// <summary>Batch-imports edited GdiV1 tilemap images, z-planes and 0x57 costume frames into a v1 game.</summary>

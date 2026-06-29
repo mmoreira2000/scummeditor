@@ -80,10 +80,20 @@ namespace ScummEditor.Engine.Encoders
         {
             if (game == null || game.LoadedGameInfo == null) return;
 
+            // SCUMM v8 (The Curse of Monkey Island) keeps its translated dialogue in the external
+            // LANGUAGE.TAB (its in-container scripts are /TAG/ references = engine text, which would
+            // mislead the heuristic), so detect the language from the LANGUAGE.TAB entries.
+            if (game.LoadedGameInfo.ScummVersion == 8)
+            {
+                ScummLanguage v8 = DetectV8Language(game);
+                if (v8 != ScummLanguage.Unknown) game.LoadedGameInfo.Language = v8;
+                return;
+            }
+
             // SCUMM v7 (The Dig, Full Throttle) needs its own detector: The Dig keeps its dialogue in the
             // external LANGUAGE.BND (its in-container scripts are English engine text), while Full Throttle
             // keeps the translated dialogue in the container scripts. DetectV7Language routes each correctly.
-            if (game.LoadedGameInfo.ScummVersion >= 7)
+            if (game.LoadedGameInfo.ScummVersion == 7)
             {
                 ScummLanguage v7 = DetectV7Language(game);
                 if (v7 != ScummLanguage.Unknown) game.LoadedGameInfo.Language = v7;
@@ -109,6 +119,38 @@ namespace ScummEditor.Engine.Encoders
         /// Dig) have no bundle, so their translated dialogue is the in-container script text. Returns Unknown
         /// when nothing decides (e.g. a language with no word profile), so the caller leaves it unset.
         /// </summary>
+        /// <summary>
+        /// Detects a SCUMM v8 (The Curse of Monkey Island) edition's language from its LANGUAGE.TAB - the
+        /// external file that holds almost all of COMI's translated text. Uses the same word/high-byte
+        /// heuristic over the entries as the v7 bundle path. Returns Unknown when nothing decides.
+        /// </summary>
+        private static ScummLanguage DetectV8Language(ScummGameData game)
+        {
+            LanguageTabFile tab = null;
+            if (game.LocalizedTextFiles != null)
+            {
+                foreach (ILocalizedTextFile f in game.LocalizedTextFiles)
+                {
+                    if (f is LanguageTabFile t && t.IsValid) { tab = t; break; }
+                }
+            }
+            if (tab == null) return ScummLanguage.Unknown;
+
+            var texts = new System.Collections.Generic.List<string>(tab.Entries.Count);
+            foreach (LocalizedTextEntry e in tab.Entries) texts.Add(e.Text);
+
+            ScummLanguage detected;
+            try { detected = FromName(GameLanguageDetector.DetectFromStrings(texts)); }
+            catch { return ScummLanguage.Unknown; }
+
+            // COMI's CJK editions (Chinese, Korean) store double-byte text the high-byte heuristic reports as
+            // "Japanese"; COMI has no Japanese release, so that result is necessarily one of those two and we
+            // cannot tell them apart from the bytes alone - leave it Unknown rather than claim a wrong one.
+            // The Western editions (PT/FR/DE/IT/ES - the translation-relevant ones) are detected correctly.
+            if (detected == ScummLanguage.Japanese) return ScummLanguage.Unknown;
+            return detected;
+        }
+
         private static ScummLanguage DetectV7Language(ScummGameData game)
         {
             LanguageBundleFile bundle = null;

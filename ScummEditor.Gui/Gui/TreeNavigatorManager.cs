@@ -30,6 +30,7 @@ namespace ScummEditor.Gui
         private readonly NutFontControl _nutFontControl = new NutFontControl();
         private readonly ImuseBundleControl _imuseBundleControl = new ImuseBundleControl();
         private readonly LocalizedTextControl _localizedTextControl = new LocalizedTextControl();
+        private readonly ScummV8RoomImageControl _scummV8RoomImageControl = new ScummV8RoomImageControl();
         private readonly TreeView _treeView;
         private readonly Panel _displayPanel;
 
@@ -98,6 +99,7 @@ namespace ScummEditor.Gui
             _controlViewers.Add(typeof(DirectoryOfCostumes).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfScripts).Name, directoryOfItemsControlGeneric);
             _controlViewers.Add(typeof(DirectoryOfSounds).Name, directoryOfItemsControlGeneric);
+            _controlViewers.Add(typeof(DirectoryOfRoomScripts).Name, directoryOfItemsControlGeneric); // v8 DRSC
 
             var indexDetailsControl = new IndexDetailsControl();
             _controlViewers.Add(typeof(MaximumValues).Name, indexDetailsControl);
@@ -140,6 +142,10 @@ namespace ScummEditor.Gui
             else if (GameData.IndexFile is ScummV3OldBundleIndexFile)
             {
                 CreateOldBundleIndexTree((ScummV3OldBundleIndexFile)GameData.IndexFile);
+            }
+            else if (GameData.IndexFile is ScummV8IndexFile)
+            {
+                CreateScummV8IndexFileTree((ScummV8IndexFile)GameData.IndexFile);
             }
             else if (GameData.IndexFile is ScummV7IndexFile)
             {
@@ -459,6 +465,27 @@ namespace ScummEditor.Gui
             CreateNode(index.RawANAM, node);
         }
 
+        /// <summary>
+        /// Index tree for SCUMM v8 (The Curse of Monkey Island): the raw RNAM/MAXS blocks, the six typed
+        /// resource directories (DROO, the v8-only DRSC room-scripts directory, DSCR/DSOU/DCOS/DCHR), then
+        /// the raw DOBJ/AARY. The raw blocks are kept verbatim and shown with the generic block viewer.
+        /// </summary>
+        private void CreateScummV8IndexFileTree(ScummV8IndexFile index)
+        {
+            var node = _treeView.Nodes.Add("IndexFile", "Index File");
+
+            CreateNode(index.RawRNAM, node);
+            CreateNode(index.RawMAXS, node);
+            CreateNode(index.DROO, node);
+            CreateNode(index.DRSC, node);
+            CreateNode(index.DSCR, node);
+            CreateNode(index.DSOU, node);
+            CreateNode(index.DCOS, node);
+            CreateNode(index.DCHR, node);
+            CreateNode(index.RawDOBJ, node);
+            CreateNode(index.RawAARY, node);
+        }
+
         private void CreateScummIndexFileTree(ScummIndexFile scummV6IndexFile)
         {
             var node = _treeView.Nodes.Add("IndexFile", "Index File");
@@ -564,6 +591,18 @@ namespace ScummEditor.Gui
                 _localizedTextControl.SetData(localizedText, codePage);
                 _displayPanel.Controls.Add(_localizedTextControl);
                 _localizedTextControl.Dock = DockStyle.Fill;
+                return;
+            }
+
+            // v8 ROOM: a dedicated background/object/z-plane image viewer. RoomBlock is shared with v5/v6/v7
+            // (whose images are shown via the DiskBlock viewer), so this is gated to v8 - its SMAP/BOMP/ZPLN
+            // nesting is v8-specific and needs ScummV8ImageDecoder/Encoder.
+            var roomBlock = e.Node.Tag as RoomBlock;
+            if (roomBlock != null && GameData.LoadedGameInfo != null && GameData.LoadedGameInfo.ScummVersion == 8)
+            {
+                _scummV8RoomImageControl.SetAndRefreshData(roomBlock);
+                _displayPanel.Controls.Add(_scummV8RoomImageControl);
+                _scummV8RoomImageControl.Dock = DockStyle.Fill;
                 return;
             }
 

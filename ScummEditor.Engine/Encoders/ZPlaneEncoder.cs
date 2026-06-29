@@ -46,6 +46,31 @@ namespace ScummEditor.Engine.Encoders
             Encode();
         }
 
+        /// <summary>
+        /// Encodes a mask bitmap (black = masked) into the per-strip mask RLE, returning the strips without
+        /// the v5/v6 2-byte offset table (the v8 caller builds its own 4-byte leaf OFFS). Reuses the exact
+        /// strip codec; the v5/v6 RoomBlock path is untouched.
+        /// </summary>
+        public List<ZPlaneStripData> EncodeToStrips(Bitmap imageToEncode, int width, int height)
+        {
+            _imageToEncode = imageToEncode;
+            _width = (ushort)width;
+            _height = (ushort)height;
+            if (_imageToEncode.Width != _width || _imageToEncode.Height != _height)
+            {
+                throw new ImageEncodeException("The image must have the same size as ROOM/OBJ");
+            }
+
+            var strips = new List<ZPlaneStripData>();
+            int stripCount = _width / 8;
+            for (int i = 0; i < stripCount; i++)
+            {
+                _currentOffset = i * 8;
+                strips.Add(EncodeZPlaneStrip());
+            }
+            return strips;
+        }
+
         private void Encode()
         {
             if (_imageToEncode.Width != _width || _imageToEncode.Height != _height)

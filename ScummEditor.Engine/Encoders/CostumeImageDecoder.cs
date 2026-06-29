@@ -129,6 +129,10 @@ namespace ScummEditor.Engine.Encoders
                     {
                         currentLine = 0;
                         currentColumn++;
+                        // A run can overshoot the last column (some real frames, e.g. DOTT room 65 costume 1
+                        // frame 7); stop cleanly here instead of indexing column == Width on the next pixel
+                        // (the same guard the v4 decoder + ScummVM's byleRLEDecode already apply).
+                        if (currentColumn == _pictureData.Width) { finishDecode = true; break; }
                     }
                 }
                 if ((currentColumn == _pictureData.Width && currentLine == 0) || bitStreamManager.EndOfStream) finishDecode = true;

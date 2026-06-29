@@ -29,14 +29,18 @@ namespace ScummEditor.Engine.Encoders
         public static Result Disassemble(ObjectCode obcd)
         {
             var result = new Result();
+            int scummVersion = obcd.GameInfo != null ? obcd.GameInfo.ScummVersion : 0;
 
             // Verb-entry labels (and the label map fed to the disassembler). VerbEntryBase makes the
-            // offset math version-correct: VerbBlockOffset for v5/v6, -HeaderLength for v4.
+            // offset math version-correct: VerbBlockOffset for v5/v6/v7, VerbBlockOffset+8 for v8 (offsets
+            // relative to the VERB body), -HeaderLength for v4.
             var labels = new Dictionary<int, string>();
             foreach (VerbEntry entry in obcd.VerbEntries)
             {
                 int sliceOffset = obcd.VerbEntryBase + entry.Offset - obcd.VerbCodeOffset;
-                string name = entry.Id == 0xFF ? "verb_any" : "verb_0x" + entry.Id.ToString("X2");
+                // The wildcard/fallback verb id is 0xFFFFFFFF in v8 (stored as -1) and 0xFF in v4-v7.
+                bool isAny = scummVersion == 8 ? (uint)entry.Id == 0xFFFFFFFF : entry.Id == 0xFF;
+                string name = isAny ? "verb_any" : "verb_0x" + entry.Id.ToString("X2");
                 bool inRange = sliceOffset >= 0 && sliceOffset < obcd.VerbCodeLength;
 
                 result.Verbs.Add(new VerbLabel { Name = name, SliceOffset = sliceOffset, InRange = inRange });
@@ -51,7 +55,6 @@ namespace ScummEditor.Engine.Encoders
             var slice = new byte[obcd.VerbCodeLength];
             System.Array.Copy(obcd.RawContent, obcd.VerbCodeOffset, slice, 0, obcd.VerbCodeLength);
 
-            int scummVersion = obcd.GameInfo != null ? obcd.GameInfo.ScummVersion : 0;
             if (scummVersion == 3)
             {
                 bool isIndy3 = obcd.GameInfo != null && obcd.GameInfo.LoadedGame == Structures.ScummGame.IndianaJones3;
@@ -64,6 +67,12 @@ namespace ScummEditor.Engine.Encoders
             else if (scummVersion == 5)
             {
                 result.Code = Scumm5Disassembler.Disassemble(slice, 0, labels);
+            }
+            else if (scummVersion == 8)
+            {
+                // v8 is a fully remapped opcode table with 4-byte operands - it MUST use its own
+                // disassembler (same routing as GameTextManager.Disassemble), not the v6 fallback.
+                result.Code = ScummV8Disassembler.Disassemble(slice, 0, labels);
             }
             else
             {
