@@ -270,6 +270,20 @@ namespace ScummEditor.Engine.Encoders
                     error = "invalid token: {" + token + "}";
                     return false;
                 }
+                // 0x00 is the string terminator in every SCUMM version; embedding it mid-string would
+                // silently truncate the game text at runtime (and desync the disassembler on rebuild).
+                if (raw == 0x00)
+                {
+                    error = "cannot embed {0x00} (the string terminator) in text";
+                    return false;
+                }
+                // In v8 a 0xFF byte leads an escape sequence, so a literal {0xFF} would be mis-read as one;
+                // the escape tokens (e.g. {int:N}, {verb:N}) must be used instead.
+                if (raw == 0xFF && FourByteArgs)
+                {
+                    error = "cannot embed a literal {0xFF} in v8 text; use the escape tokens instead";
+                    return false;
+                }
                 bytes.Add(raw);
                 return true;
             }

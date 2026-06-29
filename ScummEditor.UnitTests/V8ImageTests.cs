@@ -217,6 +217,91 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableFact]
+        public void MultiStateObjectOffsTableSurvivesSizeChangingEdit()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            // Find a disk-0 object whose IMAG->WRAP holds 2+ SMAP states (a multi-state object), so a
+            // size-changing edit of state 0 shifts state 1 and the outer OFFS table must be rebuilt.
+            List<DiskBlock> lflfs = game.DataFile.GetLFLFs();
+            int roomIndex = -1, objectIndex = -1;
+            for (int i = 0; i < lflfs.Count && roomIndex < 0; i++)
+            {
+                RoomBlock room = lflfs[i].GetROOM();
+                List<BlockBase> obims = room.Childrens.Where(c => c.BlockType == "OBIM").ToList();
+                for (int j = 0; j < obims.Count; j++)
+                {
+                    BlockBase imag = obims[j].Childrens.FirstOrDefault(c => c.BlockType == "IMAG");
+                    BlockBase wrap = imag == null ? null : imag.Childrens.FirstOrDefault(c => c.BlockType == "WRAP");
+                    if (wrap != null && wrap.Childrens.Count(c => c.BlockType == "SMAP") >= 2)
+                    {
+                        roomIndex = i; objectIndex = j; break;
+                    }
+                }
+            }
+            Skip.If(roomIndex < 0, "no disk-0 multi-SMAP object found");
+            _out.WriteLine("editing multi-SMAP object: room index {0}, object index {1}", roomIndex, objectIndex);
+
+            var dec = new ScummV8ImageDecoder();
+            var enc = new ScummV8ImageEncoder();
+
+            // A maximally-compressible (flat) edit of state 0 - its SMAP shrinks, forcing the OFFS rebuild.
+            byte[,] edited;
+            using (Bitmap a = dec.DecodeObject(lflfs[roomIndex].GetROOM(), objectIndex))
+            {
+                Assert.NotNull(a);
+                edited = IndexedImageHelper.GetIndexMatrix(a);
+                Color[] palette = a.Palette.Entries;
+                byte mark = edited[0, 0];
+                for (int y = 0; y < edited.GetLength(1); y++)
+                    for (int x = 0; x < edited.GetLength(0); x++)
+                        edited[x, y] = mark;
+                using (Bitmap eb = IndexedImageHelper.FromIndexMatrix(edited, palette, -1))
+                {
+                    enc.EncodeObject(lflfs[roomIndex].GetROOM(), objectIndex, eb);
+                }
+            }
+
+            game.PostProcessChanges();
+
+            // Save + reload disk 0, then verify the OFFS table points exactly at each SMAP in the new layout.
+            ScummDataFile reparsed;
+            using (var ms = new MemoryStream())
+            {
+                game.DataFile.SaveToBinaryWriter(ms);
+                ms.Position = 0;
+                reparsed = new ScummDataFile(null, game.LoadedGameInfo);
+                reparsed.LoadFromBinaryReader(ms);
+            }
+
+            RoomBlock reloaded = reparsed.GetLFLFs()[roomIndex].GetROOM();
+            BlockBase rObim = reloaded.Childrens.Where(c => c.BlockType == "OBIM").ToList()[objectIndex];
+            BlockBase rWrap = rObim.Childrens.First(c => c.BlockType == "IMAG").Childrens.First(c => c.BlockType == "WRAP");
+            var rOffs = (RawContainerBlock)rWrap.Childrens.First(c => c.BlockType == "OFFS");
+
+            List<BlockBase> states = rWrap.Childrens.Where(c => c.BlockType != "OFFS").ToList();
+            Assert.Equal(states.Count * 4, rOffs.Contents.Length);
+            long offsBase = rOffs.BlockOffSet; // the engine reads each entry relative to the OFFS chunk start
+            for (int k = 0; k < states.Count; k++)
+            {
+                uint entry = (uint)(rOffs.Contents[k * 4] | (rOffs.Contents[k * 4 + 1] << 8)
+                    | (rOffs.Contents[k * 4 + 2] << 16) | (rOffs.Contents[k * 4 + 3] << 24));
+                long expected = states[k].BlockOffSet - offsBase;
+                Assert.True(entry == expected,
+                    string.Format("OFFS[{0}] = {1} but SMAP/BOMP state is at {2} (stale table = engine reads the wrong image)", k, entry, expected));
+            }
+
+            // And state 0 still decodes to the edited (flat) image.
+            using (Bitmap rb = dec.DecodeObject(reloaded, objectIndex))
+            {
+                Assert.NotNull(rb);
+                Assert.True(MatrixEquals(edited, IndexedImageHelper.GetIndexMatrix(rb)),
+                    "the edited multi-state object's state 0 did not survive save+reload");
+            }
+        }
+
         private static bool MatrixEquals(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;

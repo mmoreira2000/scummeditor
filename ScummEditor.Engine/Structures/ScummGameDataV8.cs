@@ -69,7 +69,14 @@ namespace ScummEditor.Engine.Structures
             {
                 List<DiskBlock> lflfs = DataDisks[d].Tree.GetLFLFs();
                 RoomOffsetTable loff = DataDisks[d].Tree.GetLOFF();
-                for (int k = 0; k < lflfs.Count && k < loff.Rooms.Count; k++)
+                // ScummVM rejects a v8 file whose LFLF and LOFF counts differ, so surface it at load time
+                // (the save path already throws on the same mismatch) instead of silently linking a prefix
+                // and leaving the surplus rooms with stale, unrelocated index offsets.
+                if (lflfs.Count != loff.Rooms.Count)
+                {
+                    throw new InvalidFileFormatException("v8: the number of LFLF blocks does not match the LOFF table.");
+                }
+                for (int k = 0; k < lflfs.Count; k++)
                 {
                     int roomNumber = loff.Rooms[k].Id;
                     // A room duplicated byte-identically on both disks (COMI's menu rooms 1/3/6/72/92/93)

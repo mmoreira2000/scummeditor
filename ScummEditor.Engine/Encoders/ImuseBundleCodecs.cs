@@ -478,7 +478,10 @@ namespace ScummEditor.Engine.Encoders
                 System.Array.Copy(src, s, dst, 0, copy);
                 rawBase = copy;
                 s += copy;
-                outputSamplesLeft -= firstWord / 2;
+                // Decrement by the SAME (possibly clamped) byte count we copied so the sample budget and the
+                // source pointer stay consistent (ScummVM uses the unclamped firstWord, but real COMI blocks
+                // never take this path - firstWord is always 0 - so consistency here is the safe choice).
+                outputSamplesLeft -= copy / 2;
             }
             else
             {

@@ -528,7 +528,14 @@ namespace ScummEditor.Engine.Encoders
                     else if (script.BlockType == "EXCD")
                         list.Add(new Source { Id = lf + ".EXCD" + (excd++).ToString("D3"), Script = script });
                     else if (script.BlockType == "LSCR")
-                        list.Add(new Source { Id = lf + ".LSCR" + Math.Max(script.ScriptId, 0).ToString("D3"), Script = script });
+                    {
+                        // Key by the script id, but disambiguate the (malformed-container) case of two LSCRs
+                        // with the same/unknown id in one room, so each gets a unique, stable source id.
+                        string lscr = "LSCR" + Math.Max(script.ScriptId, 0).ToString("D3");
+                        string baseLscr = lscr;
+                        for (int dup = 2; !usedLabels.Add(lscr); dup++) lscr = baseLscr + "x" + dup;
+                        list.Add(new Source { Id = lf + "." + lscr, Script = script });
+                    }
                     continue;
                 }
 

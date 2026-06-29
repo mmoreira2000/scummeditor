@@ -63,5 +63,32 @@ namespace ScummEditor.UnitTests
             // wrong opcode or operand width - exactly what this gate exists to catch.
             Assert.Equal(scripts.Count, decoded);
         }
+
+        [Fact]
+        public void HandlesArrayIncDecStopObjectScriptAndStartMusic()
+        {
+            // Regression for the opcodes the adversarial review found missing (0x72 wordArrayInc,
+            // 0x73 wordArrayDec, 0x80 stopObjectScript, 0xB0 startMusic): each must decode (no early stop),
+            // or any script using them would be excluded from text editing (DecodedToEnd gates the rebuild).
+            byte[] local0 = { 0x00, 0x00, 0x00, 0x40 }; // v8 var Local[0] (bit 30 set)
+            var code = new List<byte>();
+            code.AddRange(new byte[] { 0x01, 0x05, 0x00, 0x00, 0x00 });   // pushWord 5 (array index)
+            code.Add(0x72); code.AddRange(local0);                        // wordArrayInc Local[0]
+            code.AddRange(new byte[] { 0x01, 0x05, 0x00, 0x00, 0x00 });   // pushWord 5
+            code.Add(0x73); code.AddRange(local0);                        // wordArrayDec Local[0]
+            code.AddRange(new byte[] { 0x01, 0x07, 0x00, 0x00, 0x00 });   // pushWord 7
+            code.Add(0x80);                                               // stopObjectScript
+            code.AddRange(new byte[] { 0x01, 0x03, 0x00, 0x00, 0x00 });   // pushWord 3
+            code.Add(0xB0);                                               // startMusic
+
+            ScummV6Disassembler.Result result = ScummV8Disassembler.Disassemble(code.ToArray(), 0);
+
+            Assert.True(result.DecodedToEnd, "synthetic v8 bytecode did not decode to the end");
+            Assert.Empty(result.UnknownOpcodes);
+            Assert.Contains("++", result.Listing);
+            Assert.Contains("--", result.Listing);
+            Assert.Contains("stopObjectScript", result.Listing);
+            Assert.Contains("startMusic", result.Listing);
+        }
     }
 }

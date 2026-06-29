@@ -302,6 +302,8 @@ namespace ScummEditor.Engine.Encoders
                 case 0x6F: Emit(offset, ReadVarName() + "--;"); break;                         // wordVarDec
                 case 0x70: DimArray(offset, "dimArray"); break;
                 case 0x71: { string val = StripParens(Pop()); string a = ReadVarName(); string idx = Pop(); Emit(offset, a + "[" + idx + "] = " + val + ";"); break; } // wordArrayWrite
+                case 0x72: { string a = ReadVarName(); string idx = Pop(); Emit(offset, a + "[" + idx + "]++;"); break; } // wordArrayInc
+                case 0x73: { string a = ReadVarName(); string idx = Pop(); Emit(offset, a + "[" + idx + "]--;"); break; } // wordArrayDec
                 case 0x74: DimArray(offset, "dim2dimArray"); break;
                 case 0x75: { string val = StripParens(Pop()); string idx = Pop(); string a = ReadVarName(); string b = Pop(); Emit(offset, a + "[" + b + "][" + idx + "] = " + val + ";"); break; } // wordArrayIndexedWrite
                 case 0x76: ArrayOps(offset); break;
@@ -314,6 +316,7 @@ namespace ScummEditor.Engine.Encoders
                 case 0x7D: { string a = PopStackList(); string s = Pop(); string f = Pop(); Emit(offset, "jumpToScript(" + s + ", " + f + ", " + a + ");"); break; }
                 case 0x7E: StmtCall(offset, "return", 1); break;
                 case 0x7F: { string a = PopStackList(); string e = Pop(); string en = Pop(); string s = Pop(); Emit(offset, "startObject(" + s + ", " + en + ", " + e + ", " + a + ");"); break; }
+                case 0x80: StmtCall(offset, "stopObjectScript", 1); break;
                 case 0x81: { string a = PopStackList(); Emit(offset, "beginCutscene(" + a + ");"); break; }
                 case 0x82: Emit(offset, "endCutscene();"); break;
                 case 0x83: StmtCall(offset, "freezeUnfreeze", 1); break;
@@ -360,6 +363,7 @@ namespace ScummEditor.Engine.Encoders
                 case 0xAD: SubOp(offset, "cameraOps", CameraOps); break;
                 case 0xAE: SubOpMaybeString(offset, "verbOps", 0x99, VerbOps, "verbName"); break;    // verbLoadString -> inline string
                 case 0xAF: StmtCall(offset, "startSound", 1); break;
+                case 0xB0: StmtCall(offset, "startMusic", 1); break;
                 case 0xB1: StmtCall(offset, "stopSound", 1); break;
                 case 0xB2: Emit(offset, "soundKludge(" + PopStackList() + ");"); break;
                 case 0xB3: SubOp(offset, "systemOps", SystemOps); break;
@@ -543,8 +547,8 @@ namespace ScummEditor.Engine.Encoders
 
         private static readonly Dictionary<int, string> CursorCommand = new Dictionary<int, string>
         {
-            {0xDC,"cursorOn"}, {0xDD,"cursorOff"}, {0xDE,"userPutOn"}, {0xDF,"userPutOff"},
-            {0xE0,"softCursorOn"}, {0xE1,"softCursorOff"}, {0xE2,"softUserputOn"}, {0xE3,"softUserputOff"},
+            {0xDC,"cursorOn"}, {0xDD,"cursorOff"}, {0xDE,"softCursorOn"}, {0xDF,"softCursorOff"},
+            {0xE0,"userPutOn"}, {0xE1,"userPutOff"}, {0xE2,"softUserputOn"}, {0xE3,"softUserputOff"},
             {0xE4,"setCursorImg"}, {0xE5,"setCursorHotspot"}, {0xE6,"makeCursorColorTransparent"},
             {0xE7,"initCharset"}, {0xE8,"charsetColors"}, {0xE9,"setCursorPosition"}
         };
@@ -612,7 +616,7 @@ namespace ScummEditor.Engine.Encoders
 
         private static readonly Dictionary<int, string> DimNames = new Dictionary<int, string>
         {
-            {0x0A,"int"}, {0x0B,"string"}, {0xCA,"undim"}
+            {0x0A,"int"}, {0x0B,"string"}, {0x0C,"undim"} // SO_INT_ARRAY/SO_STRING_ARRAY/SO_UNDIM_ARRAY
         };
 
         private static readonly Dictionary<int, string> PrintOps = new Dictionary<int, string>

@@ -60,10 +60,72 @@ namespace ScummEditor.Engine.Encoders
             }
 
             byte[,] matrix = IndexedImageHelper.GetIndexMatrix(bitmap);
-            byte transparency = FindUnusedIndex(matrix, width, height); // force non-transparent codecs (index-preserving)
+            int unused = FindUnusedIndex(matrix, width, height); // an index no pixel uses -> non-transparent codecs
 
-            List<StripData> strips = new ImageEncoder().EncodeStrips(matrix, width, height, transparency, ImageEncoder.EncodeTypeSettings.AutoDetect);
+            // Pick the transparency sentinel so the per-strip codecs come out NON-transparent and every
+            // palette index is reproduced exactly. If all 256 indexes are present there is no free value,
+            // so fall back to the uncompressed codec (0x01), which has no transparent variant - lossless at
+            // the cost of size (a rare full-256-colour strip). Otherwise a transparent codec would make the
+            // engine skip the pixels equal to the sentinel, leaving holes.
+            byte transparency;
+            ImageEncoder.EncodeTypeSettings settings;
+            if (unused < 0)
+            {
+                transparency = 0; // unused by the uncompressed codec
+                settings = ImageEncoder.EncodeTypeSettings.Uncompressed;
+            }
+            else
+            {
+                transparency = (byte)unused;
+                settings = ImageEncoder.EncodeTypeSettings.AutoDetect;
+            }
+
+            List<StripData> strips = new ImageEncoder().EncodeStrips(matrix, width, height, transparency, settings);
             leafBlock.Contents = BuildStripLeaf(strips);
+
+            // A size-changing re-encode of this SMAP shifts every later SMAP/BOMP state in the same
+            // IMAG->WRAP, so the WRAP's OFFS state table (which the engine reads to locate each state's
+            // image - see ScummVM getObjectImage) must be rebuilt from the new child sizes.
+            RebuildOuterOffsTable(imag);
+        }
+
+        /// <summary>
+        /// Rebuilds the IMAG->WRAP OFFS state table from the (recomputed) sizes of its SMAP/BOMP children.
+        /// Each table entry is a state's image cumulative byte offset from the WRAP body start (= OFFS chunk
+        /// start), in file order; entry[0] = the OFFS chunk size, entry[i] = entry[i-1] + child[i-1] size.
+        /// ScummVM reads state k from this table to find its SMAP (object.cpp getObjectImage), so without
+        /// this a size-changing edit of one state would corrupt every later state of a multi-state object.
+        /// A single-state image rebuilds to the same (correct) bytes, so this is always safe to run.
+        /// </summary>
+        private static void RebuildOuterOffsTable(BlockBase imag)
+        {
+            BlockBase wrap = ScummV8ImageDecoder.FindChild(imag, "WRAP");
+            if (wrap == null) return;
+            var offs = ScummV8ImageDecoder.FindChild(wrap, "OFFS") as RawContainerBlock;
+            if (offs == null || offs.Contents == null) return;
+
+            // Refresh every child's size from the just-edited subtree (the save pipeline recomputes sizes
+            // later too, but the offsets here need the up-to-date sizes now).
+            wrap.CalculateBlockSize();
+
+            int stateCount = wrap.Childrens.Count(c => c.BlockType != "OFFS");
+            if (stateCount * 4 != offs.Contents.Length) return; // unexpected layout - leave it untouched
+
+            var table = new byte[stateCount * 4];
+            long cumulative = 0;
+            int entry = 0;
+            foreach (BlockBase child in wrap.Childrens)
+            {
+                if (child.BlockType == "OFFS") { cumulative += child.BlockSize; continue; }
+                uint off = (uint)cumulative;
+                table[entry * 4] = (byte)(off & 0xFF);
+                table[entry * 4 + 1] = (byte)((off >> 8) & 0xFF);
+                table[entry * 4 + 2] = (byte)((off >> 16) & 0xFF);
+                table[entry * 4 + 3] = (byte)((off >> 24) & 0xFF);
+                entry++;
+                cumulative += child.BlockSize;
+            }
+            offs.Contents = table;
         }
 
         /// <summary>
@@ -97,16 +159,16 @@ namespace ScummEditor.Engine.Encoders
         }
 
         /// <summary>A palette index no pixel uses (so the strip codecs come out non-transparent and the
-        /// index matrix is preserved exactly); falls back to 0 if all 256 indexes are present.</summary>
-        private static byte FindUnusedIndex(byte[,] matrix, int width, int height)
+        /// index matrix is preserved exactly); -1 when all 256 indexes are present (no free value).</summary>
+        private static int FindUnusedIndex(byte[,] matrix, int width, int height)
         {
             var used = new bool[256];
             for (int y = 0; y < height; y++)
                 for (int x = 0; x < width; x++)
                     used[matrix[x, y]] = true;
             for (int i = 255; i >= 0; i--)
-                if (!used[i]) return (byte)i;
-            return 0;
+                if (!used[i]) return i;
+            return -1;
         }
     }
 }
