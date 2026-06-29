@@ -80,11 +80,10 @@ namespace ScummEditor.Engine.Encoders
                 }
                 if (verbOffsets.Count == 0) continue;
                 verbOffsets.Sort();
-                int objEnd = NextBoundaryAbove(boundaries, objptr, data.Length);
                 for (int v = 0; v < verbOffsets.Count; v++)
                 {
                     int start = verbOffsets[v];
-                    int end = v + 1 < verbOffsets.Count ? verbOffsets[v + 1] : objEnd;
+                    int end = VerbSegmentEnd(boundaries, verbOffsets, v, data.Length);
                     AddBytecodeStrings(entries, data, start, end, oid + ".v" + v.ToString("D2"), codec, isV1);
                 }
             }
@@ -124,10 +123,74 @@ namespace ScummEditor.Engine.Encoders
         {
             // Decode with the Portuguese accent map so the team sees/edits accented letters directly, and
             // write that map into the editable "; charmap:" header (the slots match the EXE-font edits).
-            GameTextCodecV12 codec = GameTextCodecV12.Portuguese();
+            // BUT drop any accent whose slot byte the game itself uses as a literal glyph - some games do
+            // (e.g. the save-game UI labels "Game A*@" use '*' = 0x2A, the 'u-acute' slot). Keeping such a
+            // mapping would decode that byte as a false accent in the export ("Game A<u-acute>@") and the
+            // header would advertise a slot that is not actually free. Dropping it keeps the byte literal and
+            // the header honest; the dropped accent has no font slot for this game (the translator can remap
+            // it to a free slot in the header if they need it). Slots the game does not use are kept as-is.
+            GameTextCodecV12 codec = PruneAccentSlotsUsedByGame(game, GameTextCodecV12.Portuguese());
             List<GameTextEntry> entries = Extract(game, codec);
             GameTextManager.WriteEntriesFile(entries, path, codec.ToAccentSpec(), gameLabel);
             return entries.Count;
+        }
+
+        /// <summary>
+        /// Returns the charmap codec with every accent removed whose slot byte appears as a literal glyph in
+        /// the game's own extracted text. Detection decodes with the PLAIN codec (so slot bytes show as their
+        /// literal character), skipping {tokens}. Returns the input unchanged when no slot collides.
+        /// </summary>
+        private static GameTextCodecV12 PruneAccentSlotsUsedByGame(ScummGameData game, GameTextCodecV12 full)
+        {
+            var slotBytes = AccentSlotBytes(full);
+            if (slotBytes.Count == 0) return full;
+
+            var used = new HashSet<int>();
+            foreach (GameTextEntry e in Extract(game, GameTextCodecV12.Default()))
+            {
+                string t = e.Text ?? "";
+                for (int i = 0; i < t.Length; i++)
+                {
+                    char ch = t[i];
+                    if (ch == '{')
+                    {
+                        if (i + 1 < t.Length && t[i + 1] == '{') { i++; continue; } // literal brace "{{"
+                        int close = t.IndexOf('}', i);
+                        if (close > i) { i = close; continue; }                       // {xNN} token
+                    }
+                    if (slotBytes.Contains(ch)) used.Add(ch);
+                }
+            }
+            if (used.Count == 0) return full;
+
+            var kept = new List<string>();
+            foreach (string token in full.ToAccentSpec().Split(' '))
+            {
+                int slot = SlotByteOf(token);
+                if (slot < 0 || !used.Contains(slot)) kept.Add(token);
+            }
+            return GameTextCodecV12.FromAccentSpec(string.Join(" ", kept));
+        }
+
+        private static HashSet<int> AccentSlotBytes(GameTextCodecV12 codec)
+        {
+            var slots = new HashSet<int>();
+            foreach (string token in codec.ToAccentSpec().Split(' '))
+            {
+                int slot = SlotByteOf(token);
+                if (slot >= 0) slots.Add(slot);
+            }
+            return slots;
+        }
+
+        /// <summary>The slot byte of a "char=0xNN" charmap token, or -1 if the token has no 0xNN part.</summary>
+        private static int SlotByteOf(string token)
+        {
+            if (string.IsNullOrEmpty(token)) return -1;
+            int x = token.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
+            if (x < 0) return -1;
+            try { return Convert.ToInt32(token.Substring(x + 2), 16); }
+            catch { return -1; }
         }
 
         /// <summary>Parses an edited translation file and imports it into the v2 game (byte-safe).</summary>
@@ -205,11 +268,16 @@ namespace ScummEditor.Engine.Encoders
                 string id = lf + ".OBJ" + room.ObjectId(i).ToString("D3") + ".name";
                 string newText;
                 if (!idToText.TryGetValue(id, out newText)) continue;
+                int oldLen = ZeroTerminatedLength(data, nameOffset);
+                // Skip when the decoded TEXT is unchanged (see AddBytecodeEdit): the codec's folded trailing
+                // space makes a re-encode render-identical but not byte-identical, so a byte compare would flag
+                // an untouched name as changed on a no-op import.
+                string originalText = codec.Decode(data, nameOffset, oldLen);
+                if (newText == originalText) continue; // unchanged - keep the original bytes
                 string err;
                 byte[] content = codec.Encode(newText, out err);
                 if (content == null) { report.Errors.Add(id + ": " + err); continue; }
-                int oldLen = ZeroTerminatedLength(data, nameOffset);
-                if (SliceEquals(data, nameOffset, oldLen, content)) continue; // unchanged
+                if (SliceEquals(data, nameOffset, oldLen, content)) continue; // re-encode happens to match
                 edits.Add(new Edit { Offset = nameOffset, OldLen = oldLen, NewBytes = content, SizeWordOffset = -1 });
             }
         }
@@ -235,11 +303,10 @@ namespace ScummEditor.Engine.Encoders
                 }
                 if (verbOffsets.Count == 0) continue;
                 verbOffsets.Sort();
-                int objEnd = NextBoundaryAbove(boundaries, objptr, data.Length);
                 for (int v = 0; v < verbOffsets.Count; v++)
                 {
                     int start = verbOffsets[v];
-                    int end = v + 1 < verbOffsets.Count ? verbOffsets[v + 1] : objEnd;
+                    int end = VerbSegmentEnd(boundaries, verbOffsets, v, data.Length);
                     AddBytecodeEdit(df, data, start, end, -1, oid + ".v" + v.ToString("D2"), idToText, codec, edits, report, isV1);
                 }
             }
@@ -283,11 +350,18 @@ namespace ScummEditor.Engine.Encoders
                 string id = idPrefix + ".t" + k.ToString("D3");
                 string newText;
                 if (!idToText.TryGetValue(id, out newText)) continue;
+                int contentLen = sref.Length - (sref.Terminated ? 1 : 0);
+                // Skip when the TEXT is unchanged, not when the re-encoded bytes match. The v1/v2 codec folds a
+                // trailing space into the preceding glyph's 0x80 bit, so decoding then re-encoding an untouched
+                // string is render-identical but not byte-identical; comparing bytes would flag every such line
+                // as "changed" and rebuild the block on a no-op import. Comparing the decoded text keeps an
+                // unedited import a true no-op (and leaves the original folded bytes in place).
+                string originalText = codec.Decode(slice, sref.Offset, contentLen);
+                if (newText == originalText) continue; // unchanged - keep the original bytes
                 string err;
                 byte[] content = codec.Encode(newText, out err);
                 if (content == null) { report.Errors.Add(id + ": " + err); continue; }
-                int contentLen = sref.Length - (sref.Terminated ? 1 : 0);
-                if (SliceEquals(slice, sref.Offset, contentLen, content)) continue; // unchanged
+                if (SliceEquals(slice, sref.Offset, contentLen, content)) continue; // re-encode happens to match
                 replacements[k] = content;
             }
             if (replacements.Count == 0) return;
@@ -383,6 +457,24 @@ namespace ScummEditor.Engine.Encoders
             int best = fallback;
             foreach (int x in boundaries) if (x > offset && x < best) best = x;
             return best;
+        }
+
+        /// <summary>
+        /// End offset for one object verb-code segment (verbOffsets[index]). The boundaries set includes every
+        /// object's NAME string, and a name can be packed AFTER the verb code (the common case - the name then
+        /// bounds the last segment), BEFORE it (e.g. Maniac room 44 "placa": name@objptr+18, verb@objptr+24),
+        /// or BETWEEN two verbs. Bounding each segment above its OWN start (not above objptr) skips a name that
+        /// precedes the segment, while NextBoundaryAbove still stops the segment at a name/object that follows
+        /// it; the segment is then capped at the next verb entry. Mirrors ScummV3OldTextManager's per-segment
+        /// bounding. Bounding above objptr instead would, in the name-first case, pick that leading name and
+        /// produce an empty range that silently drops every string in the verb code. verbOffsets is sorted.
+        /// </summary>
+        private static int VerbSegmentEnd(List<int> boundaries, List<int> verbOffsets, int index, int fallback)
+        {
+            int start = verbOffsets[index];
+            int end = NextBoundaryAbove(boundaries, start, fallback);
+            if (index + 1 < verbOffsets.Count && verbOffsets[index + 1] < end) end = verbOffsets[index + 1];
+            return end;
         }
 
         /// <summary>End of a global script: its [size:u16] word when consistent with the next packed resource, else that resource.</summary>

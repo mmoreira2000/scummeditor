@@ -33,6 +33,7 @@ namespace ScummEditor.Engine.Encoders
         private readonly List<ScummV6Disassembler.JumpRef> _jumps = new List<ScummV6Disassembler.JumpRef>();
         private IDictionary<int, string> _namedLabels;
         private bool _stopped;
+        private bool _truncatedAtEnd;
 
         private struct Line
         {
@@ -78,17 +79,28 @@ namespace ScummEditor.Engine.Encoders
                 }
                 catch (IndexOutOfRangeException)
                 {
-                    Emit(offset, "; <truncated while decoding 0x" + op.ToString("X2") + ">");
+                    // The buffer ended in the middle of a fixed-operand opcode. Inline strings are read with a
+                    // bounded loop and never throw, so this is never a truncated string - it is an incomplete
+                    // trailing instruction, typically dead code packed right after a stopScript that the engine
+                    // never executes (real games leave a resource a byte or two short of its last instruction).
+                    // There are no strings or jump targets beyond it, so for the text pipeline the slice is
+                    // effectively decoded to the end: the strings/jumps are all found, and RebuildCode preserves
+                    // the partial tail verbatim. Treat it as a clean end rather than a desync (which would
+                    // needlessly exclude the whole block from editing).
+                    Emit(offset, "; <truncated while decoding 0x" + op.ToString("X2") + " at end of buffer>");
                     _stopped = true;
+                    _truncatedAtEnd = true;
                 }
             }
 
             return new ScummV6Disassembler.Result
             {
                 Listing = Render(),
-                DecodedToEnd = !_stopped && _pos >= _code.Length,
+                // A clean run to the end, or a benign mid-instruction truncation at the very end with no
+                // unknown opcode along the way (an unknown opcode is a real desync and keeps this false).
+                DecodedToEnd = (!_stopped && _pos >= _code.Length) || (_truncatedAtEnd && _unknown.Count == 0),
                 UnknownOpcodes = _unknown,
-                BytesDecoded = _pos - startOffset,
+                BytesDecoded = System.Math.Min(_pos, _code.Length) - startOffset,
                 Strings = _strings,
                 Jumps = _jumps
             };
