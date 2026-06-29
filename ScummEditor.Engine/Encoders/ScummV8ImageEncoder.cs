@@ -41,7 +41,44 @@ namespace ScummEditor.Engine.Encoders
             int width = (int)ScummV8ImageDecoder.ReadUInt32LE(imhd, 56);
             int height = (int)ScummV8ImageDecoder.ReadUInt32LE(imhd, 60);
 
-            ReplaceImag(ScummV8ImageDecoder.FindChild(obim, "IMAG"), width, height, bitmap, "object");
+            BlockBase imag = ScummV8ImageDecoder.FindChild(obim, "IMAG");
+            if (imag == null) throw new ImageEncodeException("the v8 object has no IMAG image to replace");
+
+            // SMAP-coded object: re-encode the strip leaf. BOMP-coded object (verb GUI/cursors/overlays):
+            // re-encode the BOMP chunk directly under IMAG/WRAP.
+            if (ScummV8ImageDecoder.FindStripLeaf(imag) != null) ReplaceImag(imag, width, height, bitmap, "object");
+            else ReplaceBomp(imag, bitmap, "object");
+        }
+
+        /// <summary>
+        /// Re-encodes an edited BOMP object image (state 0) back into its BOMP chunk under IMAG/WRAP and
+        /// rebuilds the outer OFFS state table (so a size change shifts the later states correctly). The BOMP
+        /// body is [w:4 LE][h:4 LE][RLE], reusing the shared BOMP line codec.
+        /// </summary>
+        private static void ReplaceBomp(BlockBase imag, Bitmap bitmap, string what)
+        {
+            RawContainerBlock bomp = ScummV8ImageDecoder.FindBompLeaf(imag, 0);
+            if (bomp == null || bomp.Contents == null || bomp.Contents.Length < 8)
+                throw new ImageEncodeException("the v8 " + what + " has no SMAP or BOMP image to replace");
+
+            int w = (int)ScummV8ImageDecoder.ReadUInt32LE(bomp.Contents, 0);
+            int h = (int)ScummV8ImageDecoder.ReadUInt32LE(bomp.Contents, 4);
+
+            if (!IndexedImageHelper.IsIndexed(bitmap))
+                throw new ImageEncodeException("The image must be an indexed (palette-based) PNG so the original palette indexes are preserved. Re-export it and edit it without converting to RGB.");
+            if (bitmap.Width != w || bitmap.Height != h)
+                throw new ImageEncodeException(string.Format("The image must be {0}x{1} (the BOMP {2} size); got {3}x{4}.", w, h, what, bitmap.Width, bitmap.Height));
+
+            byte[,] matrix = IndexedImageHelper.GetIndexMatrix(bitmap);
+            byte[] rle = BompImageEncoder.EncodeIndexMatrix(matrix, w, h);
+
+            var output = new byte[8 + rle.Length];
+            output[0] = (byte)(w & 0xFF); output[1] = (byte)((w >> 8) & 0xFF); output[2] = (byte)((w >> 16) & 0xFF); output[3] = (byte)((w >> 24) & 0xFF);
+            output[4] = (byte)(h & 0xFF); output[5] = (byte)((h >> 8) & 0xFF); output[6] = (byte)((h >> 16) & 0xFF); output[7] = (byte)((h >> 24) & 0xFF);
+            System.Array.Copy(rle, 0, output, 8, rle.Length);
+            bomp.Contents = output;
+
+            RebuildOuterOffsTable(imag);
         }
 
         private static void ReplaceImag(BlockBase imag, int width, int height, Bitmap bitmap, string what)

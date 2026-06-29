@@ -50,7 +50,28 @@ namespace ScummEditor.Engine.Encoders
             BlockBase imag = FindChild(obim, "IMAG");
             if (imag == null) return null; // imageless object
 
-            return DecodeImag(imag, width, height, ReadRoomPalette(room));
+            // SMAP-coded object (the common case).
+            if (FindStripLeaf(imag) != null) return DecodeImag(imag, width, height, ReadRoomPalette(room));
+
+            // BOMP-coded object (verb GUI, cursors, overlays): IMAG->WRAP->{OFFS, BOMP[state]...}, the BOMP
+            // is a direct child of WRAP (not wrapped in BSTR) and carries its own [w:4 LE][h:4 LE] header.
+            RawContainerBlock bomp = FindBompLeaf(imag, 0);
+            if (bomp != null) return DecodeBomp(bomp.Contents, ReadRoomPalette(room));
+
+            return null;
+        }
+
+        /// <summary>Decodes a v8 BOMP chunk body ([w:4 LE][h:4 LE][RLE]) to a bitmap via the shared BOMP codec.</summary>
+        private static Bitmap DecodeBomp(byte[] bomp, Color[] palette)
+        {
+            if (bomp == null || bomp.Length < 8) return null;
+            int w = (int)ReadUInt32LE(bomp, 0);
+            int h = (int)ReadUInt32LE(bomp, 4);
+            if (w <= 0 || h <= 0 || w > 8192 || h > 8192) return null;
+            var data = new byte[bomp.Length - 8];
+            Array.Copy(bomp, 8, data, 0, data.Length);
+            byte[,] matrix = BompImageDecoder.DecodeIndexMatrix(data, w, h);
+            return IndexedImageHelper.FromIndexMatrix(matrix, palette, -1);
         }
 
         /// <summary>How many object images (OBIM blocks) the room has.</summary>
@@ -140,6 +161,23 @@ namespace ScummEditor.Engine.Encoders
             if (smap == null) return null;
             BlockBase bstr = FindChild(smap, "BSTR");
             return FindChild(bstr ?? smap, "WRAP") as RawContainerBlock;
+        }
+
+        /// <summary>The <paramref name="state"/>-th BOMP chunk directly under IMAG/WRAP (objects use one BOMP
+        /// per image state, siblings of the OFFS table), or null when the IMAG carries no BOMP. Shared with
+        /// the encoder.</summary>
+        internal static RawContainerBlock FindBompLeaf(BlockBase imag, int state)
+        {
+            BlockBase wrap = FindChild(imag, "WRAP");
+            if (wrap == null) return null;
+            int idx = 0;
+            foreach (BlockBase c in wrap.Childrens)
+            {
+                if (c.BlockType != "BOMP") continue;
+                if (idx == state) return c as RawContainerBlock;
+                idx++;
+            }
+            return null;
         }
 
         private static byte[] FindDescendantLeaf(BlockBase block, string tag)

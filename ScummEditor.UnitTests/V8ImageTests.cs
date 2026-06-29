@@ -302,6 +302,118 @@ namespace ScummEditor.UnitTests
             }
         }
 
+        [SkippableFact]
+        public void BompObjectsDecodeAndReEncodeLossless()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            var dec = new ScummV8ImageDecoder();
+            var enc = new ScummV8ImageEncoder();
+            int decoded = 0, roundTripped = 0;
+
+            foreach (DiskBlock lflf in game.DataFile.GetLFLFs())
+            {
+                RoomBlock room = lflf.GetROOM();
+                List<BlockBase> obims = room.Childrens.Where(c => c.BlockType == "OBIM").ToList();
+                for (int j = 0; j < obims.Count && roundTripped < 12; j++)
+                {
+                    if (!IsBompObject(obims[j])) continue;
+                    using (Bitmap a = dec.DecodeObject(room, j))
+                    {
+                        Assert.NotNull(a); // BOMP objects must now decode (previously returned null)
+                        decoded++;
+                        byte[,] before = IndexedImageHelper.GetIndexMatrix(a);
+                        enc.EncodeObject(room, j, a); // re-encode the same image
+                        using (Bitmap b = dec.DecodeObject(room, j))
+                        {
+                            Assert.NotNull(b);
+                            Assert.True(MatrixEquals(before, IndexedImageHelper.GetIndexMatrix(b)),
+                                "BOMP object re-encode was not lossless");
+                            roundTripped++;
+                        }
+                    }
+                }
+                if (roundTripped >= 12) break;
+            }
+
+            _out.WriteLine("v8 BOMP objects: {0} decoded, {1} round-tripped losslessly", decoded, roundTripped);
+            Assert.True(roundTripped > 0, "no v8 BOMP objects were decoded/re-encoded");
+        }
+
+        [SkippableFact]
+        public void BompMultiStateEditSurvivesSaveReload()
+        {
+            ScummGameData game = GameLibrary.Load(GameLibrary.CurseOfMonkeyIsland);
+            Skip.If(game == null, "COMI (v8) not present");
+
+            List<DiskBlock> lflfs = game.DataFile.GetLFLFs();
+            int roomIndex = -1, objectIndex = -1;
+            for (int i = 0; i < lflfs.Count && roomIndex < 0; i++)
+            {
+                List<BlockBase> obims = lflfs[i].GetROOM().Childrens.Where(c => c.BlockType == "OBIM").ToList();
+                for (int j = 0; j < obims.Count; j++)
+                {
+                    BlockBase imag = obims[j].Childrens.FirstOrDefault(c => c.BlockType == "IMAG");
+                    BlockBase wrap = imag?.Childrens.FirstOrDefault(c => c.BlockType == "WRAP");
+                    if (wrap != null && wrap.Childrens.Count(c => c.BlockType == "BOMP") >= 2) { roomIndex = i; objectIndex = j; break; }
+                }
+            }
+            Skip.If(roomIndex < 0, "no disk-0 multi-BOMP object found");
+
+            var dec = new ScummV8ImageDecoder();
+            var enc = new ScummV8ImageEncoder();
+
+            byte[,] edited;
+            using (Bitmap a = dec.DecodeObject(lflfs[roomIndex].GetROOM(), objectIndex))
+            {
+                Assert.NotNull(a);
+                edited = IndexedImageHelper.GetIndexMatrix(a);
+                Color[] palette = a.Palette.Entries;
+                byte mark = edited[0, 0];
+                for (int y = 0; y < edited.GetLength(1); y++)
+                    for (int x = 0; x < edited.GetLength(0); x++)
+                        edited[x, y] = mark; // flat fill -> the BOMP shrinks, forcing the OFFS rebuild
+                using (Bitmap eb = IndexedImageHelper.FromIndexMatrix(edited, palette, -1))
+                    enc.EncodeObject(lflfs[roomIndex].GetROOM(), objectIndex, eb);
+            }
+
+            game.PostProcessChanges();
+
+            ScummDataFile reparsed;
+            using (var ms = new MemoryStream())
+            {
+                game.DataFile.SaveToBinaryWriter(ms);
+                ms.Position = 0;
+                reparsed = new ScummDataFile(null, game.LoadedGameInfo);
+                reparsed.LoadFromBinaryReader(ms);
+            }
+
+            RoomBlock reloaded = reparsed.GetLFLFs()[roomIndex].GetROOM();
+            BlockBase rImag = reloaded.Childrens.Where(c => c.BlockType == "OBIM").ToList()[objectIndex].Childrens.First(c => c.BlockType == "IMAG");
+            BlockBase rWrap = rImag.Childrens.First(c => c.BlockType == "WRAP");
+            var rOffs = (RawContainerBlock)rWrap.Childrens.First(c => c.BlockType == "OFFS");
+            List<BlockBase> states = rWrap.Childrens.Where(c => c.BlockType != "OFFS").ToList();
+            long offsBase = rOffs.BlockOffSet;
+            for (int k = 0; k < states.Count; k++)
+            {
+                uint entry = (uint)(rOffs.Contents[k * 4] | (rOffs.Contents[k * 4 + 1] << 8)
+                    | (rOffs.Contents[k * 4 + 2] << 16) | (rOffs.Contents[k * 4 + 3] << 24));
+                Assert.True(entry == states[k].BlockOffSet - offsBase,
+                    string.Format("OFFS[{0}] stale after a size-changing BOMP edit", k));
+            }
+            using (Bitmap rb = dec.DecodeObject(reloaded, objectIndex))
+                Assert.True(MatrixEquals(edited, IndexedImageHelper.GetIndexMatrix(rb)),
+                    "the edited multi-state BOMP object did not survive save+reload");
+        }
+
+        private static bool IsBompObject(BlockBase obim)
+        {
+            BlockBase imag = obim.Childrens.FirstOrDefault(c => c.BlockType == "IMAG");
+            BlockBase wrap = imag?.Childrens.FirstOrDefault(c => c.BlockType == "WRAP");
+            return wrap != null && wrap.Childrens.Any(c => c.BlockType == "BOMP");
+        }
+
         private static bool MatrixEquals(byte[,] a, byte[,] b)
         {
             if (a.GetLength(0) != b.GetLength(0) || a.GetLength(1) != b.GetLength(1)) return false;

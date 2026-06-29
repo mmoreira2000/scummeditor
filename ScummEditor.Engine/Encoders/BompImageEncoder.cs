@@ -17,9 +17,6 @@ namespace ScummEditor.Engine.Encoders
         // directly, so the index is preserved losslessly regardless of duplicate palette colors.
         private byte[,] _indexMatrix;
 
-        //Used during encode.
-        private int _currentLine;
-
         public void Encode(RoomBlock blockToEncode, int objectIndex, int imageIndex, Bitmap imageToEncode)
         {
             ObjectImage obj = blockToEncode.GetOBIMs()[objectIndex];
@@ -50,33 +47,41 @@ namespace ScummEditor.Engine.Encoders
         //    line data    : size bytes
         private void Encode()
         {
-            var result = new List<byte>();
-
             if (!IndexedImageHelper.IsIndexed(_imageToEncode))
             {
                 throw new ImageEncodeException("The image must be an indexed (palette-based) image so the original palette indexes are preserved. Re-export it from ScummEditor and edit it without converting it to RGB/truecolor.");
             }
             _indexMatrix = IndexedImageHelper.GetIndexMatrix(_imageToEncode);
+            _imageBomp.Data = EncodeIndexMatrix(_indexMatrix, _width, _height);
+        }
 
-            _currentLine = 0;
+        /// <summary>
+        /// Encodes a [width,height] palette-index matrix into a raw BOMP RLE bitstream (the per-line 16le
+        /// size + RLE control bytes). The codec is identical across v5-v8; only the chunk header that wraps
+        /// the returned bytes differs by version. Reused by the v8 object-image encoder.
+        /// </summary>
+        public static byte[] EncodeIndexMatrix(byte[,] indexMatrix, int width, int height)
+        {
+            var result = new List<byte>();
+            int currentLine = 0;
 
             //Primeira passagem - Cadastra tudo alternado
-            while (_currentLine < (_height))
+            while (currentLine < (height))
             {
                 var bitStream = new BitStreamManager();
                 var lineInformation = new List<SegmentInformation>();
 
                 var currentSegmentInformation = new SegmentInformation();
-                byte lastColorIndex = (byte)GetIndexAt(0, _currentLine);
-                if (lastColorIndex == (byte)GetIndexAt(1, _currentLine))
+                byte lastColorIndex = indexMatrix[0, currentLine];
+                if (width > 1 && lastColorIndex == indexMatrix[1, currentLine])
                 {
                     currentSegmentInformation.RepeatSameColor = true;
                 }
                 currentSegmentInformation.Colors.Add(lastColorIndex);
 
-                for (int x = 1; x < _width; x++)
+                for (int x = 1; x < width; x++)
                 {
-                    byte currentColorIndex = (byte)GetIndexAt(x, _currentLine);
+                    byte currentColorIndex = indexMatrix[x, currentLine];
 
                     if (currentColorIndex != lastColorIndex)
                     {
@@ -173,20 +178,14 @@ namespace ScummEditor.Engine.Encoders
                     }
                 }
 
-                _currentLine++;
+                currentLine++;
 
                 byte[] encodedLine = bitStream.ToByteArray();
                 result.AddRange(BinaryHelper.UInt16ToBytes((ushort)encodedLine.Length));
                 result.AddRange(encodedLine);
             }
 
-            _imageBomp.Data = result.ToArray();
-        }
-
-        // Returns the raw palette index stored at the given pixel of the indexed source bitmap.
-        private int GetIndexAt(int x, int y)
-        {
-            return _indexMatrix[x, y];
+            return result.ToArray();
         }
 
     }
