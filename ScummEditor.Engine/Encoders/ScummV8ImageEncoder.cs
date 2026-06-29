@@ -50,6 +50,71 @@ namespace ScummEditor.Engine.Encoders
             else ReplaceBomp(imag, bitmap, "object");
         }
 
+        /// <summary>Re-encodes an edited background z-plane mask (black = masked) back into its ZSTR leaf.</summary>
+        public void EncodeBackgroundZPlane(RoomBlock room, int z, Bitmap bitmap)
+        {
+            byte[] rmhd = ScummV8ImageDecoder.LeafBytes(ScummV8ImageDecoder.FindChild(room, "RMHD"));
+            if (rmhd == null || rmhd.Length < 12) throw new ImageEncodeException("v8 room has no RMHD");
+            int width = (int)ScummV8ImageDecoder.ReadUInt32LE(rmhd, 4);
+            int height = (int)ScummV8ImageDecoder.ReadUInt32LE(rmhd, 8);
+            ReplaceZPlane(ScummV8ImageDecoder.FindChild(room, "IMAG"), z, width, height, bitmap, "background");
+        }
+
+        /// <summary>Re-encodes an edited object z-plane mask (black = masked) back into its ZSTR leaf.</summary>
+        public void EncodeObjectZPlane(RoomBlock room, int objectIndex, int z, Bitmap bitmap)
+        {
+            List<BlockBase> obims = room.Childrens.Where(c => c.BlockType == "OBIM").ToList();
+            if (objectIndex < 0 || objectIndex >= obims.Count) throw new ImageEncodeException("v8 object index out of range");
+            byte[] imhd = ScummV8ImageDecoder.LeafBytes(ScummV8ImageDecoder.FindChild(obims[objectIndex], "IMHD"));
+            if (imhd == null || imhd.Length < 64) throw new ImageEncodeException("v8 object has no IMHD");
+            int width = (int)ScummV8ImageDecoder.ReadUInt32LE(imhd, 56);
+            int height = (int)ScummV8ImageDecoder.ReadUInt32LE(imhd, 60);
+            ReplaceZPlane(ScummV8ImageDecoder.FindChild(obims[objectIndex], "IMAG"), z, width, height, bitmap, "object");
+        }
+
+        /// <summary>
+        /// Re-encodes z-plane <paramref name="z"/> (a 1-bit mask) into its ZSTR leaf, then rebuilds the ZPLN
+        /// OFFS table (which indexes the ZSTRs) and the IMAG OFFS table (which indexes the SMAP states), so a
+        /// size change shifts the later z-planes / image states correctly.
+        /// </summary>
+        private static void ReplaceZPlane(BlockBase imag, int z, int width, int height, Bitmap bitmap, string what)
+        {
+            if (imag == null) throw new ImageEncodeException("the v8 " + what + " has no IMAG");
+            RawContainerBlock leaf = ScummV8ImageDecoder.FindZStrLeaf(imag, z);
+            if (leaf == null) throw new ImageEncodeException("the v8 " + what + " has no z-plane " + z + " to replace");
+            if (bitmap.Width != width || bitmap.Height != height)
+                throw new ImageEncodeException(string.Format("The z-plane must be {0}x{1} (the {2} size); got {3}x{4}.", width, height, what, bitmap.Width, bitmap.Height));
+
+            List<ZPlaneStripData> strips = new ZPlaneEncoder().EncodeToStrips(bitmap, width, height);
+            leaf.Contents = BuildZStrLeaf(strips);
+
+            RebuildWrapOffsTable(ScummV8ImageDecoder.FindZPlaneWrap(imag)); // ZPLN->WRAP (indexes ZSTRs)
+            RebuildOuterOffsTable(imag);                                    // IMAG->WRAP (indexes SMAP states)
+        }
+
+        /// <summary>Builds a ZSTR leaf: [OFFS tag][size:BE = 8 + numStrips*4][stripOffset:u32 LE x numStrips]
+        /// then each strip's mask RLE (NO codec byte, unlike the SMAP strip leaf). Offsets are leaf-relative.</summary>
+        private static byte[] BuildZStrLeaf(List<ZPlaneStripData> strips)
+        {
+            int tableLength = 8 + strips.Count * 4;
+            var output = new List<byte>(tableLength + strips.Sum(s => s.ImageData.Length));
+
+            output.Add((byte)'O'); output.Add((byte)'F'); output.Add((byte)'F'); output.Add((byte)'S');
+            output.Add((byte)(tableLength >> 24)); output.Add((byte)(tableLength >> 16));
+            output.Add((byte)(tableLength >> 8)); output.Add((byte)tableLength);
+
+            int cursor = tableLength;
+            foreach (ZPlaneStripData strip in strips)
+            {
+                output.Add((byte)(cursor & 0xFF)); output.Add((byte)((cursor >> 8) & 0xFF));
+                output.Add((byte)((cursor >> 16) & 0xFF)); output.Add((byte)((cursor >> 24) & 0xFF));
+                cursor += strip.ImageData.Length;
+            }
+
+            foreach (ZPlaneStripData strip in strips) output.AddRange(strip.ImageData);
+            return output.ToArray();
+        }
+
         /// <summary>
         /// Re-encodes an edited BOMP object image (state 0) back into its BOMP chunk under IMAG/WRAP and
         /// rebuilds the outer OFFS state table (so a size change shifts the later states correctly). The BOMP
@@ -136,7 +201,16 @@ namespace ScummEditor.Engine.Encoders
         /// </summary>
         private static void RebuildOuterOffsTable(BlockBase imag)
         {
-            BlockBase wrap = ScummV8ImageDecoder.FindChild(imag, "WRAP");
+            RebuildWrapOffsTable(ScummV8ImageDecoder.FindChild(imag, "WRAP"));
+        }
+
+        /// <summary>
+        /// Rebuilds a WRAP's OFFS table from the cumulative sizes of its non-OFFS children. Works for both the
+        /// IMAG->WRAP (children = SMAP/BOMP image states) and the ZPLN->WRAP (children = ZSTR z-planes), since
+        /// both index their children with the same [tag][BE size][u32 LE offset per child] table.
+        /// </summary>
+        private static void RebuildWrapOffsTable(BlockBase wrap)
+        {
             if (wrap == null) return;
             var offs = ScummV8ImageDecoder.FindChild(wrap, "OFFS") as RawContainerBlock;
             if (offs == null || offs.Contents == null) return;

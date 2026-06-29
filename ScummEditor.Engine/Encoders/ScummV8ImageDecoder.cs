@@ -81,6 +81,85 @@ namespace ScummEditor.Engine.Encoders
         }
 
         // -------------------------------------------------------------------------
+        // Z-planes (occlusion masks). v8 nests them ROOM/OBIM -> IMAG -> WRAP -> SMAP -> ZPLN -> WRAP ->
+        // {OFFS(one entry per ZSTR), ZSTR x numZBuffer}; each ZSTR -> WRAP -> leaf[inner OFFS + mask strips],
+        // the leaf laid out exactly like the SMAP strip leaf but the strips are 1-bit mask RLE (no codec
+        // byte) decoded by the shared ZPlaneDecoder. numZBuffer (RMHD body+16) == the ZSTR count.
+        // -------------------------------------------------------------------------
+
+        /// <summary>Number of z-planes on the room background (0 when none / an empty placeholder).</summary>
+        public int CountBackgroundZPlanes(RoomBlock room)
+        {
+            return CountZPlanes(FindChild(room, "IMAG"));
+        }
+
+        /// <summary>Decodes background z-plane <paramref name="z"/> as a 1-bit mask (black=masked), or null.</summary>
+        public Bitmap DecodeBackgroundZPlane(RoomBlock room, int z)
+        {
+            byte[] rmhd = LeafBytes(FindChild(room, "RMHD"));
+            if (rmhd == null || rmhd.Length < 12) return null;
+            int width = (int)ReadUInt32LE(rmhd, 4);
+            int height = (int)ReadUInt32LE(rmhd, 8);
+            return DecodeZPlane(FindChild(room, "IMAG"), z, width, height);
+        }
+
+        /// <summary>Number of z-planes on object image <paramref name="objectIndex"/>.</summary>
+        public int CountObjectZPlanes(RoomBlock room, int objectIndex)
+        {
+            List<BlockBase> obims = room.Childrens.Where(c => c.BlockType == "OBIM").ToList();
+            if (objectIndex < 0 || objectIndex >= obims.Count) return 0;
+            return CountZPlanes(FindChild(obims[objectIndex], "IMAG"));
+        }
+
+        /// <summary>Decodes object z-plane <paramref name="z"/> as a 1-bit mask (black=masked), or null.</summary>
+        public Bitmap DecodeObjectZPlane(RoomBlock room, int objectIndex, int z)
+        {
+            List<BlockBase> obims = room.Childrens.Where(c => c.BlockType == "OBIM").ToList();
+            if (objectIndex < 0 || objectIndex >= obims.Count) return null;
+            byte[] imhd = LeafBytes(FindChild(obims[objectIndex], "IMHD"));
+            if (imhd == null || imhd.Length < 64) return null;
+            int width = (int)ReadUInt32LE(imhd, 56);
+            int height = (int)ReadUInt32LE(imhd, 60);
+            return DecodeZPlane(FindChild(obims[objectIndex], "IMAG"), z, width, height);
+        }
+
+        private static Bitmap DecodeZPlane(BlockBase imag, int z, int width, int height)
+        {
+            if (imag == null || width <= 0 || height <= 0) return null;
+            RawContainerBlock leaf = FindZStrLeaf(imag, z);
+            if (leaf == null || leaf.Contents == null) return null;
+            List<ZPlaneStripData> strips = BuildZPlaneStrips(leaf.Contents, width / 8);
+            if (strips == null) return null;
+            return new ZPlaneDecoder().Decode(strips, width, height);
+        }
+
+        /// <summary>Builds z-plane strips from a ZSTR leaf ([inner OFFS][mask strips]); the strips are pure
+        /// mask RLE (no codec byte), unlike the SMAP strip leaf.</summary>
+        private static List<ZPlaneStripData> BuildZPlaneStrips(byte[] leaf, int expectedStrips)
+        {
+            if (leaf.Length < 8 || leaf[0] != 'O' || leaf[1] != 'F' || leaf[2] != 'F' || leaf[3] != 'S') return null;
+            int offsSize = (int)ReadUInt32BE(leaf, 4);
+            int numStrips = (offsSize - 8) / 4;
+            if (numStrips <= 0) numStrips = expectedStrips;
+            if (numStrips <= 0 || 8 + numStrips * 4 > leaf.Length) return null;
+
+            var offsets = new int[numStrips];
+            for (int i = 0; i < numStrips; i++) offsets[i] = (int)ReadUInt32LE(leaf, 8 + i * 4);
+
+            var strips = new List<ZPlaneStripData>(numStrips);
+            for (int i = 0; i < numStrips; i++)
+            {
+                int start = offsets[i];
+                int end = (i + 1 < numStrips) ? offsets[i + 1] : leaf.Length;
+                if (start < 0 || start > leaf.Length || end > leaf.Length || end < start) return null;
+                var data = new byte[end - start];
+                Array.Copy(leaf, start, data, 0, data.Length);
+                strips.Add(new ZPlaneStripData { ImageData = data });
+            }
+            return strips;
+        }
+
+        // -------------------------------------------------------------------------
 
         private static Bitmap DecodeImag(BlockBase imag, int width, int height, Color[] palette)
         {
@@ -175,6 +254,38 @@ namespace ScummEditor.Engine.Encoders
             {
                 if (c.BlockType != "BOMP") continue;
                 if (idx == state) return c as RawContainerBlock;
+                idx++;
+            }
+            return null;
+        }
+
+        /// <summary>The ZPLN's inner WRAP (holding the OFFS table + one ZSTR per z-plane) for the first SMAP
+        /// under IMAG, or null when there is no z-plane. Shared with the encoder.</summary>
+        internal static BlockBase FindZPlaneWrap(BlockBase imag)
+        {
+            BlockBase wrap = FindChild(imag, "WRAP");
+            BlockBase smap = FindChild(wrap, "SMAP");
+            BlockBase zpln = FindChild(smap, "ZPLN");
+            return FindChild(zpln, "WRAP");
+        }
+
+        /// <summary>The number of z-planes (ZSTR blocks) under the first SMAP's ZPLN, or 0.</summary>
+        internal static int CountZPlanes(BlockBase imag)
+        {
+            BlockBase zwrap = FindZPlaneWrap(imag);
+            return zwrap == null ? 0 : zwrap.Childrens.Count(c => c.BlockType == "ZSTR");
+        }
+
+        /// <summary>The leaf (ZSTR->WRAP content) of z-plane <paramref name="z"/>, or null. Shared with the encoder.</summary>
+        internal static RawContainerBlock FindZStrLeaf(BlockBase imag, int z)
+        {
+            BlockBase zwrap = FindZPlaneWrap(imag);
+            if (zwrap == null) return null;
+            int idx = 0;
+            foreach (BlockBase c in zwrap.Childrens)
+            {
+                if (c.BlockType != "ZSTR") continue;
+                if (idx == z) return FindChild(c, "WRAP") as RawContainerBlock;
                 idx++;
             }
             return null;

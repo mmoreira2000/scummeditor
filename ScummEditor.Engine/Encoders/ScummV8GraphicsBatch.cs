@@ -14,9 +14,11 @@ namespace ScummEditor.Engine.Encoders
     /// image, across BOTH data files. v8's room/object images use the IMAG/WRAP/OFFS nesting (not the v5/v6
     /// RMIM/OBIM blocks), so it needs this dedicated path over <see cref="ScummV8ImageDecoder"/> /
     /// <see cref="ScummV8ImageEncoder"/>. Filenames follow the v4-v6 scheme ("Room#i.png",
-    /// "Room#i Obj#j Img#0.png") where i is the room's game-wide order, so export and import map 1:1; an
-    /// edit is written back by the normal save (the v8 index relocation handles the size change). z-plane
-    /// and BOMP-coded object images are not yet covered (see the v8 build notes).
+    /// "Room#i Obj#j Img#0.png", "Room#i ZP#z.png" for a background z-plane, "Room#i Obj#j Img#0 ZP#z.png"
+    /// for an object z-plane, "Room#i Akos#j Cel#k.png" for a costume cel) where i is the room's game-wide
+    /// order, so export and import map 1:1; an edit is written back by the normal save (the v8 index
+    /// relocation handles the size change). SMAP backgrounds/objects, BOMP-coded objects, AKOS cels and
+    /// z-planes (occlusion masks) all round-trip.
     /// </summary>
     public static class ScummV8GraphicsBatch
     {
@@ -25,6 +27,8 @@ namespace ScummEditor.Engine.Encoders
             public bool Backgrounds = true;
             public bool Objects = true;
             public bool Costumes = true;
+            public bool BackgroundZPlanes = true;
+            public bool ObjectZPlanes = true;
         }
 
         /// <summary>The room (LFLF) blocks in a stable, game-wide order (both data files, file order).</summary>
@@ -56,13 +60,35 @@ namespace ScummEditor.Engine.Encoders
                     if (bg != null) { Save(bg, folder, string.Format("Room#{0}.png", i)); count++; }
                 }
 
-                if (options.Objects)
+                if (options.BackgroundZPlanes)
+                {
+                    int zCount = decoder.CountBackgroundZPlanes(room);
+                    for (int z = 0; z < zCount; z++)
+                    {
+                        Bitmap zp = decoder.DecodeBackgroundZPlane(room, z);
+                        if (zp != null) { Save(zp, folder, string.Format("Room#{0} ZP#{1}.png", i, z)); count++; }
+                    }
+                }
+
+                if (options.Objects || options.ObjectZPlanes)
                 {
                     int objects = ScummV8ImageDecoder.ObjectCount(room);
                     for (int j = 0; j < objects; j++)
                     {
-                        Bitmap obj = decoder.DecodeObject(room, j);
-                        if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j)); count++; }
+                        if (options.Objects)
+                        {
+                            Bitmap obj = decoder.DecodeObject(room, j);
+                            if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j)); count++; }
+                        }
+                        if (options.ObjectZPlanes)
+                        {
+                            int zCount = decoder.CountObjectZPlanes(room, j);
+                            for (int z = 0; z < zCount; z++)
+                            {
+                                Bitmap zp = decoder.DecodeObjectZPlane(room, j, z);
+                                if (zp != null) { Save(zp, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#{2}.png", i, j, z)); count++; }
+                            }
+                        }
                     }
                 }
 
@@ -98,8 +124,8 @@ namespace ScummEditor.Engine.Encoders
             {
                 if (shouldCancel != null && shouldCancel()) break;
                 string name = Path.GetFileNameWithoutExtension(files[f]);
-                int roomIndex, objectIndex, akosIndex, celIndex;
-                if (!TryParseName(name, out roomIndex, out objectIndex, out akosIndex, out celIndex)) continue;
+                int roomIndex, objectIndex, akosIndex, celIndex, zPlaneIndex;
+                if (!TryParseName(name, out roomIndex, out objectIndex, out akosIndex, out celIndex, out zPlaneIndex)) continue;
                 if (roomIndex < 0 || roomIndex >= rooms.Count) continue;
                 report.Found++;
 
@@ -113,6 +139,14 @@ namespace ScummEditor.Engine.Encoders
                             if (akosIndex >= akosList.Count) { report.Errors.Add(name + ": AKOS index out of range"); continue; }
                             if (!IndexedImageHelper.IsIndexed(bmp)) { report.Errors.Add(name + ": cel must be an indexed PNG"); continue; }
                             AkosImageEncoder.ReplaceCel(akosList[akosIndex], celIndex, IndexedImageHelper.GetIndexMatrix(bmp));
+                        }
+                        else if (zPlaneIndex >= 0 && objectIndex < 0)
+                        {
+                            encoder.EncodeBackgroundZPlane(rooms[roomIndex].GetROOM(), zPlaneIndex, bmp);
+                        }
+                        else if (zPlaneIndex >= 0)
+                        {
+                            encoder.EncodeObjectZPlane(rooms[roomIndex].GetROOM(), objectIndex, zPlaneIndex, bmp);
                         }
                         else if (objectIndex < 0)
                         {
@@ -134,11 +168,12 @@ namespace ScummEditor.Engine.Encoders
             return report;
         }
 
-        /// <summary>Parses "Room#i" (background), "Room#i Obj#j Img#0" (object) or "Room#i Akos#j Cel#k"
-        /// (costume cel). objectIndex = -1 unless an object; akosIndex/celIndex = -1 unless a cel.</summary>
-        private static bool TryParseName(string name, out int roomIndex, out int objectIndex, out int akosIndex, out int celIndex)
+        /// <summary>Parses "Room#i" (background), "Room#i ZP#z" (bg z-plane), "Room#i Obj#j Img#0" (object),
+        /// "Room#i Obj#j Img#0 ZP#z" (object z-plane) or "Room#i Akos#j Cel#k" (costume cel). Unused indices
+        /// come back as -1.</summary>
+        private static bool TryParseName(string name, out int roomIndex, out int objectIndex, out int akosIndex, out int celIndex, out int zPlaneIndex)
         {
-            roomIndex = -1; objectIndex = -1; akosIndex = -1; celIndex = -1;
+            roomIndex = -1; objectIndex = -1; akosIndex = -1; celIndex = -1; zPlaneIndex = -1;
             string[] parts = name.Split(' ');
             if (parts.Length == 0 || !parts[0].StartsWith("Room#")) return false;
             if (!int.TryParse(parts[0].Substring(5), out roomIndex)) return false;
@@ -152,9 +187,12 @@ namespace ScummEditor.Engine.Encoders
                     && cel != null && int.TryParse(cel.Substring(4), out celIndex);
             }
 
+            string zp = parts.FirstOrDefault(p => p.StartsWith("ZP#"));
+            if (zp != null && !int.TryParse(zp.Substring(3), out zPlaneIndex)) return false;
+
             string obj = parts.FirstOrDefault(p => p.StartsWith("Obj#"));
-            if (obj == null) return false;
-            return int.TryParse(obj.Substring(4), out objectIndex);
+            if (obj != null) return int.TryParse(obj.Substring(4), out objectIndex); // object image or object z-plane
+            return zp != null; // a bare "Room#i ZP#z" is a background z-plane; anything else here is unknown
         }
 
         private static void Save(Bitmap bitmap, string folder, string fileName)
