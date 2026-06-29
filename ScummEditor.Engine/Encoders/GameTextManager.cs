@@ -946,22 +946,33 @@ namespace ScummEditor.Engine.Encoders
             };
 
             byte[] raw = obcd.RawContent;
-            int headerToCode = obcd.VerbCodeOffset - obcd.VerbBlockOffset; // 8-byte header + table size
+            int headerToCode = obcd.VerbCodeOffset - obcd.VerbBlockOffset; // 8-byte header + table (+ terminator)
 
-            // New offset-table values (offsets are relative to the VERB tag).
-            var newOffsets = new int[obcd.VerbEntries.Count];
+            // The verb offset table differs by version: v4-v7 use 3-byte [id:8][offset:16le] entries with
+            // offsets relative to the VERB tag; v8 uses 8-byte [id:32le][offset:32le] entries with offsets
+            // relative to the VERB body (tag + 8). ObjectCode.VerbEntryBase already anchors the offsets, so
+            // the only per-version values here are the entry stride, the offset field width/position, and the
+            // max storable offset.
+            bool isV8 = obcd.GameInfo != null && obcd.GameInfo.ScummVersion == 8;
+            int entryStride = isV8 ? 8 : 3;
+            int offFieldPos = isV8 ? 4 : 1;        // byte offset of the offset field within an entry
+            long offMax = isV8 ? 0xFFFFFFFFL : 0xFFFF;
+            int codeRelToBase = obcd.VerbCodeOffset - obcd.VerbEntryBase; // stored offset of the code start
+
+            // New offset-table values (relative to VerbEntryBase), remapped through the rebuilt code.
+            var newOffsets = new long[obcd.VerbEntries.Count];
             for (int e = 0; e < obcd.VerbEntries.Count; e++)
             {
-                int sliceRel = obcd.VerbBlockOffset + obcd.VerbEntries[e].Offset - obcd.VerbCodeOffset;
+                int sliceRel = obcd.VerbEntryBase + obcd.VerbEntries[e].Offset - obcd.VerbCodeOffset;
                 if (sliceRel < 0 || sliceRel >= obcd.VerbCodeLength)
                 {
                     error = "verb " + obcd.VerbEntries[e].Id + " offset outside the code region";
                     return false;
                 }
-                int newOff = headerToCode + map(sliceRel);
-                if (newOff > 0xFFFF)
+                long newOff = codeRelToBase + map(sliceRel);
+                if (newOff > offMax)
                 {
-                    error = "verb " + obcd.VerbEntries[e].Id + " offset exceeds 0xFFFF after the translation";
+                    error = "verb " + obcd.VerbEntries[e].Id + " offset exceeds the table field after the translation";
                     return false;
                 }
                 newOffsets[e] = newOff;
@@ -972,14 +983,19 @@ namespace ScummEditor.Engine.Encoders
 
             // [0 .. VERB) unchanged
             Array.Copy(raw, 0, rebuilt, 0, obcd.VerbBlockOffset);
-            // VERB header + table (then patch size and table offsets)
+            // VERB header + table (verbatim, then patch the size and each entry's offset field)
             Array.Copy(raw, obcd.VerbBlockOffset, rebuilt, obcd.VerbBlockOffset, headerToCode);
             WriteUInt32BE(rebuilt, obcd.VerbBlockOffset + 4, (uint)newVerbSize);
             for (int e = 0; e < newOffsets.Length; e++)
             {
-                int p = obcd.VerbBlockOffset + 8 + e * 3 + 1;
+                int p = obcd.VerbBlockOffset + 8 + e * entryStride + offFieldPos;
                 rebuilt[p] = (byte)(newOffsets[e] & 0xFF);
-                rebuilt[p + 1] = (byte)(newOffsets[e] >> 8);
+                rebuilt[p + 1] = (byte)((newOffsets[e] >> 8) & 0xFF);
+                if (isV8)
+                {
+                    rebuilt[p + 2] = (byte)((newOffsets[e] >> 16) & 0xFF);
+                    rebuilt[p + 3] = (byte)((newOffsets[e] >> 24) & 0xFF);
+                }
             }
             // new bytecode
             Array.Copy(newCode, 0, rebuilt, obcd.VerbCodeOffset, newCode.Length);
