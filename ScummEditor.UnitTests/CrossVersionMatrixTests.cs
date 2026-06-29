@@ -81,7 +81,11 @@ namespace ScummEditor.UnitTests
                     try { ScummLanguageDetector.RefineFromContent(game); } catch { }
                     lang = info.Language.ToString();
 
-                    idxRt = RoundTrip(game.IndexFile, info.IndexFile);
+                    // Run the REAL save path (recompute sizes/offsets), then compare against the original
+                    // DECRYPTED with the on-disk XOR key (the editor holds/serializes plaintext blocks).
+                    game.PostProcessChanges();
+
+                    idxRt = RoundTrip(game.IndexFile, info.IndexFile, info.IndexXorKey);
                     if (idxRt != "OK") idxDiff++;
 
                     dataRt = DataRoundTrip(game, info);
@@ -110,9 +114,14 @@ namespace ScummEditor.UnitTests
 
             Assert.True(present > 0, "no editions found in the library");
             Assert.Equal(0, hardErrors); // every present edition must load + run the sweep without throwing
+            // The save path is lossless for every version: a no-op load -> PostProcessChanges -> serialize
+            // is byte-identical to the (decrypted) original index + data, across v1-v8. A real container or
+            // index regression in ANY version (even XORed ones) now fails the build here.
+            Assert.Equal(0, idxDiff);
+            Assert.Equal(0, dataDiff);
         }
 
-        private static string RoundTrip(ScummIndexFile block, string originalPath)
+        private static string RoundTrip(ScummIndexFile block, string originalPath, int xorKey)
         {
             try
             {
@@ -120,7 +129,7 @@ namespace ScummEditor.UnitTests
                 using (var ms = new MemoryStream())
                 {
                     block.SaveToBinaryWriter(ms);
-                    return BytesEqual(ms.ToArray(), File.ReadAllBytes(originalPath)) ? "OK" : "DIFF";
+                    return BytesEqual(ms.ToArray(), ReadDecrypted(originalPath, xorKey)) ? "OK" : "DIFF";
                 }
             }
             catch (Exception ex) { return "ERR:" + ex.GetType().Name; }
@@ -140,7 +149,7 @@ namespace ScummEditor.UnitTests
                         using (var ms = new MemoryStream())
                         {
                             disk.Tree.SaveToBinaryWriter(ms);
-                            if (!BytesEqual(ms.ToArray(), File.ReadAllBytes(disk.FilePath))) allOk = false;
+                            if (!BytesEqual(ms.ToArray(), ReadDecrypted(disk.FilePath, info.XorKey))) allOk = false;
                         }
                     }
                     return !any ? "NA" : (allOk ? "OK" : "DIFF");
@@ -150,12 +159,21 @@ namespace ScummEditor.UnitTests
                     using (var ms = new MemoryStream())
                     {
                         game.DataFile.SaveToBinaryWriter(ms);
-                        return BytesEqual(ms.ToArray(), File.ReadAllBytes(info.DataFile)) ? "OK" : "DIFF";
+                        return BytesEqual(ms.ToArray(), ReadDecrypted(info.DataFile, info.XorKey)) ? "OK" : "DIFF";
                     }
                 }
                 return "NA";
             }
             catch (Exception ex) { return "ERR:" + ex.GetType().Name; }
+        }
+
+        /// <summary>Reads a game file and un-XORs it with its on-disk key, since the editor holds/serializes
+        /// PLAINTEXT blocks (it loads through XoredFileStream). Key 0 is a no-op (v3small/v7/v8 plaintext).</summary>
+        private static byte[] ReadDecrypted(string path, int xorKey)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            if (xorKey != 0) for (int i = 0; i < bytes.Length; i++) bytes[i] = (byte)(bytes[i] ^ xorKey);
+            return bytes;
         }
 
         // Mirrors the GUI's per-version text export dispatch (FilePacker); returns the entry count.
