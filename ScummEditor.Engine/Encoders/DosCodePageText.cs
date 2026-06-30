@@ -40,6 +40,19 @@ namespace ScummEditor.Engine.Encoders
             }
         }
 
+        /// <summary>
+        /// The text code page for a localized-text file of the given edition. v1-v7 are DOS-era and use CP850
+        /// for every Western language; v8 (The Curse of Monkey Island) is a Windows-95 title whose LANGUAGE.TAB
+        /// is Windows-1252 (ANSI), not CP850 - decoding it as CP850 garbles the accents (e.g. the ANSI byte
+        /// 0xF3 'o-acute' shows as the CP850 glyph '¾'). CJK / Hebrew / Russian / unknown stay 0 (raw).
+        /// </summary>
+        public static int CodePageFor(ScummLanguage language, int scummVersion)
+        {
+            int cp = CodePageFor(language);
+            if (cp == 850 && scummVersion >= 8) return 1252; // COMI is a Windows (ANSI) game, not DOS
+            return cp;
+        }
+
         /// <summary>Byte-faithful (Latin-1) text -&gt; Unicode for display via the code page; cp 0 = unchanged.</summary>
         public static string ToDisplay(string latin1, int codePage)
         {

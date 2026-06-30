@@ -1,5 +1,6 @@
 using System.IO;
 using System.Linq;
+using ScummEditor.Engine.Encoders;
 using ScummEditor.Engine.Structures;
 using Xunit;
 using Xunit.Abstractions;
@@ -26,6 +27,47 @@ namespace ScummEditor.UnitTests
             var tab = game.LocalizedTextFiles.OfType<LanguageTabFile>().FirstOrDefault();
             if (tab != null) original = File.ReadAllBytes(info.LanguageTabPath);
             return tab;
+        }
+
+        // COMI is a Windows-95 game: its LANGUAGE.TAB is Windows-1252 (ANSI), NOT the DOS CP850 the v1-v7
+        // games use. Decoding it as CP850 garbled every accent in the viewer (the byte 0xF3 'o-acute' showed
+        // as the CP850 glyph '¾'). CodePageFor(language, version) must pick 1252 for v8, 850 for v1-v7.
+        [Fact]
+        public void CodePageIsAnsiForV8AndDosForV7()
+        {
+            Assert.Equal(1252, DosCodePageText.CodePageFor(ScummLanguage.Portuguese, 8));
+            Assert.Equal(1252, DosCodePageText.CodePageFor(ScummLanguage.English, 8));
+            Assert.Equal(850, DosCodePageText.CodePageFor(ScummLanguage.Portuguese, 7));
+            Assert.Equal(850, DosCodePageText.CodePageFor(ScummLanguage.English, 5));
+            Assert.Equal(0, DosCodePageText.CodePageFor(ScummLanguage.Korean, 8)); // CJK stays raw
+        }
+
+        [Fact]
+        public void V8PortugueseAccentsDecodeAsAnsiNotDos()
+        {
+            // The file stores ANSI bytes; the editor holds them byte-faithfully (one char per byte).
+            // Windows-1252: 'c-cedilla'=0xE7, 'a-tilde'=0xE3.
+            string raw = new string(new[] { (char)0xE7, (char)0xE3, 'o' });
+            Assert.Equal("ção", DosCodePageText.ToDisplay(raw, 1252));   // v8 (ANSI): correct accents
+            Assert.Equal("þÒo", DosCodePageText.ToDisplay(raw, 850));    // v7 (DOS CP850): the garble
+            Assert.Equal(raw, DosCodePageText.FromDisplay("ção", 1252)); // an edit round-trips to ANSI
+        }
+
+        [SkippableFact]
+        public void RealComiPortugueseLanguageTabDecodesAccentsAsAnsi()
+        {
+            GameInfo info = GameLibrary.Detect(GameLibrary.CurseOfMonkeyIslandPortuguese);
+            Skip.If(info == null, "COMI Portuguese edition not present");
+            ScummGameData game = ScummGameData.LoadFromGameInfo(info);
+            var tab = game.LocalizedTextFiles.OfType<LanguageTabFile>().FirstOrDefault();
+            Skip.If(tab == null, "COMI PT LANGUAGE.TAB not present");
+
+            int v8cp = DosCodePageText.CodePageFor(ScummLanguage.Portuguese, 8); // 1252
+            const string ptAccents = "ãõáéíóúâêôàç"; // ãõáéíóúâêôàç
+            bool foundAnsiAccent = tab.Entries.Any(e =>
+                DosCodePageText.ToDisplay(e.Text, v8cp).Any(c => ptAccents.IndexOf(c) >= 0));
+            _out.WriteLine("COMI PT LANGUAGE.TAB decoded a Portuguese accent via CP{0}: {1}", v8cp, foundAnsiAccent);
+            Assert.True(foundAnsiAccent, "no Portuguese accent decoded from COMI PT LANGUAGE.TAB via Windows-1252 (is it really ANSI?)");
         }
 
         [SkippableFact]

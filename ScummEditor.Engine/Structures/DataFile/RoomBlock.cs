@@ -468,9 +468,12 @@ namespace ScummEditor.Engine.Structures.DataFile
             return (RoomHeader)Childrens.Single(x => x.GetType() == typeof(RoomHeader));
         }
 
+        /// <summary>The room image (RMIM), or null when the room has none - v8 nests its room image under
+        /// IMAG/WRAP instead of a RoomImage child, so callers must handle null (the v8 path uses a dedicated
+        /// viewer/decoder and never reads RMIM).</summary>
         public RoomImage GetRMIM()
         {
-            return (RoomImage)Childrens.Single(x => x.GetType() == typeof(RoomImage));
+            return (RoomImage)Childrens.SingleOrDefault(x => x.GetType() == typeof(RoomImage));
         }
 
         public ValuePaddingBlock GetTRNS()

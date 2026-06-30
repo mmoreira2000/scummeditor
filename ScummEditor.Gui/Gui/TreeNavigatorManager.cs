@@ -185,9 +185,11 @@ namespace ScummEditor.Gui
             CreateV3FontNodes();
             CreateV2ExeFontNode();
             CreateNutFontNodes();
+            // Sound nodes (bundles + speech + CD audio) are grouped under one "Sounds" node; create them
+            // before the localized-text node so "Sounds" sits before "Texts (localized)" in the tree.
             CreateBundleNodes(GameData.LoadedGameInfo);
-            CreateLocalizedTextNodes();
             CreateSouFileNodes(GameData.LoadedGameInfo);
+            CreateLocalizedTextNodes();
         }
 
         /// <summary>
@@ -305,12 +307,18 @@ namespace ScummEditor.Gui
                 var disk = child as DiskBlock;
                 if (disk == null) continue;
 
-                RoomBlock room = disk.GetROOM();
+                RoomBlock room = null; // no-throw: disk.GetROOM() uses .Single and would throw for a room-less disk
+                foreach (BlockBase c in disk.Childrens) { var rb = c as RoomBlock; if (rb != null) { room = rb; break; } }
                 if (room == null) continue;
 
-                Color[] palette;
-                try { palette = room.GetPALS().GetWRAP().GetAPALs()[0].Colors; }
-                catch { continue; }
+                // v8 rooms have no PALS block (their palette lives elsewhere), and a PALS/WRAP can be empty.
+                // Check explicitly instead of catching a NullReference/IndexOutOfRange per room - throwing an
+                // exception as control flow also stopped the debugger on "break when thrown".
+                var pals = room.GetPALS();
+                if (pals == null || pals.Childrens.Count == 0) continue;
+                var apals = pals.GetWRAP().GetAPALs();
+                if (apals.Count == 0) continue;
+                Color[] palette = apals[0].Colors;
                 if (palette == null) continue;
 
                 if (seen.Add(PaletteKey(palette))) palettes.Add(palette);
@@ -349,23 +357,35 @@ namespace ScummEditor.Gui
             }
         }
 
-        /// <summary>Root nodes for the external iMUSE sound bundles (v7 The Dig DIGMUSIC.BUN / DIGVOICE.BUN);
-        /// the iMUSE bundle viewer handles each. These are separate files next to the .LA0/.LA1 container.</summary>
+        /// <summary>
+        /// The shared "Sounds" tree node that groups every external sound file (iMUSE bundles, speech, CD
+        /// audio) under one parent, created on demand. Cosmetic GUI grouping only - like "Texts (localized)":
+        /// it carries no Tag (the null-Tag guard in AfterNodeSelectedEvent ignores a click on it) and does not
+        /// affect the engine.
+        /// </summary>
+        private TreeNode GetOrCreateSoundsRoot()
+        {
+            TreeNode[] found = _treeView.Nodes.Find("Sounds", false);
+            return found.Length > 0 ? found[0] : _treeView.Nodes.Add("Sounds", "Sounds");
+        }
+
+        /// <summary>Nodes for the external iMUSE sound bundles (v7 The Dig DIGMUSIC.BUN / DIGVOICE.BUN, v8 COMI
+        /// MUSDISK/VOXDISK.BUN); the iMUSE bundle viewer handles each. Separate files next to the container.</summary>
         private void CreateBundleNodes(GameInfo gameInfo)
         {
             if (gameInfo == null || gameInfo.BundleFiles == null) return;
 
             foreach (string path in gameInfo.BundleFiles)
             {
-                var node = _treeView.Nodes.Add("SoundBundle",
+                var node = GetOrCreateSoundsRoot().Nodes.Add("SoundBundle",
                     "Sound Bundle (" + System.IO.Path.GetFileName(path) + ")");
                 node.Tag = new ImuseBundleFile(path);
             }
         }
 
         /// <summary>
-        /// Root nodes for the standalone audio containers next to the game files: the speech
-        /// file (MONSTER.SOU / "game".SOU) and the ripped CD audio (CDDA.SOU). The files are
+        /// Nodes for the standalone audio containers next to the game files: the speech file (MONSTER.SOU /
+        /// "game".SOU) and the ripped CD audio (CDDA.SOU), grouped under the same "Sounds" node. The files are
         /// parsed lazily, when their node is first selected.
         /// </summary>
         private void CreateSouFileNodes(GameInfo gameInfo)
@@ -374,14 +394,14 @@ namespace ScummEditor.Gui
 
             if (gameInfo.SpeechFilePath != null)
             {
-                var node = _treeView.Nodes.Add("SpeechFile",
+                var node = GetOrCreateSoundsRoot().Nodes.Add("SpeechFile",
                     "Speech File (" + System.IO.Path.GetFileName(gameInfo.SpeechFilePath) + ")");
                 node.Tag = new SpeechSouFile(gameInfo.SpeechFilePath);
             }
 
             if (gameInfo.CdAudioFilePath != null)
             {
-                var node = _treeView.Nodes.Add("CdAudioFile",
+                var node = GetOrCreateSoundsRoot().Nodes.Add("CdAudioFile",
                     "CD Audio (" + System.IO.Path.GetFileName(gameInfo.CdAudioFilePath) + ")");
                 node.Tag = new CdAudioSouFile(gameInfo.CdAudioFilePath);
             }
@@ -586,19 +606,30 @@ namespace ScummEditor.Gui
             var localizedText = e.Node.Tag as ILocalizedTextFile;
             if (localizedText != null)
             {
-                // Show the text through the edition's DOS code page so its accents render correctly.
-                int codePage = ScummEditor.Engine.Encoders.DosCodePageText.CodePageFor(GameData.LoadedGameInfo.Language);
+                // Show the text through the edition's code page so its accents render correctly: CP850 for the
+                // DOS-era v1-v7 Western editions, Windows-1252 for v8 (COMI is a Windows-95 game, ANSI not DOS).
+                int codePage = ScummEditor.Engine.Encoders.DosCodePageText.CodePageFor(
+                    GameData.LoadedGameInfo.Language, GameData.LoadedGameInfo.ScummVersion);
                 _localizedTextControl.SetData(localizedText, codePage);
                 _displayPanel.Controls.Add(_localizedTextControl);
                 _localizedTextControl.Dock = DockStyle.Fill;
                 return;
             }
 
-            // v8 ROOM: a dedicated background/object/z-plane image viewer. RoomBlock is shared with v5/v6/v7
-            // (whose images are shown via the DiskBlock viewer), so this is gated to v8 - its SMAP/BOMP/ZPLN
-            // nesting is v8-specific and needs ScummV8ImageDecoder/Encoder.
+            // v8 ROOM: a dedicated background/object/z-plane image viewer. Reached both from the ROOM node and
+            // from its parent LFLF (DiskBlock) node: the generic DiskBlock viewer assumes the v5/v6/v7 RMIM
+            // room-image layout, which v8 does not have (v8 nests its images under IMAG/WRAP), so selecting an
+            // LFLF in v8 would otherwise crash in RoomBlock.GetRMIM(). The SMAP/BOMP/ZPLN nesting is v8-specific
+            // and needs ScummV8ImageDecoder/Encoder, so this is gated to v8.
+            bool isV8 = GameData.LoadedGameInfo != null && GameData.LoadedGameInfo.ScummVersion == 8;
             var roomBlock = e.Node.Tag as RoomBlock;
-            if (roomBlock != null && GameData.LoadedGameInfo != null && GameData.LoadedGameInfo.ScummVersion == 8)
+            if (roomBlock == null && isV8)
+            {
+                var lflf = e.Node.Tag as DiskBlock;
+                if (lflf != null)
+                    foreach (BlockBase c in lflf.Childrens) { var rb = c as RoomBlock; if (rb != null) { roomBlock = rb; break; } }
+            }
+            if (roomBlock != null && isV8)
             {
                 _scummV8RoomImageControl.SetAndRefreshData(roomBlock);
                 _displayPanel.Controls.Add(_scummV8RoomImageControl);

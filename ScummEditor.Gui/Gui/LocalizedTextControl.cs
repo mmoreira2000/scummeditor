@@ -16,10 +16,11 @@ namespace ScummEditor.Gui
     /// applies an edited dump.
     ///
     /// Text is stored byte-faithfully (Latin-1), but the grid and editor DISPLAY it through the edition's
-    /// DOS code page (set by SetData from the detected language - CP850 for every Western v7 edition,
-    /// including Portuguese), so its accents render correctly and an edit is re-encoded back to those exact
-    /// bytes. The double-byte CJK editions pass code page 0, stay raw, and the box is view-only. The Export
-    /// dump is the raw code-page bytes, for editing in an external CP850-aware editor.
+    /// code page (set by SetData - CP850 for the DOS-era v1-v7 Western editions, Windows-1252 for v8/COMI
+    /// which is a Windows-95 game, both including Portuguese), so its accents render correctly and an edit is
+    /// re-encoded back to those exact bytes. The double-byte CJK editions pass code page 0, stay raw, and the
+    /// box is view-only. The Export dump is the raw code-page bytes, for editing in an external code-page-aware
+    /// editor.
     /// </summary>
     public class LocalizedTextControl : UserControl
     {
@@ -172,9 +173,11 @@ namespace ScummEditor.Gui
                 try
                 {
                     File.WriteAllText(dlg.FileName, _file.ExportToText(), Encoding.Latin1);
+                    string cpHint = _codePage == 0
+                        ? "The file is in the game's native (multi-byte) encoding - open it with that encoding."
+                        : "The file is in code page CP" + _codePage + " (Western European) - open it as CP" + _codePage + ".";
                     MessageBox.Show(this, "Strings exported to:\n" + dlg.FileName +
-                        "\n\nEdit the text after each tab. The file is in the game's DOS code page - open it as " +
-                        "CP850 (Western European, the code page SCUMM v7 uses). Then Import text.",
+                        "\n\nEdit the text after each tab. " + cpHint + " Then Import text.",
                         "Export text", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
                 catch (Exception ex)

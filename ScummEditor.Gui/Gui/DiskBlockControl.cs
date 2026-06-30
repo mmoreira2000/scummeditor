@@ -133,6 +133,9 @@ namespace ScummEditor.Gui
             TreeNode backgroundNode = null;
 
             RoomImage RMIM = roomBlock.GetRMIM();
+            // v8 rooms have no RMIM (their images nest under IMAG/WRAP and are shown by the dedicated v8
+            // viewer); this control is the v5/v6/v7 layout, so bail out instead of dereferencing a null RMIM.
+            if (RMIM == null) { _loading = false; return; }
             if (RMIM.GetIM00().GetSMAP().Strips.Count > 0)
             {
                 var createInfo = new ClassCreateInfo();
