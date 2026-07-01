@@ -87,6 +87,48 @@ namespace ScummEditor.Engine.Encoders
         }
 
         /// <summary>
+        /// Perturbs duplicate palette entries in place so every entry has a unique ARGB, changing a duplicate
+        /// by the smallest possible amount (a +1 walk on B, then G, then R). Keeps alpha (so the transparent
+        /// entry stays transparent and never collides with an opaque entry of the same RGB). With &lt;=256
+        /// entries in a 24-bit space, uniqueness is always reachable with tiny tweaks.
+        /// </summary>
+        private static void MakePaletteEntriesUnique(Color[] entries)
+        {
+            var used = new System.Collections.Generic.HashSet<int>();
+            for (int i = 0; i < entries.Length; i++)
+            {
+                Color c = entries[i];
+                if (used.Add(c.ToArgb())) continue;
+
+                // Duplicate: nudge it to the nearest free colour of the SAME alpha (never change alpha - an
+                // alpha &lt; 255 here would add a PNG tRNS chunk, which makes GDI+ reload the indexed PNG as
+                // 32bpp and lose the indices). Search a small neighbourhood on B, then G, then R.
+                int a = c.A, r = c.R, g = c.G, b = c.B;
+                Color chosen = c;
+                bool placed = false;
+                for (int d = 1; d <= 255 && !placed; d++)
+                {
+                    placed = TryUse(used, a, r, g, b + d, ref chosen)
+                          || TryUse(used, a, r, g, b - d, ref chosen)
+                          || TryUse(used, a, r, g + d, b, ref chosen)
+                          || TryUse(used, a, r, g - d, b, ref chosen)
+                          || TryUse(used, a, r + d, g, b, ref chosen)
+                          || TryUse(used, a, r - d, g, b, ref chosen);
+                }
+                entries[i] = chosen; // if nothing free was found (a full 16.7M-colour palette can't happen at <=256), keep as-is
+            }
+        }
+
+        private static bool TryUse(System.Collections.Generic.HashSet<int> used, int a, int r, int g, int b, ref Color chosen)
+        {
+            if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) return false;
+            int argb = Color.FromArgb(a, r, g, b).ToArgb();
+            if (!used.Add(argb)) return false;
+            chosen = Color.FromArgb(argb);
+            return true;
+        }
+
+        /// <summary>
         /// Builds an 8bpp indexed bitmap from an index matrix and a palette.
         /// The pixel bytes are the indexes themselves; <paramref name="palette"/> is only
         /// used for display (and written as the PNG PLTE chunk on Save).
@@ -116,6 +158,14 @@ namespace ScummEditor.Engine.Encoders
                     bitmapPalette.Entries[i] = Color.FromArgb(255, color.R, color.G, color.B);
                 }
             }
+            // Force every palette entry to a DISTINCT color. The pixel bytes already carry the true index, so
+            // this display palette is cosmetic (the game never reads it - it renders through its own AKPL/RGBS),
+            // but an external editor that re-derives a pixel's index from its COLOR on save (e.g. IDraw3) would,
+            // with duplicate palette colors, collapse two indices that share a colour into the first one -
+            // silently changing the image. Making each entry unique (an imperceptible +-1 tweak on a duplicate)
+            // gives every index its own colour, so such an editor round-trips the indices faithfully. Duplicates
+            // are usually unused padding slots, so this changes nothing a pixel actually uses.
+            MakePaletteEntriesUnique(bitmapPalette.Entries);
             bitmap.Palette = bitmapPalette; // must reassign for changes to take effect
 
             BitmapData data = bitmap.LockBits(new Rectangle(0, 0, width, height),

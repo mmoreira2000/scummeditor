@@ -1,3 +1,7 @@
+5.1.2
+-----
+* Exported images are now safe to edit in palette editors that mishandle duplicate colors (e.g. IDraw). Every pixel of an exported costume/background/font PNG already stores its true palette index, but when the game's palette repeats a color - very common in AKOS costumes, and the case reported for The Curse of Monkey Island - an external editor that rewrites each pixel by its color on save collapses the two indices that share that color into one, silently corrupting the image (IDraw's own manual lists this as a known bug with duplicate palette colors). The export now gives every palette slot a distinct color - an imperceptible tweak the game never sees, since it renders through its own palette - so each index keeps its own color and such an editor round-trips every index faithfully. Import is unchanged (it always read the raw index). This covers AKOS cels and every other indexed image, across all versions.
+
 5.1.1
 -----
 * SCUMM v8 (The Curse of Monkey Island) viewer fixes. Selecting the LFLF node of a v8 game no longer crashes - the LFLF and the room node now open the dedicated v8 room-image viewer, instead of the v5/v6/v7 room viewer that expected a room-image (RMIM) block v8 does not have (v8 nests its images differently). Selecting a v8 font no longer raises an internal error while gathering room palettes (v7/v8 rooms do not use the v5/v6 palette block).
