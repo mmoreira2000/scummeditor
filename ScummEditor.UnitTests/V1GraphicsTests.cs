@@ -39,7 +39,7 @@ namespace ScummEditor.UnitTests
                     var df = disk.Tree as ScummV3OldBundleDataFile;
                     int roomNo;
                     if (df == null || !int.TryParse(Path.GetFileNameWithoutExtension(disk.FilePath), out roomNo)) continue;
-                    string png = Path.Combine(dir, "Room#" + roomNo + ".png");
+                    string png = Path.Combine(dir, string.Format("Room#{0:D3}.png", roomNo));
                     if (!File.Exists(png)) continue;
 
                     using (Bitmap expected = decoder.DecodeBackground(new ScummV1Room(df.RawContent)))

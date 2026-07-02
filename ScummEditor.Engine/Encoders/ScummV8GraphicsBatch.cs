@@ -57,7 +57,7 @@ namespace ScummEditor.Engine.Encoders
                 if (options.Backgrounds)
                 {
                     Bitmap bg = decoder.DecodeBackground(room);
-                    if (bg != null) { Save(bg, folder, string.Format("Room#{0}.png", i)); count++; }
+                    if (bg != null) { Save(bg, folder, string.Format("Room#{0:D3}.png", i)); count++; }
                 }
 
                 if (options.BackgroundZPlanes)
@@ -66,7 +66,7 @@ namespace ScummEditor.Engine.Encoders
                     for (int z = 0; z < zCount; z++)
                     {
                         Bitmap zp = decoder.DecodeBackgroundZPlane(room, z);
-                        if (zp != null) { Save(zp, folder, string.Format("Room#{0} ZP#{1}.png", i, z)); count++; }
+                        if (zp != null) { Save(zp, folder, string.Format("Room#{0:D3} ZP#{1:D3}.png", i, z)); count++; }
                     }
                 }
 
@@ -78,7 +78,7 @@ namespace ScummEditor.Engine.Encoders
                         if (options.Objects)
                         {
                             Bitmap obj = decoder.DecodeObject(room, j);
-                            if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j)); count++; }
+                            if (obj != null) { Save(obj, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", i, j)); count++; }
                         }
                         if (options.ObjectZPlanes)
                         {
@@ -86,7 +86,7 @@ namespace ScummEditor.Engine.Encoders
                             for (int z = 0; z < zCount; z++)
                             {
                                 Bitmap zp = decoder.DecodeObjectZPlane(room, j, z);
-                                if (zp != null) { Save(zp, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#{2}.png", i, j, z)); count++; }
+                                if (zp != null) { Save(zp, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#{2:D3}.png", i, j, z)); count++; }
                             }
                         }
                     }
@@ -103,7 +103,7 @@ namespace ScummEditor.Engine.Encoders
                             System.Drawing.Size sz = AkosImageDecoder.GetCelSize(akosList[j], k);
                             if (sz.Width * sz.Height <= 4) continue; // placeholder slot
                             Bitmap cel = AkosImageDecoder.DecodeCel(akosList[j], k);
-                            if (cel != null) { Save(cel, folder, string.Format("Room#{0} Akos#{1} Cel#{2}.png", i, j, k)); count++; }
+                            if (cel != null) { Save(cel, folder, string.Format("Room#{0:D3} Akos#{1:D3} Cel#{2:D3}.png", i, j, k)); count++; }
                         }
                     }
                 }

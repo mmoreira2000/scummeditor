@@ -73,7 +73,7 @@ namespace ScummEditor.Engine.Structures
         /// <summary>
         /// Every editable charset of the game, in a stable order: the ones embedded in the data
         /// file (v5/v6) followed by the standalone font files (v4 90x.LFL). Batch font
-        /// export/import name files charset_N.png by this order.
+        /// export/import name files charset_NNN.png (zero-padded index) by this order.
         /// </summary>
         public List<Charset> GetAllEditableCharsets()
         {

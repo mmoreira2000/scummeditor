@@ -169,8 +169,8 @@ namespace ScummEditor.Engine.Encoders
             for (int i = 0; i < charsets.Count; i++)
             {
                 ExportPng(charsets[i],
-                    Path.Combine(folder, "charset_" + i + ".png"),
-                    Path.Combine(folder, "charset_" + i + ".guide.png"));
+                    Path.Combine(folder, string.Format("charset_{0:D3}.png", i)),
+                    Path.Combine(folder, string.Format("charset_{0:D3}.guide.png", i)));
             }
             return charsets.Count + " fonts exported to:\n" + folder;
         }
@@ -182,8 +182,8 @@ namespace ScummEditor.Engine.Encoders
             int imported = 0, missing = 0, failed = 0;
             for (int i = 0; i < charsets.Count; i++)
             {
-                string file = "charset_" + i + ".png";
-                string path = Path.Combine(folder, file);
+                string file = string.Format("charset_{0:D3}.png", i);
+                string path = BatchImageNaming.ResolveForImport(folder, file);
                 if (!File.Exists(path))
                 {
                     missing++;

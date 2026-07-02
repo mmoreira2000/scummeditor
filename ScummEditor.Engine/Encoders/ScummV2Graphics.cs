@@ -36,12 +36,12 @@ namespace ScummEditor.Engine.Encoders
                 if (options.Backgrounds)
                 {
                     using (Bitmap background = decoder.DecodeBackground(room))
-                        if (background != null) { Save(background, folder, string.Format("Room#{0}.png", roomNo)); count++; }
+                        if (background != null) { Save(background, folder, string.Format("Room#{0:D3}.png", roomNo)); count++; }
                 }
                 if (options.BackgroundZPlanes)
                 {
                     using (Bitmap zplane = decoder.DecodeBackgroundZPlane(room))
-                        if (zplane != null) { Save(zplane, folder, string.Format("Room#{0} ZPlane#0.png", roomNo)); count++; }
+                        if (zplane != null) { Save(zplane, folder, string.Format("Room#{0:D3} ZPlane#000.png", roomNo)); count++; }
                 }
                 if (options.Objects || options.ObjectZPlanes)
                 {
@@ -49,10 +49,10 @@ namespace ScummEditor.Engine.Encoders
                     {
                         if (options.Objects)
                             using (Bitmap obj = decoder.DecodeObject(room, j))
-                                if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j)); count++; }
+                                if (obj != null) { Save(obj, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomNo, j)); count++; }
                         if (options.ObjectZPlanes)
                             using (Bitmap objZ = decoder.DecodeObjectZPlane(room, j))
-                                if (objZ != null) { Save(objZ, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j)); count++; }
+                                if (objZ != null) { Save(objZ, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomNo, j)); count++; }
                     }
                 }
                 if (onProgress != null) onProgress(idx + 1, roomNumbers.Count);
@@ -92,7 +92,7 @@ namespace ScummEditor.Engine.Encoders
                     catch { continue; }
                     if (frame != null)
                     {
-                        using (frame) { Save(frame, folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k)); count++; }
+                        using (frame) { Save(frame, folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k)); count++; }
                     }
                 }
             }
@@ -168,8 +168,8 @@ namespace ScummEditor.Engine.Encoders
             int w = room.Width, h = room.Height, imageOffset = room.ImageOffset;
             int imageEnd = room.NextStructuralOffsetAbove(imageOffset);
 
-            string imgPath = Path.Combine(folder, string.Format("Room#{0}.png", roomNo));
-            string maskPath = Path.Combine(folder, string.Format("Room#{0} ZPlane#0.png", roomNo));
+            string imgPath = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3}.png", roomNo));
+            string maskPath = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} ZPlane#000.png", roomNo));
             bool hasImg = File.Exists(imgPath), hasMask = File.Exists(maskPath);
             if (!hasImg && !hasMask) return;
 
@@ -249,8 +249,8 @@ namespace ScummEditor.Engine.Encoders
             var room = new ScummV2Room(df.RawContent);
             for (int j = 0; j < room.NumObjects; j++)
             {
-                string imgPath = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j));
-                string maskPath = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j));
+                string imgPath = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomNo, j));
+                string maskPath = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomNo, j));
                 bool hasImg = File.Exists(imgPath), hasMask = File.Exists(maskPath);
                 if (!hasImg && !hasMask) continue;
                 if (!ScummV2ImageDecoder.ObjectOwnsImage(room, j)) continue; // imageless / non-primary multi-state: never splice
@@ -346,7 +346,7 @@ namespace ScummEditor.Engine.Encoders
                 var replacements = new Dictionary<int, byte[]>();
                 for (int k = 0; k < costume.Frames.Count; k++)
                 {
-                    string path = Path.Combine(folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                    string path = BatchImageNaming.ResolveForImport(folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k));
                     if (!File.Exists(path)) continue;
                     try
                     {

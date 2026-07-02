@@ -442,7 +442,7 @@ namespace ScummEditor.Gui
 
             var dlg = new FolderBrowserDialog
             {
-                Description = "Folder to save the game fonts (charset_N.png + charset_N.guide.png)"
+                Description = "Folder to save the game fonts (charset_NNN.png + charset_NNN.guide.png)"
             };
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 
@@ -499,7 +499,7 @@ namespace ScummEditor.Gui
 
             var dlg = new FolderBrowserDialog
             {
-                Description = "Folder with the charset_N.png files to import"
+                Description = "Folder with the charset_NNN.png files to import"
             };
             if (dlg.ShowDialog(this) != DialogResult.OK) return;
 

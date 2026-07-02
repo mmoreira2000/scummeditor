@@ -255,12 +255,13 @@ namespace ScummEditor.Engine.Encoders
             for (int i = 0; i < charsets.Count; i++)
             {
                 ExportPng(charsets[i],
-                    Path.Combine(folder, "charset_" + i + ".png"),
-                    Path.Combine(folder, "charset_" + i + ".guide.png"));
+                    Path.Combine(folder, string.Format("charset_{0:D3}.png", i)),
+                    Path.Combine(folder, string.Format("charset_{0:D3}.guide.png", i)));
             }
             return charsets.Count + " fonts exported to:\n" + folder
-                + "\n\nFiles: charset_0.png ... charset_" + (charsets.Count - 1)
-                + ".png (+ the .guide.png reference images).";
+                + "\n\nFiles: charset_000.png ... "
+                + string.Format("charset_{0:D3}.png", charsets.Count - 1)
+                + " (+ the .guide.png reference images).";
         }
 
         /// <summary>Imports the charsets embedded in the data file (v5/v6).</summary>
@@ -277,8 +278,8 @@ namespace ScummEditor.Engine.Encoders
 
             for (int i = 0; i < charsets.Count; i++)
             {
-                string file = "charset_" + i + ".png";
-                string path = Path.Combine(folder, file);
+                string file = string.Format("charset_{0:D3}.png", i);
+                string path = BatchImageNaming.ResolveForImport(folder, file);
                 if (!File.Exists(path))
                 {
                     missing++;

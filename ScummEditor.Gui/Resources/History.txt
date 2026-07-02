@@ -1,3 +1,7 @@
+5.1.3
+-----
+* Batch-exported image file names now sort in natural numeric order. Every number in a batch export name is zero-padded to at least three digits - Room#001, Room#002, ... Room#010, ... Room#100 (and the same for object, z-plane, costume, frame, AKOS cel, charset and NUT font numbers) - so a plain directory listing no longer interleaves them as 1, 10, 100, 2, 20 ... This covers all image types across every version, v1 through v8. Re-import stays fully backward compatible: a folder exported by an earlier version (with the old unpadded names) still imports correctly, so translations already in progress are unaffected.
+
 5.1.2
 -----
 * Exported images are now safe to edit in palette editors that mishandle duplicate colors (e.g. IDraw). Every pixel of an exported costume/background/font PNG already stores its true palette index, but when the game's palette repeats a color - very common in AKOS costumes, and the case reported for The Curse of Monkey Island - an external editor that rewrites each pixel by its color on save collapses the two indices that share that color into one, silently corrupting the image (IDraw's own manual lists this as a known bug with duplicate palette colors). The export now gives every palette slot a distinct color - an imperceptible tweak the game never sees, since it renders through its own palette - so each index keeps its own color and such an editor round-trips every index faithfully. Import is unchanged (it always read the raw index). This covers AKOS cels and every other indexed image, across all versions.

@@ -27,7 +27,7 @@ namespace ScummEditor.UnitTests
                 int exported = ScummV2Graphics.Export(game, dir, new ScummV4GraphicsBatch.ExportOptions(), null, null);
                 Assert.True(exported > 0, "nothing exported");
 
-                string[] objZ = Directory.GetFiles(dir, "*Obj#* ZP#0.png");
+                string[] objZ = Directory.GetFiles(dir, "*Obj#* ZP#000.png");
                 Assert.True(objZ.Length > 0, "no object z-plane PNGs were exported");
 
                 ScummV4GraphicsBatch.ImportReport report = ScummV2Graphics.Import(game, dir, null);

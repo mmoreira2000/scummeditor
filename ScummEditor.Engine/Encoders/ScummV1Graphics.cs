@@ -39,20 +39,20 @@ namespace ScummEditor.Engine.Encoders
 
                 if (options.Backgrounds)
                     using (Bitmap bg = decoder.DecodeBackground(room))
-                        if (bg != null) { Save(bg, folder, string.Format("Room#{0}.png", roomNo)); count++; }
+                        if (bg != null) { Save(bg, folder, string.Format("Room#{0:D3}.png", roomNo)); count++; }
                 if (options.BackgroundZPlanes)
                     using (Bitmap zp = decoder.DecodeBackgroundZPlane(room))
-                        if (zp != null) { Save(zp, folder, string.Format("Room#{0} ZP#0.png", roomNo)); count++; }
+                        if (zp != null) { Save(zp, folder, string.Format("Room#{0:D3} ZP#000.png", roomNo)); count++; }
                 if (options.Objects || options.ObjectZPlanes)
                 {
                     for (int j = 0; j < room.NumObjects; j++)
                     {
                         if (options.Objects)
                             using (Bitmap obj = decoder.DecodeObject(room, j))
-                                if (obj != null) { Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j)); count++; }
+                                if (obj != null) { Save(obj, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomNo, j)); count++; }
                         if (options.ObjectZPlanes)
                             using (Bitmap objZ = decoder.DecodeObjectZPlane(room, j))
-                                if (objZ != null) { Save(objZ, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j)); count++; }
+                                if (objZ != null) { Save(objZ, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomNo, j)); count++; }
                     }
                 }
                 if (onProgress != null) onProgress(idx + 1, roomNumbers.Count);
@@ -90,7 +90,7 @@ namespace ScummEditor.Engine.Encoders
                     try { frame = decoder.Decode(costume.Frames[k], palette); }
                     catch { continue; }
                     if (frame != null)
-                        using (frame) { Save(frame, folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k)); count++; }
+                        using (frame) { Save(frame, folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k)); count++; }
                 }
             }
             return count;
@@ -119,17 +119,17 @@ namespace ScummEditor.Engine.Encoders
                 ScummV3OldBundleDataFile df = rooms[roomNo];
 
                 TryImportImage(df, index, roomNo, decoder, folder, OldBundleImageKind.Background, 0,
-                    string.Format("Room#{0}.png", roomNo), report);
+                    string.Format("Room#{0:D3}.png", roomNo), report);
                 TryImportImage(df, index, roomNo, decoder, folder, OldBundleImageKind.BackgroundZPlane, 0,
-                    string.Format("Room#{0} ZP#0.png", roomNo), report);
+                    string.Format("Room#{0:D3} ZP#000.png", roomNo), report);
 
                 int numObjects = new ScummV1Room(df.RawContent).NumObjects;
                 for (int j = 0; j < numObjects; j++)
                 {
                     TryImportImage(df, index, roomNo, decoder, folder, OldBundleImageKind.Object, j,
-                        string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, j), report);
+                        string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomNo, j), report);
                     TryImportImage(df, index, roomNo, decoder, folder, OldBundleImageKind.ObjectZPlane, j,
-                        string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomNo, j), report);
+                        string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomNo, j), report);
                 }
 
                 ImportCostumes(df, index, roomNo, folder, isManiac, report);
@@ -142,7 +142,7 @@ namespace ScummEditor.Engine.Encoders
             ScummV1ImageDecoder decoder, string folder, OldBundleImageKind kind, int objectIndex, string fileName,
             ScummV4GraphicsBatch.ImportReport report)
         {
-            string path = Path.Combine(folder, fileName);
+            string path = BatchImageNaming.ResolveForImport(folder, fileName);
             if (!File.Exists(path)) return;
 
             try
@@ -183,7 +183,7 @@ namespace ScummEditor.Engine.Encoders
 
                 for (int k = 0; k < costume.Frames.Count; k++)
                 {
-                    string path = Path.Combine(folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                    string path = BatchImageNaming.ResolveForImport(folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k));
                     if (!File.Exists(path)) continue;
                     try
                     {

@@ -52,7 +52,7 @@ namespace ScummEditor.Engine.Encoders
                 if (options.Backgrounds)
                 {
                     Bitmap bg = ImageResourceCodec.Decode(room, null, ImageType.Background, 0, 0, 0, 0, options.Transparency);
-                    if (bg != null) { Save(bg, folder, string.Format("Room#{0}.png", i)); count++; }
+                    if (bg != null) { Save(bg, folder, string.Format("Room#{0:D3}.png", i)); count++; }
                 }
 
                 if (options.BackgroundZPlanes)
@@ -64,7 +64,7 @@ namespace ScummEditor.Engine.Encoders
                         if (zp != null)
                         {
                             zp = convert.CopyToBpp(zp, 1, new[] { Color.Black, Color.White });
-                            Save(zp, folder, string.Format("Room#{0} ZP#{1}.png", i, j));
+                            Save(zp, folder, string.Format("Room#{0:D3} ZP#{1:D3}.png", i, j));
                             count++;
                         }
                     }
@@ -81,7 +81,7 @@ namespace ScummEditor.Engine.Encoders
                             if (options.Objects)
                             {
                                 Bitmap img = ImageResourceCodec.Decode(room, null, ImageType.Object, j, k, 0, 0, options.Transparency);
-                                if (img != null) { Save(img, folder, string.Format("Room#{0} Obj#{1} Img#{2}.png", i, j, k)); count++; }
+                                if (img != null) { Save(img, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#{2:D3}.png", i, j, k)); count++; }
                             }
 
                             if (options.ObjectZPlanes)
@@ -93,7 +93,7 @@ namespace ScummEditor.Engine.Encoders
                                     if (zp != null)
                                     {
                                         zp = convert.CopyToBpp(zp, 1, new[] { Color.Black, Color.White });
-                                        Save(zp, folder, string.Format("Room#{0} Obj#{1} Img#{2} ZP#{3}.png", i, j, k, l));
+                                        Save(zp, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#{2:D3} ZP#{3:D3}.png", i, j, k, l));
                                         count++;
                                     }
                                 }
@@ -114,7 +114,7 @@ namespace ScummEditor.Engine.Encoders
                             if (data.Length == 0 || (data.Length == 1 && data[0] == 0)) continue; // empty frame
 
                             Bitmap img = ImageResourceCodec.Decode(room, costume, ImageType.Costume, 0, k, 0, 0, options.Transparency);
-                            if (img != null) { Save(img, folder, string.Format("Room#{0} Costume#{1} FrameIndex#{2}.png", i, j, k)); count++; }
+                            if (img != null) { Save(img, folder, string.Format("Room#{0:D3} Costume#{1:D3} FrameIndex#{2:D3}.png", i, j, k)); count++; }
                         }
                     }
 
@@ -133,7 +133,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap cel = AkosImageDecoder.DecodeCel(akos, k);
                             if (cel != null)
                             {
-                                Save(cel, folder, string.Format("Room#{0} Akos#{1} Cel#{2}.png", i, j, k));
+                                Save(cel, folder, string.Format("Room#{0:D3} Akos#{1:D3} Cel#{2:D3}.png", i, j, k));
                                 cel.Dispose();
                                 count++;
                             }

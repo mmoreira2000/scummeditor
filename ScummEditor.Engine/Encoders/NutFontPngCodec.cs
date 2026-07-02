@@ -213,7 +213,12 @@ namespace ScummEditor.Engine.Encoders
                 string path = Path.Combine(folder, name);
                 if (!File.Exists(path))
                 {
-                    continue; // not every font has to be edited
+                    // Backward compatibility: older versions used a 2-digit (and originally an unpadded) index.
+                    string alt2 = Path.Combine(folder, BatchFileName(fonts[i], i, 2));
+                    string alt1 = Path.Combine(folder, BatchFileName(fonts[i], i, 1));
+                    if (File.Exists(alt2)) path = alt2;
+                    else if (File.Exists(alt1)) path = alt1;
+                    else continue; // not every font has to be edited
                 }
                 try
                 {
@@ -230,10 +235,18 @@ namespace ScummEditor.Engine.Encoders
 
         /// <summary>The batch PNG name for a font: an index prefix keeps it unique (a game can ship two NUT
         /// files with the same base name in different subfolders, e.g. Full Throttle's TITLFNT.NUT), while
-        /// the base name keeps it readable. Import reconstructs the same name from the font list order.</summary>
+        /// the base name keeps it readable. The index is zero-padded to three digits so a directory listing
+        /// sorts naturally. Import reconstructs the same name from the font list order.</summary>
         private static string BatchFileName(NutFontResource resource, int index)
         {
-            return string.Format("nutfont_{0:D2}_{1}.png", index, Path.GetFileNameWithoutExtension(resource.FilePath));
+            return BatchFileName(resource, index, BatchImageNaming.MinDigits);
+        }
+
+        /// <summary>Builds the batch PNG name with a specific index width. Import tries the current width and
+        /// then the narrower widths older versions used (2 digits, and originally none) so old exports re-import.</summary>
+        private static string BatchFileName(NutFontResource resource, int index, int digits)
+        {
+            return "nutfont_" + index.ToString("D" + digits) + "_" + Path.GetFileNameWithoutExtension(resource.FilePath) + ".png";
         }
 
         // ---- helpers ----

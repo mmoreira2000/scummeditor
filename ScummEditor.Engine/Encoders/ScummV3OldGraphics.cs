@@ -48,7 +48,7 @@ namespace ScummEditor.Engine.Encoders
                     Bitmap background = decoder.DecodeBackground(room);
                     if (background != null)
                     {
-                        Save(background, folder, string.Format("Room#{0}.png", i));
+                        Save(background, folder, string.Format("Room#{0:D3}.png", i));
                         count++;
                     }
                 }
@@ -58,7 +58,7 @@ namespace ScummEditor.Engine.Encoders
                     Bitmap zplane = decoder.DecodeBackgroundZPlane(room);
                     if (zplane != null)
                     {
-                        Save(zplane, folder, string.Format("Room#{0} ZP#0.png", i));
+                        Save(zplane, folder, string.Format("Room#{0:D3} ZP#000.png", i));
                         count++;
                     }
                 }
@@ -72,7 +72,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap obj = decoder.DecodeObject(room, j);
                             if (obj != null)
                             {
-                                Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j));
+                                Save(obj, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", i, j));
                                 count++;
                             }
                         }
@@ -82,7 +82,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap objZ = decoder.DecodeObjectZPlane(room, j);
                             if (objZ != null)
                             {
-                                Save(objZ, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", i, j));
+                                Save(objZ, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", i, j));
                                 count++;
                             }
                         }
@@ -126,7 +126,7 @@ namespace ScummEditor.Engine.Encoders
                     Bitmap frame = costumeDecoder.Decode(costume.Frames[k], 16, egaPalette, false);
                     if (frame != null)
                     {
-                        Save(frame, folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                        Save(frame, folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k));
                         count++;
                     }
                 }
@@ -231,7 +231,7 @@ namespace ScummEditor.Engine.Encoders
                 var replacements = new Dictionary<int, byte[]>();
                 for (int k = 0; k < costume.Frames.Count; k++)
                 {
-                    string path = Path.Combine(folder, string.Format("Costume#{0} FrameIndex#{1}.png", c, k));
+                    string path = BatchImageNaming.ResolveForImport(folder, string.Format("Costume#{0:D3} FrameIndex#{1:D3}.png", c, k));
                     if (!File.Exists(path)) continue;
                     try
                     {
@@ -266,7 +266,7 @@ namespace ScummEditor.Engine.Encoders
         private static void CollectBackgroundEdit(ScummV3OldBundleDataFile dataFile, string folder, int roomIndex,
             List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
         {
-            string path = Path.Combine(folder, string.Format("Room#{0}.png", roomIndex));
+            string path = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3}.png", roomIndex));
             if (!File.Exists(path)) return;
 
             var room = new ScummV3OldRoom(dataFile.RawContent);
@@ -282,7 +282,7 @@ namespace ScummEditor.Engine.Encoders
             var room = new ScummV3OldRoom(dataFile.RawContent);
             for (int j = 0; j < room.NumObjects; j++)
             {
-                string path = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0.png", roomIndex, j));
+                string path = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomIndex, j));
                 if (!File.Exists(path)) continue;
                 int obim = room.ObjectImageOffset(j);
                 int w = room.ObjectWidth(j), h = room.ObjectHeight(j);
@@ -296,7 +296,7 @@ namespace ScummEditor.Engine.Encoders
         private static void CollectBackgroundZPlaneEdit(ScummV3OldBundleDataFile dataFile, string folder, int roomIndex,
             List<ImageEdit> edits, ScummV4GraphicsBatch.ImportReport report)
         {
-            string path = Path.Combine(folder, string.Format("Room#{0} ZP#0.png", roomIndex));
+            string path = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} ZP#000.png", roomIndex));
             if (!File.Exists(path)) return;
 
             var room = new ScummV3OldRoom(dataFile.RawContent);
@@ -320,7 +320,7 @@ namespace ScummEditor.Engine.Encoders
             var decoder = new ScummV3OldImageDecoder();
             for (int j = 0; j < room.NumObjects; j++)
             {
-                string path = Path.Combine(folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomIndex, j));
+                string path = BatchImageNaming.ResolveForImport(folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomIndex, j));
                 if (!File.Exists(path)) continue;
                 if (decoder.CountObjectZPlanes(room, j) == 0)
                 {

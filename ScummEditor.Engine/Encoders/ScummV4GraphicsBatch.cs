@@ -83,7 +83,7 @@ namespace ScummEditor.Engine.Encoders
                         Bitmap background = decoder.DecodeBackground(room);
                         if (background != null)
                         {
-                            Save(background, folder, string.Format("Room#{0}.png", i));
+                            Save(background, folder, string.Format("Room#{0:D3}.png", i));
                             count++;
                         }
                     }
@@ -96,7 +96,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap zplane = decoder.DecodeBackgroundZPlane(room, z);
                             if (zplane != null)
                             {
-                                Save(zplane, folder, string.Format("Room#{0} ZP#{1}.png", i, z));
+                                Save(zplane, folder, string.Format("Room#{0:D3} ZP#{1:D3}.png", i, z));
                                 count++;
                             }
                         }
@@ -121,7 +121,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap obj = decoder.DecodeObject(room, objectImage, code);
                             if (obj != null)
                             {
-                                Save(obj, folder, string.Format("Room#{0} Obj#{1} Img#0.png", i, j));
+                                Save(obj, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", i, j));
                                 count++;
                             }
                         }
@@ -134,7 +134,7 @@ namespace ScummEditor.Engine.Encoders
                                 Bitmap zplane = decoder.DecodeObjectZPlane(room, objectImage, code, z);
                                 if (zplane != null)
                                 {
-                                    Save(zplane, folder, string.Format("Room#{0} Obj#{1} Img#0 ZP#{2}.png", i, j, z));
+                                    Save(zplane, folder, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#{2:D3}.png", i, j, z));
                                     count++;
                                 }
                             }
@@ -154,7 +154,7 @@ namespace ScummEditor.Engine.Encoders
                             Bitmap frame = costumeDecoder.Decode(costume.Frames[k], costume.PaletteSize, palette, options.Transparency);
                             if (frame != null)
                             {
-                                Save(frame, folder, string.Format("Room#{0} Costume#{1} FrameIndex#{2}.png", i, j, k));
+                                Save(frame, folder, string.Format("Room#{0:D3} Costume#{1:D3} FrameIndex#{2:D3}.png", i, j, k));
                                 count++;
                             }
                         }

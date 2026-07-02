@@ -198,7 +198,7 @@ namespace ScummEditor.UnitTests
             {
                 var options = new ScummV4GraphicsBatch.ExportOptions();
                 int exported = ScummV3OldGraphics.Export(game, dir, options, null, null);
-                int zpPngs = Directory.GetFiles(dir, "*ZP#0.png").Length;
+                int zpPngs = Directory.GetFiles(dir, "*ZP#000.png").Length;
                 Assert.True(zpPngs > 0, "no z-plane PNGs were exported");
 
                 var before = new Dictionary<string, byte[]>();
@@ -256,8 +256,8 @@ namespace ScummEditor.UnitTests
                 var options = new ScummV4GraphicsBatch.ExportOptions { Backgrounds = false, Objects = false, Costumes = false, BackgroundZPlanes = false, ObjectZPlanes = true };
                 ScummV3OldGraphics.Export(game, dir, options, null, null);
 
-                string pa = Path.Combine(dir, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomIndex, ja));
-                string pb = Path.Combine(dir, string.Format("Room#{0} Obj#{1} Img#0 ZP#0.png", roomIndex, jb));
+                string pa = Path.Combine(dir, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomIndex, ja));
+                string pb = Path.Combine(dir, string.Format("Room#{0:D3} Obj#{1:D3} Img#000 ZP#000.png", roomIndex, jb));
                 Skip.If(!File.Exists(pa) || !File.Exists(pb), "shared-object z-plane PNGs were not exported");
 
                 // pa = full invert (differs from the original); pb = full invert with one pixel toggled

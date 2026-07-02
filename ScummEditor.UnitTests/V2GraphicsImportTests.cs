@@ -53,7 +53,7 @@ namespace ScummEditor.UnitTests
 
                 // Edit only the background PNG (toggle pixel 0,0); drop the rest so only this applies.
                 byte expected = 0;
-                KeepOnly(dir, string.Format("Room#{0}.png", roomNo), path => expected = ToggleFirstPixel(path));
+                KeepOnly(dir, string.Format("Room#{0:D3}.png", roomNo), path => expected = ToggleFirstPixel(path));
 
                 ScummV4GraphicsBatch.ImportReport report = ScummV2Graphics.Import(game, dir, null);
                 Assert.Empty(report.Errors);
@@ -85,7 +85,7 @@ namespace ScummEditor.UnitTests
                 byte[,] maskBefore = DecodeMask(game, diskIdx);
 
                 // Edit only the z-plane PNG (invert it); drop the rest.
-                KeepOnly(dir, string.Format("Room#{0} ZPlane#0.png", roomNo), InvertMaskFile);
+                KeepOnly(dir, string.Format("Room#{0:D3} ZPlane#000.png", roomNo), InvertMaskFile);
 
                 ScummV4GraphicsBatch.ImportReport report = ScummV2Graphics.Import(game, dir, null);
                 Assert.Empty(report.Errors);
@@ -131,7 +131,7 @@ namespace ScummEditor.UnitTests
             {
                 var snap = SnapshotOthers(game, diskIdx);
                 byte expected = 0;
-                KeepOnly(dir, string.Format("Room#{0} Obj#{1} Img#0.png", roomNo, objIndex), path => expected = ToggleFirstPixel(path));
+                KeepOnly(dir, string.Format("Room#{0:D3} Obj#{1:D3} Img#000.png", roomNo, objIndex), path => expected = ToggleFirstPixel(path));
 
                 ScummV4GraphicsBatch.ImportReport report = ScummV2Graphics.Import(game, dir, null);
                 Assert.Empty(report.Errors);
